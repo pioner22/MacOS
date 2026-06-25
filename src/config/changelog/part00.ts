@@ -2,6 +2,17 @@ import type { ChangelogEntry } from "./types";
 
 export const CHANGELOG_PART_00: ChangelogEntry[] = [
   {
+    version: "0.1.935",
+    date: "2026-06-25",
+    fixed: [
+      "GitHub main ветка web-клиента очищена от устаревших Android/macOS веток и чужих клиентских реализаций, чтобы пользователи видели только актуальный Web/PWA код.",
+    ],
+    improved: [
+      "Web, Android и macOS репозитории теперь держат только свои клиентские реализации; диагностические iOS lab/repro страницы и презентационный мусор удалены из всех клиентов.",
+      "Платформенные bootstrap-зависимости разделены: web и Android больше не тянут desktop updater, а web/macOS не тянут Android version metadata.",
+    ],
+  },
+  {
     version: "0.1.934",
     date: "2026-06-25",
     fixed: [

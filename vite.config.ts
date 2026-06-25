@@ -1,30 +1,9 @@
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const shouldMinifyBuild = process.env.YAGODKA_WEB_MINIFY !== "0";
-const ROOT_DIR = path.dirname(fileURLToPath(import.meta.url));
-
-function loadAndroidAppVersionMeta(): { versionName: string; versionCode: number } {
-  const gradlePath = path.join(ROOT_DIR, "android", "app", "build.gradle");
-  try {
-    const raw = fs.readFileSync(gradlePath, "utf8");
-    const versionNameMatch = raw.match(/versionName\s+"([^"]+)"/);
-    const versionCodeMatch = raw.match(/versionCode\s+(\d+)/);
-    const versionName = versionNameMatch?.[1]?.trim() || "";
-    const versionCode = Number(versionCodeMatch?.[1] ?? 0);
-    if (!versionName || !Number.isFinite(versionCode) || versionCode <= 0) {
-      return { versionName: "", versionCode: 0 };
-    }
-    return { versionName, versionCode: Math.trunc(versionCode) };
-  } catch {
-    return { versionName: "", versionCode: 0 };
-  }
-}
-
-const androidAppVersionMeta = loadAndroidAppVersionMeta();
 
 function resolveAppChunk(cleanId: string): string | undefined {
   if (cleanId.includes("/src/app/handleServerMessage")) return "app-handle-server-message";
@@ -105,8 +84,6 @@ export default defineConfig({
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? "dev"),
-    __ANDROID_APP_VERSION_NAME__: JSON.stringify(androidAppVersionMeta.versionName),
-    __ANDROID_APP_VERSION_CODE__: String(androidAppVersionMeta.versionCode || 0),
   },
   server: {
     host: true,

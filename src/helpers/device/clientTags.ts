@@ -1,5 +1,4 @@
 import { getCapacitorPlatform, isCapacitorNativeRuntime } from "../runtime/nativeRuntime";
-import { getCurrentAndroidAppVersionInfo } from "../runtime/androidAppVersion";
 import { APP_VERSION } from "../../config/app";
 import { loadStoredBuildIdForCurrentVersion } from "../pwa/buildIdStore";
 
@@ -96,11 +95,6 @@ export function buildClientInfoTags(): Record<string, unknown> {
   if (nativePlatform) {
     out.native_platform = nativePlatform;
     out.client_surface = nativePlatform === "android" ? "android" : "native";
-    if (nativePlatform === "android") {
-      const appVersion = getCurrentAndroidAppVersionInfo();
-      if (appVersion.versionName) out.app_version_name = appVersion.versionName;
-      if (appVersion.versionCode !== null) out.app_version_code = appVersion.versionCode;
-    }
   }
   try {
     const bid = String(loadStoredBuildIdForCurrentVersion(APP_VERSION) || "").trim();

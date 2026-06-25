@@ -1,8 +1,6 @@
 /// <reference types="vite/client" />
 
 declare const __APP_VERSION__: string;
-declare const __ANDROID_APP_VERSION_NAME__: string;
-declare const __ANDROID_APP_VERSION_CODE__: number | string;
 
 interface YagodkaDesktopBridge {
   config?: {
