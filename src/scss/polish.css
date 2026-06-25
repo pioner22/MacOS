@@ -1,0 +1,2255 @@
+/* UI polish overrides (telegram-exact).
+ *
+ * Goal: make the UI look less flat and closer to Telegram's "paper" feel,
+ * without touching core layout logic.
+ */
+
+html[data-skin="telegram-exact"][data-theme="light"] .chat {
+  background:
+    radial-gradient(circle at 18px 20px, rgba(0, 0, 0, 0.035) 0 1px, transparent 1px 100%),
+    radial-gradient(circle at 64px 76px, rgba(0, 0, 0, 0.025) 0 1px, transparent 1px 100%),
+    radial-gradient(circle at 110px 34px, rgba(0, 0, 0, 0.02) 0 1px, transparent 1px 100%),
+    linear-gradient(var(--layer-1), var(--layer-1)),
+    linear-gradient(var(--layer-2), var(--layer-2)),
+    var(--chat-bg);
+  background-size: 180px 180px, 260px 260px, 340px 340px, auto, auto, auto;
+  background-position: 0 0, 40px 60px, 90px 30px, 0 0, 0 0, 0 0;
+}
+
+html[data-skin="telegram-exact"][data-theme="dark"] .chat {
+  background:
+    radial-gradient(circle at 18px 20px, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 100%),
+    radial-gradient(circle at 64px 76px, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 100%),
+    radial-gradient(circle at 110px 34px, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 100%),
+    linear-gradient(var(--layer-1), var(--layer-1)),
+    linear-gradient(var(--layer-2), var(--layer-2)),
+    var(--chat-bg);
+  background-size: 180px 180px, 260px 260px, 340px 340px, auto, auto, auto;
+  background-position: 0 0, 40px 60px, 90px 30px, 0 0, 0 0, 0 0;
+}
+
+html[data-skin="telegram-exact"][data-theme="light"] {
+  --composer-field-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset, 0 10px 24px rgba(0, 0, 0, 0.06);
+}
+
+html[data-skin="telegram-exact"][data-theme="dark"] {
+  --composer-field-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 34px rgba(0, 0, 0, 0.38);
+}
+
+html[data-skin="telegram-exact"] .input-wrap {
+  background: color-mix(in srgb, var(--composer-bg), #ffffff 6%);
+  box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.06);
+}
+
+html[data-skin="telegram-exact"][data-theme="dark"] .input-wrap {
+  box-shadow: 0 -16px 36px rgba(0, 0, 0, 0.42);
+}
+
+html[data-skin="telegram-exact"] .chat-jump {
+  border: 1px solid color-mix(in srgb, var(--line), transparent 35%);
+  background: color-mix(in srgb, var(--panel) 92%, transparent 8%);
+  backdrop-filter: blur(6px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg:not(.msg-sys):not(.msg-attach) .msg-body {
+    transition:
+      transform 140ms ease,
+      box-shadow 180ms ease,
+      border-color 180ms ease;
+  }
+
+  html[data-skin="telegram-exact"] .chat:not(.chat-board) .msg:not(.msg-sys):not(.msg-attach):hover .msg-body {
+    transform: translateY(-1px);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
+  }
+
+  html[data-skin="telegram-exact"][data-theme="dark"] .chat:not(.chat-board) .msg:not(.msg-sys):not(.msg-attach):hover .msg-body {
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
+  }
+}
+
+/* W-0975: messenger surface polish.
+ * One late layer for chat history, dialog list and profile pages.
+ */
+.chat:not(.chat-board) {
+  --chat-line-gap: 8px;
+  --msg-group-stack-gap: 2px;
+  --msg-in-bg: color-mix(in srgb, var(--panel2) 88%, #ffffff 12%);
+  --msg-out-bg: color-mix(in srgb, var(--focus) 20%, var(--panel2) 80%);
+  --msg-in-fill: var(--msg-in-bg);
+  --msg-out-fill: var(--msg-out-bg);
+  --msg-in-border-color: color-mix(in srgb, var(--line), transparent 48%);
+  --msg-out-border-color: color-mix(in srgb, var(--focus), transparent 54%);
+  --msg-modern-outline-in: color-mix(in srgb, var(--msg-in-border-color) 82%, transparent);
+  --msg-modern-outline-out: color-mix(in srgb, var(--msg-out-border-color) 82%, transparent);
+  --msg-in-radius: 18px;
+  --msg-out-radius: 18px;
+  --msg-in-radius-tail: 7px;
+  --msg-out-radius-tail: 7px;
+  --msg-in-pad-y: 8px;
+  --msg-in-pad-x: 12px;
+  --msg-in-pad-bottom: 16px;
+  --msg-out-pad-y: 8px;
+  --msg-out-pad-x: 12px;
+  --msg-out-pad-bottom: 16px;
+  --msg-card-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.045) inset,
+    0 8px 22px rgba(0, 0, 0, 0.18);
+  --msg-card-outline: 0 0 0 1px color-mix(in srgb, var(--line), transparent 86%);
+}
+
+html[data-theme="dark"] .chat:not(.chat-board) {
+  --msg-in-bg: color-mix(in srgb, var(--panel2) 86%, #ffffff 6%);
+  --msg-out-bg: color-mix(in srgb, var(--focus) 24%, var(--panel2) 76%);
+  --msg-card-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.035) inset,
+    0 12px 28px rgba(0, 0, 0, 0.32);
+  --msg-card-outline: 0 0 0 1px color-mix(in srgb, #ffffff, transparent 93%);
+}
+
+.chat:not(.chat-board) .msg:not(.msg-sys) {
+  scroll-margin-top: calc(var(--msg-date-top, 16px) + 52px);
+}
+
+.chat:not(.chat-board) .msg:not(.msg-sys) .msg-body {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 140ms ease;
+}
+
+.chat:not(.chat-board) .msg.msg-group-start:not(.msg-tail) .msg-body,
+.chat:not(.chat-board) .msg.msg-group-middle .msg-body {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.035) inset,
+    0 3px 10px rgba(0, 0, 0, 0.12);
+}
+
+.chat:not(.chat-board) .msg-context-active .msg-body,
+.chat:not(.chat-board) .msg-selected .msg-body {
+  border-color: color-mix(in srgb, var(--focus), transparent 30%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--focus), transparent 28%),
+    0 18px 42px rgba(0, 0, 0, 0.24),
+    var(--msg-card-shadow);
+}
+
+.chat:not(.chat-board) .msg-hit .msg-body {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--warn), transparent 28%),
+    var(--msg-card-shadow);
+}
+
+.chat:not(.chat-board) .msg-hit-active .msg-body {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--warn), transparent 18%),
+    0 18px 38px rgba(0, 0, 0, 0.24),
+    var(--msg-card-shadow);
+}
+
+.chat:not(.chat-board) .msg-meta {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.88;
+}
+
+.chat:not(.chat-board) .msg-status-read {
+  color: color-mix(in srgb, var(--good), #ffffff 10%);
+}
+
+.chat:not(.chat-board) .msg-status-error {
+  color: var(--bad);
+}
+
+.chat:not(.chat-board) .msg-ref {
+  width: 100%;
+  min-width: 0;
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--msg-ref-accent) 18%, transparent), transparent 78%),
+    color-mix(in srgb, var(--panel), transparent 72%);
+  border-color: color-mix(in srgb, var(--msg-ref-accent) 34%, transparent);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.035) inset;
+}
+
+.chat:not(.chat-board) .msg-ref-title {
+  font-weight: 700;
+}
+
+.chat:not(.chat-board) .msg-ref-text,
+.chat:not(.chat-board) .msg-ref-meta {
+  color: color-mix(in srgb, var(--muted), var(--text) 16%);
+}
+
+.chat:not(.chat-board) .msg-reacts {
+  margin-top: 4px;
+  gap: 4px;
+}
+
+.chat:not(.chat-board) .msg-react {
+  min-height: 26px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel), transparent 32%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.chat:not(.chat-board) .msg-react.is-active {
+  background: color-mix(in srgb, var(--msg-accent, var(--focus)) 26%, transparent);
+}
+
+.chat:not(.chat-board) .msg-sep {
+  margin: 10px 0;
+  color: color-mix(in srgb, var(--muted), var(--text) 12%);
+}
+
+.chat:not(.chat-board) .msg-sep-line {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--line), transparent 30%), transparent);
+}
+
+.chat:not(.chat-board) .msg-sep-pill {
+  min-height: 28px;
+  padding: 0 11px;
+  border-color: color-mix(in srgb, var(--line), transparent 48%);
+  background: color-mix(in srgb, var(--panel), transparent 32%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.045) inset,
+    0 10px 24px rgba(0, 0, 0, 0.16);
+  -webkit-backdrop-filter: blur(12px) saturate(135%);
+  backdrop-filter: blur(12px) saturate(135%);
+}
+
+.chat:not(.chat-board) .msg-unread .msg-sep-pill {
+  color: color-mix(in srgb, var(--focus), #ffffff 18%);
+  border-color: color-mix(in srgb, var(--focus), transparent 44%);
+  background: color-mix(in srgb, var(--focus), transparent 86%);
+}
+
+.chat:not(.chat-board) .msg-sep-count {
+  min-width: 19px;
+  height: 19px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--focus), transparent 16%);
+  color: #ffffff;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar {
+  --row-min-h: 64px;
+  --row-gap: 11px;
+  --row-tail-min: 64px;
+  --avatar-size: 44px;
+  --avatar-radius: 15px;
+  --row-bg-hover: color-mix(in srgb, var(--focus), transparent 92%);
+  --row-bg-menu-open: color-mix(in srgb, var(--focus), transparent 88%);
+}
+
+.sidebar .row[data-ctx-kind] {
+  min-height: var(--row-min-h);
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.sidebar .row[data-ctx-kind]::after {
+  opacity: 0.72;
+}
+
+.sidebar .row[data-ctx-kind] > .avatar {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #ffffff, transparent 86%) inset,
+    0 8px 18px rgba(0, 0, 0, 0.16);
+}
+
+.sidebar .row[data-online="1"] .avatar::after {
+  right: -1px;
+  bottom: -1px;
+  width: 13px;
+  height: 13px;
+  border-width: 2px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--good), transparent 50%);
+}
+
+.sidebar .row-title {
+  line-height: 1.18;
+}
+
+.sidebar .row-sub {
+  line-height: 1.22;
+  opacity: 0.92;
+}
+
+.sidebar .row-tail {
+  min-width: var(--row-tail-min, 64px);
+}
+
+.sidebar .row-tail-top,
+.sidebar .row-tail-bottom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+}
+
+.sidebar .row-time {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.86;
+}
+
+.sidebar .row-unread,
+.sidebar .row-mention,
+.sidebar .row-reaction {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+.sidebar .row-pin,
+.sidebar .row-muted {
+  width: 18px;
+  height: 18px;
+  opacity: 0.82;
+}
+
+.sidebar .row-menu-open[data-ctx-kind],
+.sidebar .row[data-ctx-kind]:active {
+  background: color-mix(in srgb, var(--focus), transparent 88%);
+}
+
+.sidebar[data-sidebar-tab="menu"] .row {
+  border-radius: 16px;
+}
+
+.page.page-profile,
+.page.page-user,
+.page.page-room {
+  gap: 12px;
+  border-color: color-mix(in srgb, var(--line), transparent 40%);
+  background:
+    radial-gradient(140% 80% at 12% 0%, color-mix(in srgb, var(--focus), transparent 92%), transparent 55%),
+    color-mix(in srgb, var(--panel), transparent 8%);
+}
+
+.profile-card,
+.page-card {
+  border-color: color-mix(in srgb, var(--line), transparent 48%);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #ffffff, transparent 96%), transparent),
+    color-mix(in srgb, var(--panel2), transparent 18%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 10px 26px rgba(0, 0, 0, 0.16);
+}
+
+.profile-head {
+  padding: 14px;
+}
+
+.profile-name {
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.profile-handle,
+.profile-id,
+.profile-session-meta,
+.profile-hint {
+  color: color-mix(in srgb, var(--muted), var(--text) 8%);
+}
+
+.profile-card-title,
+.page-card-title,
+.profile-section-title,
+.profile-field-label {
+  letter-spacing: 0.045em;
+  color: color-mix(in srgb, var(--muted), var(--focus) 16%);
+}
+
+.profile-actions .btn,
+.profile-head-actions .btn,
+.profile-session-card .btn {
+  border-radius: 999px;
+}
+
+.profile-field-value,
+.profile-session-name {
+  overflow-wrap: anywhere;
+}
+
+.profile-session-card,
+.member-row {
+  border-color: color-mix(in srgb, var(--line), transparent 52%);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel), transparent 36%);
+}
+
+@media (max-width: 600px) {
+  .chat:not(.chat-board) {
+    --chat-line-gap: 7px;
+    --msg-body-max-width: min(86%, calc(100vw - 54px));
+    --msg-in-pad-y: 7px;
+    --msg-in-pad-x: 10px;
+    --msg-out-pad-y: 7px;
+    --msg-out-pad-x: 10px;
+  }
+
+  .chat.chat-dm {
+    --msg-body-max-width: min(84%, calc(100vw - 44px));
+  }
+
+  .chat:not(.chat-board) .msg-sep {
+    margin: 8px 0;
+  }
+
+  .sidebar {
+    --row-min-h: 62px;
+    --row-tail-min: 54px;
+    --avatar-size: 42px;
+  }
+
+  .sidebar .row[data-ctx-kind] {
+    grid-template-columns: var(--avatar-size) minmax(0, 1fr) minmax(48px, max-content);
+    padding-left: 12px;
+    padding-right: 10px;
+  }
+
+  .sidebar .row-sub {
+    font-size: 13px;
+  }
+
+  .page.page-profile,
+  .page.page-user,
+  .page.page-room {
+    padding: 12px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .profile-card,
+  .page-card {
+    border-radius: 13px;
+    padding: 12px;
+  }
+
+  .profile-head {
+    padding: 14px 12px;
+  }
+}
+
+/* W-1037: profile page owns mobile bottom canvas after removing the manual footer buttons. */
+@media (max-width: 600px) {
+  html.has-profile-surface:not(.has-auth-pages),
+  html.has-profile-surface:not(.has-auth-pages) body,
+  html.has-profile-surface:not(.has-auth-pages) #app {
+    --profile-surface-bg: var(--chat-bg);
+    --safe-area-bg: var(--profile-surface-bg);
+    --app-frame-safe-bg: var(--profile-surface-bg);
+    --app-host-canvas-bg: var(--profile-surface-bg);
+    background-color: var(--profile-surface-bg);
+  }
+
+  html.has-profile-surface:not(.has-auth-pages) body::after,
+  html.has-profile-surface:not(.has-auth-pages) #app.app-frame::after {
+    background: var(--profile-surface-bg);
+    background-color: var(--profile-surface-bg);
+  }
+
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page,
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page .chat-host,
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page .page.page-profile {
+    background-color: var(--profile-surface-bg);
+  }
+
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page .page.page-profile {
+    background:
+      radial-gradient(140% 80% at 12% 0%, color-mix(in srgb, var(--focus), transparent 92%), transparent 55%),
+      var(--profile-surface-bg);
+  }
+}
+
+/* W-1038: profile pages keep the last card above the mobile bottom well. */
+@media (max-width: 600px) {
+  html.has-profile-surface:not(.has-auth-pages),
+  html.has-profile-surface:not(.has-auth-pages) body,
+  html.has-profile-surface:not(.has-auth-pages) #app {
+    --profile-bottom-clearance: max(
+      104px,
+      var(--app-frame-bottom-inset, 0px),
+      var(--app-bottom-inset, 0px),
+      var(--safe-bottom-pad, 0px),
+      env(safe-area-inset-bottom)
+    );
+  }
+
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page .chat-host {
+    scroll-padding-bottom: var(--profile-bottom-clearance);
+  }
+
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page .page.page-profile,
+  html.has-profile-surface:not(.has-auth-pages) .chat.chat-page .page.page-sessions {
+    padding-bottom: calc(12px + var(--profile-bottom-clearance));
+  }
+}
+
+/* W-0976: visual stability repair after W-0975 real-device screenshots. */
+.chat:not(.chat-board) .msg:not(.msg-sys) .msg-body {
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+
+.chat:not(.chat-board) .msg-context-active .msg-body,
+.chat:not(.chat-board) .msg-selected .msg-body {
+  border-color: color-mix(in srgb, var(--focus), transparent 42%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--focus), transparent 38%),
+    0 8px 20px rgba(0, 0, 0, 0.16);
+}
+
+.chat:not(.chat-board) .msg-hit-active .msg-body {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--warn), transparent 26%),
+    0 8px 18px rgba(0, 0, 0, 0.16);
+}
+
+.chat:not(.chat-board) .msg-sep-pill {
+  min-height: 26px;
+  padding: 0 10px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 5px 14px rgba(0, 0, 0, 0.1);
+}
+
+html[data-theme="dark"] .chat:not(.chat-board) .msg-sep-pill {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 7px 16px rgba(0, 0, 0, 0.18);
+}
+
+@media (max-width: 600px) {
+  .chat:not(.chat-board) {
+    --chat-line-gap: 6px;
+    --msg-body-max-width: min(82%, calc(100vw - 52px));
+  }
+
+  .chat.chat-dm {
+    --msg-body-max-width: min(82%, calc(100vw - 44px));
+  }
+}
+
+/* W-0978: Android WebView message fallback for stale layout metrics and wide media captions. */
+html.env-os-android .chat:not(.chat-board) .msg {
+  min-width: 0;
+  max-width: 100%;
+}
+
+html.env-os-android .chat:not(.chat-board) .msg-body {
+  min-width: 0;
+  max-width: min(100%, var(--msg-body-max-width));
+  overflow-wrap: anywhere;
+}
+
+html.env-os-android .chat:not(.chat-board) .msg-content-shell,
+html.env-os-android .chat:not(.chat-board) .msg-text,
+html.env-os-android .chat:not(.chat-board) .msg-caption,
+html.env-os-android .chat:not(.chat-board) .chat-file-preview,
+html.env-os-android .chat:not(.chat-board) .file-row-chat {
+  max-width: 100%;
+}
+
+html.env-os-android .chat:not(.chat-board) .msg-meta,
+html.env-os-android .chat:not(.chat-board) .msg-forward,
+html.env-os-android .chat:not(.chat-board) .msg-reply {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+html.env-os-android .ctx-menu.ctx-menu-message-action-list {
+  max-width: min(276px, calc(100dvw - 28px));
+}
+
+html.env-os-android .ctx-menu.ctx-menu-message-action-list .ctx-list {
+  max-height: min(var(--ctx-list-max-h, 292px), calc(100dvh - 168px));
+}
+
+/* W-0985: history typography and date separator anti-overlap.
+ * Date separators are inline instead of per-item sticky pills, so they cannot
+ * stack over each other while old history batches are added.
+ */
+.chat:not(.chat-board) .msg-text,
+.chat:not(.chat-board) .msg-caption {
+  letter-spacing: 0;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+}
+
+.chat:not(.chat-board) .msg-meta,
+.chat:not(.chat-board) .msg-time,
+.chat:not(.chat-board) .msg-status,
+.chat:not(.chat-board) .msg-edited {
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat:not(.chat-board) .msg-date {
+  position: relative;
+  top: auto;
+  z-index: 1;
+  isolation: isolate;
+  margin: 8px 0;
+  padding: 3px 0;
+  pointer-events: none;
+}
+
+.chat:not(.chat-board) .msg-date .msg-sep-line {
+  display: none;
+}
+
+.chat:not(.chat-board) .msg-date .msg-sep-pill {
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 58%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel), transparent 22%);
+  color: color-mix(in srgb, var(--text), var(--muted) 18%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+/* W-0986: reference cleanup for message density, sharp date pills and viewer chrome.
+ * This final polish layer intentionally overrides older blur/shadow-heavy rules
+ * that made dates look muddy and photo-viewer controls disappear on light media.
+ */
+.chat:not(.chat-board) {
+  --msg-in-radius: 15px;
+  --msg-out-radius: 15px;
+  --msg-in-radius-tail: 6px;
+  --msg-out-radius-tail: 6px;
+  --msg-in-pad-y: 7px;
+  --msg-in-pad-x: 12px;
+  --msg-out-pad-y: 7px;
+  --msg-out-pad-x: 12px;
+  --msg-in-pad-bottom: 15px;
+  --msg-out-pad-bottom: 15px;
+  --msg-meta-font-size: 11.5px;
+  --msg-text-size: 15px;
+  --msg-text-line: 1.28;
+  --msg-card-shadow: none;
+  --msg-card-outline: 0 0 0 1px color-mix(in srgb, var(--line), transparent 76%);
+  --msg-modern-outline-in: color-mix(in srgb, var(--line), transparent 74%);
+  --msg-modern-outline-out: color-mix(in srgb, var(--focus), transparent 74%);
+}
+
+html[data-theme="light"] .chat:not(.chat-board) {
+  --msg-in-bg: rgba(255, 255, 255, 0.96);
+  --msg-out-bg: color-mix(in srgb, var(--focus) 9%, #ffffff 91%);
+  --msg-in-border-color: rgba(34, 48, 68, 0.12);
+  --msg-out-border-color: color-mix(in srgb, var(--focus), transparent 70%);
+  --msg-time-color: color-mix(in srgb, var(--muted), #111827 12%);
+  --msg-out-meta-color: color-mix(in srgb, var(--focus), #26323f 42%);
+}
+
+html[data-theme="dark"] .chat:not(.chat-board) {
+  --msg-in-bg: color-mix(in srgb, var(--panel2) 82%, #ffffff 9%);
+  --msg-out-bg: color-mix(in srgb, var(--focus) 18%, var(--panel2) 82%);
+  --msg-in-border-color: rgba(255, 255, 255, 0.07);
+  --msg-out-border-color: color-mix(in srgb, var(--focus), transparent 72%);
+  --msg-time-color: rgba(205, 215, 224, 0.66);
+  --msg-out-meta-color: rgba(125, 229, 209, 0.78);
+}
+
+.chat:not(.chat-board) .msg:not(.msg-sys):not(.msg-attach) .msg-body {
+  border-color: var(--msg-modern-outline-in);
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-out:not(.msg-sys):not(.msg-attach) .msg-body {
+  border-color: var(--msg-modern-outline-out);
+}
+
+.chat:not(.chat-board) .msg-text,
+.chat:not(.chat-board) .msg-caption {
+  font-size: var(--msg-text-size, 15px);
+  line-height: var(--msg-text-line, 1.28);
+}
+
+.chat:not(.chat-board) .msg-meta {
+  gap: 3px;
+  font-size: var(--msg-meta-font-size, 11.5px);
+  font-weight: 600;
+  opacity: 0.86;
+}
+
+.chat:not(.chat-board) .msg-status {
+  font-weight: 700;
+}
+
+.chat:not(.chat-board) .msg-date {
+  margin: 10px 0;
+  padding: 0;
+}
+
+.chat:not(.chat-board) .msg-date .msg-sep-pill {
+  min-height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel2) 84%, var(--text) 16%);
+  color: color-mix(in srgb, var(--text), var(--muted) 8%);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 24px;
+  text-shadow: none;
+}
+
+html[data-theme="light"] .chat:not(.chat-board) .msg-date .msg-sep-pill {
+  background: #ffffff;
+  color: #52606d;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.08);
+}
+
+html[data-theme="dark"] .chat:not(.chat-board) .msg-date .msg-sep-pill {
+  background: rgba(58, 64, 72, 0.96);
+  color: rgba(238, 244, 250, 0.9);
+}
+
+.overlay.overlay-viewer .viewer-header {
+  min-height: 64px;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.34) 62%, rgba(0, 0, 0, 0));
+}
+
+.overlay.overlay-viewer .viewer-author,
+.overlay.overlay-viewer .viewer-header-actions .btn {
+  opacity: 1;
+}
+
+.overlay.overlay-viewer .viewer-author-name,
+.overlay.overlay-viewer .viewer-title {
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72);
+}
+
+.overlay.overlay-viewer .viewer-author-handle,
+.overlay.overlay-viewer .viewer-author-date,
+.overlay.overlay-viewer .viewer-sub {
+  color: rgba(255, 255, 255, 0.84);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72);
+}
+
+.overlay.overlay-viewer .viewer-header-actions .btn,
+.overlay.overlay-viewer .viewer-switcher-btn {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.46);
+  color: #ffffff;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.overlay.overlay-viewer .viewer-header-actions .btn:hover,
+.overlay.overlay-viewer .viewer-switcher-btn:hover {
+  background: rgba(0, 0, 0, 0.62);
+  color: #ffffff;
+}
+
+.overlay.overlay-viewer .viewer-author .avatar {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .viewer-header {
+    background:
+      linear-gradient(180deg, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.28) 70%, rgba(0, 0, 0, 0));
+  }
+
+  .chat:not(.chat-board) {
+    --msg-text-size: 15px;
+    --msg-meta-font-size: 11.5px;
+  }
+}
+
+/* W-0987: layered history item contracts.
+ * The history rail, text, media, audio, date, system and interaction layers
+ * are intentionally separated here so one chat item state cannot resize or
+ * repaint another one while old messages/media are lazy-loaded.
+ */
+.chat:not(.chat-board) {
+  --history-layer-rail-max: min(100%, 1040px);
+  --history-layer-rail-pad-x: clamp(14px, 2vw, 28px);
+  --history-layer-gap: 4px;
+  --history-layer-group-gap: 2px;
+  --history-bubble-max: min(420px, 70%);
+  --history-audio-frame-width: min(430px, 74%);
+  --msg-body-max-width: var(--history-bubble-max);
+  --msg-in-radius: 14px;
+  --msg-out-radius: 14px;
+  --msg-in-radius-tail: 7px;
+  --msg-out-radius-tail: 7px;
+  --msg-in-pad-y: 6px;
+  --msg-in-pad-x: 10px;
+  --msg-out-pad-y: 6px;
+  --msg-out-pad-x: 10px;
+  --msg-in-pad-bottom: 14px;
+  --msg-out-pad-bottom: 14px;
+  --msg-text-size: 14.5px;
+  --msg-text-line: 1.3;
+  --msg-meta-font-size: 11.25px;
+  --msg-card-shadow: none;
+  --chat-line-gap: var(--history-layer-gap);
+  --chat-media-frame-max: 430px;
+  --chat-media-frame-width: min(430px, var(--msg-body-max-width));
+  --chat-album-frame-max: 430px;
+  --chat-history-media-radius: 14px;
+}
+
+html[data-theme="light"] .chat:not(.chat-board) {
+  --msg-in-bg: rgba(255, 255, 255, 0.98);
+  --msg-out-bg: color-mix(in srgb, var(--focus) 8%, #ffffff 92%);
+  --msg-in-border-color: rgba(30, 41, 59, 0.11);
+  --msg-out-border-color: color-mix(in srgb, var(--focus), transparent 76%);
+  --msg-time-color: rgba(82, 96, 109, 0.76);
+  --msg-out-meta-color: color-mix(in srgb, var(--focus), #24303a 42%);
+}
+
+html[data-theme="dark"] .chat:not(.chat-board) {
+  --msg-in-bg: color-mix(in srgb, var(--panel2) 88%, #ffffff 6%);
+  --msg-out-bg: color-mix(in srgb, var(--focus) 15%, var(--panel2) 85%);
+  --msg-in-border-color: rgba(255, 255, 255, 0.065);
+  --msg-out-border-color: color-mix(in srgb, var(--focus), transparent 76%);
+  --msg-time-color: rgba(205, 215, 224, 0.64);
+  --msg-out-meta-color: rgba(125, 229, 209, 0.76);
+}
+
+.chat:not(.chat-board) .chat-lines {
+  width: 100%;
+  max-width: var(--history-layer-rail-max);
+  padding: 10px var(--history-layer-rail-pad-x) 2px;
+  box-sizing: border-box;
+  gap: var(--history-layer-gap);
+}
+
+.chat:not(.chat-board) .msg {
+  max-width: 100%;
+  margin-block: 0;
+  contain: layout style;
+}
+
+.chat:not(.chat-board) .msg.msg-group-middle,
+.chat:not(.chat-board) .msg.msg-group-end,
+.chat:not(.chat-board) .msg.msg-cont {
+  margin-top: var(--history-layer-group-gap);
+}
+
+.chat:not(.chat-board) .msg:not(.msg-sys) .msg-body {
+  width: fit-content;
+  max-width: var(--msg-body-max-width);
+  min-width: 0;
+  box-shadow: none;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.chat:not(.chat-board) .msg:not(.msg-sys):not(.msg-attach) .msg-body {
+  padding: var(--msg-in-pad-y) var(--msg-in-pad-x) var(--msg-in-pad-bottom);
+  border-color: var(--msg-in-border-color);
+  background: var(--msg-in-bg);
+}
+
+.chat:not(.chat-board) .msg-out:not(.msg-sys):not(.msg-attach) .msg-body {
+  padding: var(--msg-out-pad-y) var(--msg-out-pad-x) var(--msg-out-pad-bottom);
+  border-color: var(--msg-out-border-color);
+  background: var(--msg-out-bg);
+}
+
+.chat:not(.chat-board) .msg-text:not(.msg-caption) {
+  font-size: var(--msg-text-size);
+  line-height: var(--msg-text-line);
+  overflow-wrap: anywhere;
+}
+
+.chat:not(.chat-board) .msg-meta {
+  margin-top: 2px;
+  gap: 3px;
+  font-size: var(--msg-meta-font-size);
+  font-weight: 600;
+  line-height: 1.1;
+  opacity: 0.84;
+}
+
+.chat:not(.chat-board) .msg-reply,
+.chat:not(.chat-board) .msg-forward {
+  margin: 0 0 5px;
+  padding: 5px 7px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--msg-accent, var(--focus)) 9%, transparent);
+  border-color: color-mix(in srgb, var(--msg-accent, var(--focus)), transparent 62%);
+}
+
+.chat:not(.chat-board) .msg-reacts {
+  margin-top: 3px;
+  gap: 3px;
+}
+
+.chat:not(.chat-board) .msg-react {
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-context-active .msg-body,
+.chat:not(.chat-board) .msg-selected .msg-body,
+.chat:not(.chat-board) .msg-hit-active .msg-body {
+  transform: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus), transparent 48%);
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .msg-body,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .msg-body,
+.chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .msg-body {
+  width: min(var(--chat-media-frame-width), var(--chat-media-frame-max), var(--msg-body-max-width));
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .file-row-chat.file-row-image,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .file-row-chat.file-row-image,
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .chat-album-surface,
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .chat-album-grid {
+  width: 100%;
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"] .chat-file-preview:not(.chat-file-preview-empty),
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"] .chat-file-preview:not(.chat-file-preview-empty),
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .chat-album-grid {
+  border-radius: var(--chat-history-media-radius);
+  overflow: hidden;
+  transform: none;
+  contain: layout paint;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview > .chat-file-img,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview > .chat-file-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview > .chat-file-video {
+  background: #000000;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"][data-msg-file="image"] .msg-attach-footer,
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"][data-msg-file="video"] .msg-attach-footer,
+.chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .msg-attach-footer {
+  width: 100%;
+  max-width: 100%;
+  padding: 6px 2px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"] .msg-caption {
+  padding: 0;
+  margin: 0;
+  font-size: var(--msg-text-size);
+  line-height: var(--msg-text-line);
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"] .msg-attach-footer .msg-meta {
+  margin-top: 3px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-footer="overlay"] .msg-meta,
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .msg-attach-footer-media.msg-attach-footer-meta-only .msg-meta {
+  min-height: 21px;
+  height: 21px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.38);
+  color: rgba(255, 255, 255, 0.93);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.48);
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .msg-body {
+  width: var(--history-audio-frame-width);
+  max-width: var(--msg-body-max-width);
+  padding: 7px 10px 15px;
+  border: 1px solid var(--msg-in-border-color);
+  border-radius: var(--msg-in-radius);
+  background: var(--msg-in-bg);
+  box-shadow: none;
+  position: relative;
+}
+
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-file="audio"] .msg-body {
+  border-color: var(--msg-out-border-color);
+  background: var(--msg-out-bg);
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-row-chat.file-row-audio,
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-row-chat.file-row-voice {
+  width: 100%;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  display: block;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-main {
+  width: 100%;
+  display: grid;
+  gap: 0;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-title,
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-chip-row,
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-meta {
+  display: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice {
+  width: 100%;
+  grid-template-columns: 34px minmax(110px, 1fr) minmax(38px, auto) minmax(28px, auto);
+  column-gap: 7px;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice-play {
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  background: color-mix(in srgb, var(--msg-accent, var(--focus)) 14%, transparent);
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice-track {
+  min-width: 100px;
+  height: 24px;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice-time,
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice-speed {
+  font-size: 12px;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .msg-attach-footer.msg-attach-footer-meta-only {
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.chat:not(.chat-board) .msg-date {
+  position: relative !important;
+  top: auto !important;
+  z-index: 1;
+  margin: 8px 0;
+  padding: 0;
+  pointer-events: none;
+}
+
+.chat:not(.chat-board) .msg-date .msg-sep-pill {
+  min-height: 22px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  font-size: 11.5px;
+  line-height: 22px;
+  font-weight: 750;
+  text-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-sys-noise {
+  display: none;
+}
+
+.chat:not(.chat-board) .msg-sys:not(.msg-sys-noise):not(.msg-sys-action) .msg-body {
+  max-width: min(360px, 72%);
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel2) 82%, transparent);
+  color: color-mix(in srgb, var(--text), var(--muted) 12%);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.chat:not(.chat-board) .msg-sys:not(.msg-sys-noise):not(.msg-sys-action) .msg-text {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+@media (min-width: 1400px) {
+  .chat:not(.chat-board) {
+    --history-layer-rail-max: min(100%, 1120px);
+    --history-bubble-max: min(440px, 70%);
+    --history-audio-frame-width: min(450px, 74%);
+  }
+}
+
+@media (max-width: 700px) {
+  .chat:not(.chat-board) {
+    --history-layer-rail-max: 100%;
+    --history-layer-rail-pad-x: 10px;
+    --history-bubble-max: min(84%, calc(100vw - 46px));
+    --history-audio-frame-width: min(84%, calc(100vw - 46px));
+    --chat-media-frame-max: min(340px, calc(100vw - 48px));
+    --chat-album-frame-max: min(340px, calc(100vw - 48px));
+    --chat-media-frame-width: min(78vw, var(--chat-media-frame-max), var(--msg-body-max-width));
+    --chat-history-media-radius: 13px;
+    --msg-text-size: 15px;
+  }
+
+  .chat.chat-dm {
+    --history-bubble-max: min(84%, calc(100vw - 38px));
+  }
+
+  .chat:not(.chat-board) .chat-lines {
+    padding-inline: var(--history-layer-rail-pad-x);
+  }
+
+  .chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice {
+    grid-template-columns: 34px minmax(92px, 1fr) minmax(34px, auto) minmax(28px, auto);
+    column-gap: 6px;
+  }
+}
+
+/* W-0988: screenshot-guided refinement for history, profile and menu.
+ * This layer keeps the W-0987 contracts, but tightens the wide desktop rail,
+ * stabilizes icon boxes, and removes technical-looking profile/menu details.
+ */
+.chat:not(.chat-board) {
+  --history-layer-rail-max: min(100%, 900px);
+  --history-layer-rail-pad-x: clamp(12px, 1.5vw, 22px);
+  --history-bubble-max: min(380px, 62%);
+  --history-audio-frame-width: min(360px, 62%);
+  --chat-media-frame-max: 380px;
+  --chat-media-frame-width: min(380px, var(--msg-body-max-width));
+  --chat-album-frame-max: 380px;
+  --chat-history-media-radius: 15px;
+}
+
+.chat:not(.chat-board) .chat-lines {
+  margin-inline: auto;
+}
+
+.chat:not(.chat-board) .msg:not(.msg-sys) .msg-body {
+  transform: none !important;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview,
+.chat:not(.chat-board) .msg-attach[data-msg-album="1"] .chat-album-grid {
+  transition: none !important;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview > .chat-file-img,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview > .chat-file-video {
+  transform: none !important;
+  transition: opacity 120ms ease;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"][data-msg-file="image"] .msg-attach-footer-media.msg-attach-footer-caption,
+.chat:not(.chat-board) .msg-attach[data-msg-footer="stacked"][data-msg-file="video"] .msg-attach-footer-media.msg-attach-footer-caption {
+  width: 100%;
+  padding: 7px 9px 8px;
+  border: 0;
+  border-radius: 0 0 var(--chat-history-media-radius) var(--chat-history-media-radius);
+  background: color-mix(in srgb, var(--msg-in-bg) 86%, transparent);
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-footer="stacked"][data-msg-file="image"] .msg-attach-footer-media.msg-attach-footer-caption,
+.chat:not(.chat-board) .msg-out.msg-attach[data-msg-footer="stacked"][data-msg-file="video"] .msg-attach-footer-media.msg-attach-footer-caption {
+  background: color-mix(in srgb, var(--msg-out-bg) 88%, transparent);
+}
+
+.chat:not(.chat-board) .msg-attach .msg-attach-footer-media.msg-attach-footer-caption .msg-text.msg-caption {
+  font-size: 14.5px;
+  line-height: 1.3;
+}
+
+.chat:not(.chat-board) .msg-attach .msg-attach-footer-media.msg-attach-footer-caption .msg-meta {
+  margin-top: 4px;
+  font-size: 11.5px;
+  opacity: 0.78;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .msg-body {
+  width: min(var(--history-audio-frame-width), 360px);
+  padding: 6px 9px 14px;
+  border-radius: 15px;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice {
+  grid-template-columns: 30px minmax(92px, 1fr) minmax(34px, auto) minmax(24px, auto);
+  column-gap: 6px;
+  min-height: 30px;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice-play {
+  min-width: 30px;
+  width: 30px;
+  height: 30px;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice-track {
+  min-width: 92px;
+  height: 22px;
+}
+
+.chat:not(.chat-board) .msg-date {
+  isolation: isolate;
+  contain: layout style;
+}
+
+.chat:not(.chat-board) .msg-date .msg-sep-pill {
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  color: color-mix(in srgb, var(--muted), var(--text) 20%);
+}
+
+.hdr-action,
+.chat-jump,
+.sidebar-search-icon,
+.sidebar-tab-bottom,
+.composer-actions .btn,
+.chat-voice-play,
+.chat-voice-speed,
+.ctx-icon {
+  flex-shrink: 0;
+  transform: none !important;
+}
+
+.hdr-action {
+  min-width: var(--hdr-action-size);
+  flex-basis: var(--hdr-action-size);
+}
+
+.composer-actions .btn {
+  width: var(--composer-action-size);
+  min-width: var(--composer-action-size);
+  height: var(--composer-action-size);
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.chat-jump {
+  min-width: 42px;
+  flex-basis: 42px;
+}
+
+.profile-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.profile-pill {
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  color: color-mix(in srgb, var(--muted), var(--text) 20%);
+  background: color-mix(in srgb, var(--panel2), transparent 18%);
+  border: 1px solid color-mix(in srgb, var(--line), transparent 55%);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.profile-id {
+  font-variant-numeric: normal;
+  letter-spacing: 0;
+  opacity: 0.78;
+}
+
+.profile-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.profile-insight-card {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 55%);
+  background: color-mix(in srgb, var(--panel2), transparent 24%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.035) inset;
+}
+
+.profile-insight-card-primary {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--focus), transparent 84%), transparent 62%),
+    color-mix(in srgb, var(--panel2), transparent 18%);
+}
+
+.profile-insight-label {
+  color: color-mix(in srgb, var(--muted), var(--text) 10%);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.profile-insight-value {
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.1;
+  font-weight: 850;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-insight-detail {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.sidebar[data-sidebar-tab="menu"] {
+  --menu-icon-profile: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 12a4 4 0 1 0 0-8a4 4 0 0 0 0 8Zm0 2c-4 0-7 2.1-7 5v1h14v-1c0-2.9-3-5-7-5Z'/%3E%3C/svg%3E");
+  --menu-icon-search: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M10.5 4a6.5 6.5 0 0 1 5.1 10.5l4 4l-1.4 1.4l-4-4A6.5 6.5 0 1 1 10.5 4Zm0 2a4.5 4.5 0 1 0 0 9a4.5 4.5 0 0 0 0-9Z'/%3E%3C/svg%3E");
+  --menu-icon-files: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M4 5h16v4H4V5Zm1 6h14v8H5v-8Zm5 2v2h4v-2h-4Z'/%3E%3C/svg%3E");
+  --menu-icon-plus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z'/%3E%3C/svg%3E");
+  --menu-icon-help: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M11 10h2v8h-2v-8Zm0-4h2v2h-2V6Zm1-3a9 9 0 1 1 0 18a9 9 0 0 1 0-18Z'/%3E%3C/svg%3E");
+  --menu-icon-login: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M5 5h8v2H7v10h6v2H5V5Zm10.4 3.6L18.8 12l-3.4 3.4L14 14l1-1H9v-2h6l-1-1l1.4-1.4Z'/%3E%3C/svg%3E");
+  --menu-icon-logout: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M5 4h8v2H7v12h6v2H5V4Zm11.6 4.6L20 12l-3.4 3.4l-1.4-1.4l1-1H10v-2h6.2l-1-1l1.4-1.4Z'/%3E%3C/svg%3E");
+}
+
+.sidebar[data-sidebar-tab="menu"] .sidebar-menu-row {
+  min-height: 58px;
+  border-radius: 18px;
+}
+
+.sidebar[data-sidebar-tab="menu"] .sidebar-menu-row .row-prefix {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--focus), transparent 88%);
+  color: color-mix(in srgb, var(--focus), var(--text) 16%);
+  font-size: 0;
+  line-height: 1;
+  animation: none !important;
+  transform: none !important;
+}
+
+.sidebar[data-sidebar-tab="menu"] .sidebar-menu-row .row-prefix::before {
+  content: "";
+  width: 17px;
+  height: 17px;
+  background: currentColor;
+  -webkit-mask: var(--menu-icon-mask, var(--menu-icon-help)) no-repeat center / contain;
+  mask: var(--menu-icon-mask, var(--menu-icon-help)) no-repeat center / contain;
+}
+
+.sidebar-menu-row[data-menu-icon="profile"] .row-prefix {
+  --menu-icon-mask: var(--menu-icon-profile);
+}
+
+.sidebar-menu-row[data-menu-icon="search"] .row-prefix {
+  --menu-icon-mask: var(--menu-icon-search);
+}
+
+.sidebar-menu-row[data-menu-icon="files"] .row-prefix {
+  --menu-icon-mask: var(--menu-icon-files);
+}
+
+.sidebar-menu-row[data-menu-icon="create-group"] .row-prefix,
+.sidebar-menu-row[data-menu-icon="create-board"] .row-prefix {
+  --menu-icon-mask: var(--menu-icon-plus);
+}
+
+.sidebar-menu-row[data-menu-icon="help"] .row-prefix {
+  --menu-icon-mask: var(--menu-icon-help);
+}
+
+.sidebar-menu-row[data-menu-icon="login"] .row-prefix {
+  --menu-icon-mask: var(--menu-icon-login);
+}
+
+.sidebar-menu-row[data-menu-icon="logout"] .row-prefix {
+  --menu-icon-mask: var(--menu-icon-logout);
+}
+
+@media (min-width: 1400px) {
+  .chat:not(.chat-board) {
+    --history-layer-rail-max: min(100%, 940px);
+    --history-bubble-max: min(390px, 62%);
+    --history-audio-frame-width: min(370px, 62%);
+    --chat-media-frame-max: 390px;
+    --chat-media-frame-width: min(390px, var(--msg-body-max-width));
+    --chat-album-frame-max: 390px;
+  }
+}
+
+@media (max-width: 700px) {
+  .profile-insight-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-pill {
+    max-width: 100%;
+  }
+
+  .sidebar[data-sidebar-tab="menu"] .sidebar-menu-row {
+    min-height: 56px;
+  }
+}
+
+/* W-0989: stable history media geometry + compact mobile action sheet polish. */
+.chat:not(.chat-board) .msg-album-loading,
+.chat:not(.chat-board) .chat-deferred-media-mount,
+.chat:not(.chat-board) .chat-file-preview,
+.chat:not(.chat-board) .chat-voice {
+  overflow-anchor: none;
+}
+
+.chat:not(.chat-board) .msg-album-loading {
+  contain: layout style paint;
+}
+
+.chat:not(.chat-board) .msg-album-loading .msg-body {
+  width: min(100%, var(--chat-album-shell-width, var(--chat-album-frame-max)), var(--msg-body-max-width));
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg-album-loading .msg-from-placeholder {
+  min-height: 18px;
+  margin: 0 0 4px;
+  visibility: hidden;
+}
+
+.chat:not(.chat-board) .msg-album-loading .chat-album-surface-loading {
+  position: relative;
+  width: min(100%, var(--chat-album-shell-width, var(--chat-album-frame-max)), var(--msg-body-max-width));
+  max-width: 100%;
+  display: grid;
+  gap: 0;
+  border-radius: var(--chat-history-media-radius, 16px);
+  overflow: hidden;
+  background: transparent;
+}
+
+.chat:not(.chat-board) .msg-album-loading .chat-album-grid-loading {
+  width: min(100%, var(--chat-album-shell-width, var(--chat-album-frame-max)), var(--msg-body-max-width));
+  min-height: 180px;
+  aspect-ratio: 1 / 1;
+  border-radius: inherit;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--panel2), transparent 24%);
+}
+
+.chat:not(.chat-board) .msg-album-loading[data-msg-album-layout="mosaic"] .chat-album-grid-loading {
+  aspect-ratio: auto;
+}
+
+.chat:not(.chat-board) .chat-album-grid-loading .chat-album-placeholder-item {
+  background: color-mix(in srgb, var(--panel2), transparent 16%);
+}
+
+.chat:not(.chat-board) .chat-album-grid-loading .chat-file-preview-loading {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: none;
+  transform: none !important;
+}
+
+.chat:not(.chat-board) .chat-album-grid-loading .chat-file-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: block;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, transparent, color-mix(in srgb, var(--text), transparent 92%), transparent),
+    color-mix(in srgb, var(--panel2), transparent 18%);
+  background-size: 180% 100%, 100% 100%;
+  animation: skel-shimmer 1.8s ease-in-out infinite;
+}
+
+.chat:not(.chat-board) .msg-album-loading .chat-album-footer-loading {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: auto;
+  min-width: 44px;
+  max-width: calc(100% - 12px);
+  padding: 0;
+  pointer-events: none;
+}
+
+.chat:not(.chat-board) .msg-album-loading .chat-album-loading-meta {
+  width: 44px;
+  min-width: 44px;
+  min-height: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--chat-history-media-meta-bg);
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .chat-deferred-voice-mount {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  contain: layout style;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-row-chat.file-row-audio,
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-row-chat.file-row-voice {
+  min-height: 42px;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice,
+.chat:not(.chat-board) .chat-deferred-voice-mount .chat-voice {
+  height: 32px;
+  min-height: 32px;
+  grid-template-columns: 30px minmax(104px, 1fr) 42px 28px;
+  align-items: center;
+}
+
+.chat:not(.chat-board) .chat-deferred-voice-mount .chat-voice-placeholder .chat-voice-speed {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice-time {
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .chat-voice-speed {
+  min-width: 24px;
+  justify-self: end;
+}
+
+/* W-0992: rigid history media slots before lazy media loads. */
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"],
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] {
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: var(--chat-media-slot-ratio, 4 / 3);
+  flex: 0 0 auto;
+  contain: layout style paint;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] > .chat-file-placeholder,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] > .chat-file-placeholder,
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] > .chat-file-img,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] > .chat-file-img,
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] > .chat-file-video {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-row-chat.file-row-audio,
+.chat:not(.chat-board) .msg-attach[data-msg-file="audio"] .file-row-chat.file-row-voice,
+.chat:not(.chat-board) .chat-deferred-voice-mount {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+/* W-0990: mobile media/viewer containment.
+ * Album mosaics may carry inline width/height from Telegram layout geometry.
+ * On narrow screens the container, not that inline number, must own the width.
+ */
+@media (max-width: 600px) {
+  .chat:not(.chat-board) {
+    --history-mobile-media-gutter: 34px;
+    --history-mobile-media-max: min(100%, calc(100dvw - var(--history-mobile-media-gutter)), var(--msg-body-max-width));
+    --chat-media-frame-max: min(340px, calc(100dvw - var(--history-mobile-media-gutter)));
+    --chat-album-frame-max: min(340px, calc(100dvw - var(--history-mobile-media-gutter)));
+    --chat-media-frame-width: min(78vw, var(--chat-media-frame-max), var(--history-mobile-media-max));
+  }
+
+  .chat:not(.chat-board) .chat-lines,
+  .chat:not(.chat-board) .msg,
+  .chat:not(.chat-board) .msg-body {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .chat:not(.chat-board) .msg-attach[data-msg-file="image"] .msg-body,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="video"] .msg-body,
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .msg-body {
+    width: min(var(--history-mobile-media-max), var(--chat-media-frame-max));
+    max-width: min(100%, calc(100dvw - var(--history-mobile-media-gutter)));
+    overflow: hidden;
+  }
+
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] {
+    --chat-album-shell-width-resolved: min(
+      var(--chat-album-shell-width, var(--chat-album-frame-max)),
+      var(--chat-album-frame-max),
+      var(--history-mobile-media-max)
+    );
+  }
+
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .chat-album-surface,
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .chat-album-grid,
+  .chat:not(.chat-board) .msg-album-loading .chat-album-surface-loading,
+  .chat:not(.chat-board) .msg-album-loading .chat-album-grid-loading {
+    width: var(--chat-album-shell-width-resolved) !important;
+    max-width: min(100%, calc(100dvw - var(--history-mobile-media-gutter)));
+  }
+
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"][data-msg-album-layout="mosaic"] .chat-album-grid,
+  .chat:not(.chat-board) .msg-album-loading[data-msg-album-layout="mosaic"] .chat-album-grid-loading {
+    height: auto !important;
+    aspect-ratio: var(--chat-album-shell-ratio, 1 / 1);
+  }
+
+  .chat:not(.chat-board) .msg-out.msg-attach[data-msg-album="1"] .chat-album-surface,
+  .chat:not(.chat-board) .msg-out.msg-attach[data-msg-album="1"] .chat-album-grid {
+    justify-self: end;
+    margin-left: auto;
+    margin-right: 0;
+  }
+
+  .chat:not(.chat-board) .msg-attach[data-msg-file="image"] .file-row-chat.file-row-image,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="video"] .file-row-chat.file-row-image,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="image"] .chat-file-preview,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="video"] .chat-file-preview,
+  .chat:not(.chat-board) .msg-attach .msg-attach-footer-media {
+    max-width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual {
+    width: 100dvw;
+    max-width: 100dvw;
+    overflow: hidden;
+  }
+
+  .overlay.overlay-viewer .viewer-stage,
+  .overlay.overlay-viewer .viewer-media,
+  .overlay.overlay-viewer .viewer-img-scroll {
+    width: 100%;
+    max-width: 100dvw;
+    min-width: 0;
+  }
+
+  .overlay.overlay-viewer .viewer-media .viewer-img,
+  .overlay.overlay-viewer .viewer-media .viewer-video {
+    max-width: min(100dvw, 100%);
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell,
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-main,
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-caption {
+    max-width: 100dvw;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
+
+/* W-0991: Telegram-like mobile album scale.
+ * W-0990 correctly stopped album overflow, but reused the text bubble max-width.
+ * Grouped photos need their own media rail so they stay large while still clamped
+ * by the phone viewport.
+ */
+@media (max-width: 600px) {
+  .chat:not(.chat-board) {
+    --history-mobile-album-gutter: 36px;
+    --chat-album-frame-max: 372px;
+    --history-mobile-album-max: min(var(--chat-album-frame-max), calc(100dvw - var(--history-mobile-album-gutter)));
+  }
+
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] {
+    --chat-album-shell-width-resolved: min(
+      var(--chat-album-shell-width, var(--chat-album-frame-max)),
+      var(--history-mobile-album-max)
+    );
+  }
+
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .msg-body {
+    width: var(--chat-album-shell-width-resolved);
+    max-width: min(100%, calc(100dvw - var(--history-mobile-album-gutter)));
+    overflow: hidden;
+  }
+
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .chat-album-surface,
+  .chat:not(.chat-board) .msg-attach.msg-album[data-msg-album="1"] .chat-album-grid,
+  .chat:not(.chat-board) .msg-album-loading .chat-album-surface-loading,
+  .chat:not(.chat-board) .msg-album-loading .chat-album-grid-loading {
+    width: var(--chat-album-shell-width-resolved) !important;
+    max-width: min(100%, calc(100dvw - var(--history-mobile-album-gutter)));
+  }
+}
+
+/* W-0999: hard history tail and media containment.
+ * Very tall photos must not push the latest messages/composer out of the viewport,
+ * and the full-screen viewer must reserve a real flex row for footer/rail chrome.
+ */
+.chat:not(.chat-board) {
+  --chat-media-frame-max-h: min(52dvh, 440px);
+}
+
+.chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"],
+.chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview[data-history-geometry="reserved"] {
+  max-height: var(--chat-media-frame-max-h);
+}
+
+.overlay.overlay-viewer {
+  z-index: 80;
+}
+
+.overlay.overlay-viewer:not(.hidden) {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual {
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  isolation: isolate;
+  background: #000;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(82dvh, calc(100dvh - 128px));
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail .viewer-stage {
+  max-height: min(74dvh, calc(100dvh - 228px));
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-media,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-img-scroll {
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual:not(.viewer-zoomed) .viewer-img-scroll {
+  box-sizing: border-box;
+  padding: clamp(4px, 1.2vh, 14px) clamp(12px, 4vw, 88px);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail:not(.viewer-zoomed) .viewer-img-scroll {
+  padding-bottom: clamp(8px, 1.6vh, 18px);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-media .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-media .viewer-video {
+  width: auto;
+  height: auto;
+  max-width: min(100dvw, 100%);
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual:not(.viewer-zoomed) .viewer-media .viewer-img {
+  width: auto !important;
+  height: auto !important;
+  max-width: min(100%, calc(100dvw - 24px));
+  max-height: calc(100dvh - 132px);
+  object-fit: contain;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail:not(.viewer-zoomed) .viewer-media .viewer-img {
+  max-height: calc(100dvh - 232px);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell {
+  flex: 0 0 auto;
+  max-height: min(34dvh, 220px);
+  overflow: hidden;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-rail {
+  flex: 0 0 auto;
+  max-height: 76px;
+}
+
+@media (max-width: 600px) {
+  .chat:not(.chat-board) {
+    --chat-media-frame-max-h: min(46dvh, 360px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-stage {
+    max-height: min(78dvh, calc(100dvh - 116px));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail .viewer-stage {
+    max-height: min(68dvh, calc(100dvh - 182px));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-footer-shell {
+    max-height: min(38dvh, 176px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-caption-body {
+    max-height: 4.5rem;
+  }
+}
+
+/* W-1009: strict viewer fit. Keep visual media inside the flex stage instead of
+ * precomputing viewport-height offsets that diverge on PWA/browser chrome.
+ */
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual {
+  width: 100dvw;
+  max-width: 100dvw;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  background: #000;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-stage,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail .viewer-stage {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100dvw;
+  max-height: none;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-media,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-img-scroll {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual:not(.viewer-zoomed) .viewer-img-scroll,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail:not(.viewer-zoomed) .viewer-img-scroll {
+  padding: clamp(4px, 1.2vh, 14px) clamp(8px, 2.4vw, 42px);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual:not(.viewer-zoomed) .viewer-media .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual.viewer-has-rail:not(.viewer-zoomed) .viewer-media .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-media .viewer-video {
+  width: auto !important;
+  height: auto !important;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: transparent;
+}
+
+/* W-1011: mobile viewer and physical-bottom polish.
+ * The screenshot bottom strip is outside the flex stage, so keep the host canvas,
+ * overlay, modal, footer and rail on the same black surface.
+ */
+html.viewer-surface-open,
+html.viewer-surface-open body,
+html.viewer-surface-open #app,
+html.viewer-surface-open body::after,
+html.call-surface-open,
+html.call-surface-open body,
+html.call-surface-open #app,
+html.call-surface-open body::after {
+  --safe-area-bg: #000;
+  --app-frame-bg: #000;
+  --app-frame-safe-bg: #000;
+  --app-host-canvas-bg: #000;
+  background: #000;
+  background-color: #000;
+}
+
+@media (max-width: 600px) {
+  html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) body::after {
+    height: max(var(--app-frame-bottom-inset, 0px), var(--app-gap-bottom, 0px), var(--safe-bottom-pad, 0px));
+  }
+
+  html.viewer-surface-open .overlay.overlay-viewer,
+  html.viewer-surface-open .overlay.overlay-viewer .modal.modal-viewer.viewer-visual,
+  html.viewer-surface-open .overlay.overlay-viewer .viewer-footer-shell,
+  html.viewer-surface-open .overlay.overlay-viewer .viewer-rail {
+    background: #000;
+    background-color: #000;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-header {
+    padding: max(8px, env(safe-area-inset-top)) 10px 6px;
+    min-height: calc(46px + env(safe-area-inset-top));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-header-actions {
+    gap: 6px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-header-actions .btn {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-switcher {
+    width: 46px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-switcher-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual .viewer-rail {
+    padding-bottom: max(10px, var(--app-frame-bottom-inset, 0px), env(safe-area-inset-bottom));
+  }
+}
+
+/* W-1012: screenshot repair for PWA viewer/history geometry.
+ * Keep the physical bottom black, make the media stage a hard grid row, and
+ * prevent stale progress chrome from drawing over already visible media.
+ */
+html.viewer-surface-open::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: max(var(--app-frame-bottom-inset, 0px), var(--app-gap-bottom, 0px), var(--safe-bottom-pad, 0px), env(safe-area-inset-bottom));
+  background: #000;
+  pointer-events: none;
+  z-index: 79;
+}
+
+html.viewer-surface-open #app.app-frame::after,
+html.viewer-surface-open body::after,
+html.call-surface-open #app.app-frame::after,
+html.call-surface-open body::after {
+  background: #000;
+  background-color: #000;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: stretch;
+  justify-content: stretch;
+  min-width: 0;
+  min-height: 0;
+  background: #000;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-shell {
+  min-width: 0;
+  min-height: 0;
+  flex: none;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-stage,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-stage {
+  align-self: stretch;
+  justify-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  contain: layout paint;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-media,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-img-scroll {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  contain: layout paint;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"]:not(.viewer-zoomed) .viewer-media .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail:not(.viewer-zoomed) .viewer-media .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-media .viewer-video {
+  min-width: 0;
+  min-height: 0;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: contain;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-shell {
+  max-height: min(30dvh, 220px);
+  overflow: hidden;
+  background: #000;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-rail {
+  background: #000;
+}
+
+.chat:not(.chat-board) .chat-file-preview:has(> img.chat-file-img) > .chat-media-progress,
+.chat:not(.chat-board) .chat-file-preview:has(> video.chat-file-video) > .chat-media-progress {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chat:not(.chat-board) .chat-file-preview:has(> img.chat-file-img) > .chat-media-state,
+.chat:not(.chat-board) .chat-file-preview:has(> video.chat-file-video) > .chat-media-state {
+  display: none !important;
+}
+
+.chat-jump[data-jump-unread="0"] .chat-jump-badge,
+.chat-jump[data-jump-unread="0"] .chat-jump-label {
+  display: none !important;
+}
+
+@media (max-width: 600px) {
+  html.viewer-surface-open::after {
+    height: max(var(--app-frame-bottom-inset, 0px), var(--app-gap-bottom, 0px), var(--safe-bottom-pad, 0px), env(safe-area-inset-bottom), 28px);
+  }
+
+  .overlay.overlay-viewer {
+    min-height: 100svh;
+    background: #000;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+    height: 100dvh;
+    min-height: 100svh;
+    max-height: 100dvh;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-img-scroll {
+    padding: 0 4px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-shell {
+    max-height: min(24dvh, 128px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-rail {
+    padding-bottom: max(12px, var(--app-bottom-live-pad, 0px), env(safe-area-inset-bottom));
+  }
+
+  .chat-jump {
+    right: calc(10px + env(safe-area-inset-right));
+    bottom: calc(var(--chat-bottom-inset, 0px) + var(--mobile-composer-bottom-offset, 0px) + var(--chat-history-bottom-gap, 0px) + 18px);
+    z-index: 9;
+  }
+
+  .page.page-profile {
+    scroll-padding-top: calc(var(--mobile-header-overlay-h, 0px) + 10px);
+  }
+
+  .page.page-profile .profile-card {
+    scroll-margin-top: calc(var(--mobile-header-overlay-h, 0px) + 10px);
+  }
+}
+
+/* W-1013: crash screenshot repair for blank visual viewer and mobile host paint.
+ * `contain: size` on the media row can hide the main image/video in Chromium
+ * while the sibling footer still paints. Keep only layout/paint containment and
+ * give the media, preloader and footer deterministic layers.
+ */
+html.viewer-surface-open,
+html.viewer-surface-open body,
+html.viewer-surface-open #app,
+html.viewer-surface-open #app.app-frame,
+html.viewer-surface-open #app.app-frame::after,
+html.viewer-surface-open body::after {
+  --safe-area-bg: #000;
+  --app-frame-bg: #000;
+  --app-frame-safe-bg: #000;
+  --app-host-canvas-bg: #000;
+  background: #000 !important;
+  background-color: #000 !important;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+  grid-template-rows: minmax(0, auto) minmax(0, 1fr) minmax(0, auto);
+  grid-template-columns: minmax(0, 1fr);
+  isolation: isolate;
+  contain: layout paint;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-stage,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-areas: "viewer-media";
+  place-items: stretch;
+  overflow: hidden;
+  background: #000;
+  contain: layout paint;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-media,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-img-scroll {
+  position: relative;
+  z-index: 1;
+  grid-area: viewer-media;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #000;
+  contain: layout paint;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-video {
+  position: relative;
+  z-index: 1;
+  display: block;
+  visibility: visible;
+  opacity: 1;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-preloader {
+  z-index: 3;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-load="ready"] .viewer-preloader.hidden,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-load="ready"] .viewer-preloader {
+  display: none !important;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-load="error"] .viewer-preloader {
+  display: grid;
+  background: rgba(0, 0, 0, 0.72);
+  pointer-events: auto;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-shell {
+  align-self: end;
+  justify-self: stretch;
+  z-index: 4;
+  opacity: 0.82;
+  contain: layout paint;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-context {
+  min-height: 0;
+}
+
+@media (max-width: 600px) {
+  html.viewer-surface-open:not(.kbd-open) #app,
+  html.viewer-surface-open:not(.kbd-open) .overlay.overlay-viewer,
+  html.viewer-surface-open:not(.kbd-open) .overlay.overlay-viewer .modal.modal-viewer.viewer-visual {
+    min-height: var(--app-vh, 100dvh);
+    background: #000 !important;
+    background-color: #000 !important;
+  }
+
+  html.viewer-surface-open:not(.kbd-open) body::after,
+  html.viewer-surface-open:not(.kbd-open) #app.app-frame::after,
+  html.viewer-surface-open:not(.kbd-open)::after {
+    height: max(var(--app-frame-bottom-inset, 0px), var(--app-gap-bottom, 0px), var(--safe-bottom-pad, 0px), env(safe-area-inset-bottom), 28px);
+    background: #000 !important;
+    background-color: #000 !important;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header {
+    padding-top: max(10px, env(safe-area-inset-top));
+    background: #000;
+  }
+
+  .hdr-right[data-status-empty="0"] .hdr-status {
+    max-height: 1.35em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* W-1050: mobile contact list clearance above the bottom nav.
+   The bottom tab bar is fixed glass; the list needs more scroll reserve and a
+   tighter compact search control so contact rows do not disappear underneath. */
+@media (max-width: 600px) and (pointer: coarse) {
+  .sidebar {
+    --mobile-sidebar-sticky-h: calc(env(safe-area-inset-top) + 62px);
+    --mobile-bottom-nav-scroll-pad: calc(var(--mobile-bottom-nav-h) + 56px);
+  }
+
+  .sidebar-mobile-sticky .sidebar-searchbar {
+    width: 42px;
+    min-height: 42px;
+  }
+
+  .sidebar-body {
+    padding-bottom: var(--mobile-bottom-nav-scroll-pad);
+    scroll-padding-bottom: calc(var(--mobile-bottom-nav-h) + 40px);
+  }
+
+  .sidebar-body > .chatlist::after {
+    height: calc(var(--mobile-bottom-nav-h) + 56px);
+    min-height: 132px;
+  }
+}

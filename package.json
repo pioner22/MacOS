@@ -1,0 +1,52 @@
+{
+  "name": "yagodka-client-macos",
+  "private": true,
+  "version": "0.1.934",
+  "description": "Yagodka macOS Electron client",
+  "license": "GPL-3.0-or-later",
+  "author": "Yagodka",
+  "type": "module",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "postinstall": "node scripts/postinstall.mjs",
+    "build": "vite build && node scripts/build_skins.mjs && node scripts/build_pwa.mjs",
+    "preview": "vite preview --host 0.0.0.0 --port 5173",
+    "desktop:dev": "electron desktop/main.cjs",
+    "desktop:build": "npm run build && electron-builder --dir",
+    "desktop:build:unsigned": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --dir --mac",
+    "desktop:dist": "npm run build && electron-builder",
+    "desktop:dist:mac": "npm run build && electron-builder --mac dmg zip",
+    "desktop:dist:mac:unsigned": "npm run desktop:build:unsigned && node scripts/build_unsigned_mac_feed.mjs",
+    "desktop:publish:mac": "npm run build && electron-builder --mac dmg zip --publish always",
+    "desktop:dist:win": "npm run build && electron-builder --win nsis",
+    "desktop:dist:linux": "npm run build && electron-builder --linux AppImage deb",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node scripts/run_tests.mjs"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "overrides": {
+    "js-yaml": "^4.2.0",
+    "picomatch": "^4.0.4",
+    "postcss": "^8.5.12",
+    "rollup": "^4.59.0",
+    "tar": "^7.5.16"
+  }
+}

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>Yagodka — iOS Input Lab</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b0f14;
+        color: #e6edf3;
+        font:
+          500 16px/1.35 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Arial,
+          sans-serif;
+      }
+      .wrap {
+        min-height: 100dvh;
+        padding: 16px;
+        padding-top: calc(16px + env(safe-area-inset-top));
+        padding-bottom: calc(16px + env(safe-area-inset-bottom));
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 18px;
+        letter-spacing: 0.02em;
+      }
+      p {
+        margin: 0 0 14px;
+        opacity: 0.8;
+        font-size: 13px;
+      }
+      .card {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 14px;
+        padding: 12px;
+        margin: 12px 0;
+      }
+      .label {
+        display: block;
+        font-size: 12px;
+        opacity: 0.85;
+        margin: 0 0 8px;
+      }
+      input,
+      textarea,
+      [contenteditable] {
+        width: 100%;
+        border: 1px solid rgba(236, 72, 153, 0.35);
+        background: rgba(0, 0, 0, 0.25);
+        color: #e6edf3;
+        border-radius: 12px;
+        padding: 12px 12px;
+        font: inherit;
+        outline: none;
+      }
+      textarea {
+        min-height: 96px;
+        resize: vertical;
+      }
+      [contenteditable] {
+        min-height: 96px;
+      }
+      input:focus,
+      textarea:focus,
+      [contenteditable]:focus {
+        border-color: rgba(236, 72, 153, 0.8);
+        box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.22);
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .row a {
+        color: rgba(236, 72, 153, 0.95);
+        text-decoration: none;
+      }
+      .row a:focus {
+        outline: 2px solid rgba(236, 72, 153, 0.9);
+        outline-offset: 2px;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>iOS Input Lab</h1>
+      <p>
+        Откройте в Safari iOS или в PWA (standalone) и сравните: появляется ли панель Undo/Redo/✓ при фокусе. Это тестовая
+        страница, не влияет на приложение.
+      </p>
+      <div class="row">
+        <a href="/">← Вернуться в Yagodka</a>
+      </div>
+
+      <div class="card">
+        <label class="label" for="t1">Textarea (строгий режим: autocorrect/spellcheck OFF)</label>
+        <textarea
+          id="t1"
+          placeholder="Введите текст…"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          inputmode="text"
+          enterkeyhint="done"
+        ></textarea>
+      </div>
+
+      <div class="card">
+        <label class="label" for="i1">Input type=text (строгий режим: autocorrect/spellcheck OFF)</label>
+        <input
+          id="i1"
+          type="text"
+          placeholder="Введите текст…"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          inputmode="text"
+          enterkeyhint="done"
+        />
+      </div>
+
+      <div class="card">
+        <span class="label">contenteditable (сравнение)</span>
+        <div contenteditable="true" autocorrect="off" autocapitalize="off" spellcheck="false">Текст…</div>
+      </div>
+    </div>
+  </body>
+</html>
+

@@ -1,0 +1,98 @@
+.chat:not(.chat-board) .file-row-chat.file-row-image .chat-media-overlay-controls,
+.chat:not(.chat-board) .chat-album-grid .chat-media-overlay-controls {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  z-index: 4;
+  pointer-events: none;
+}
+
+.chat:not(.chat-board) .chat-media-overlay-start,
+.chat:not(.chat-board) .chat-media-overlay-end,
+.chat:not(.chat-board) .chat-media-overlay-controls .file-actions {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  pointer-events: auto;
+}
+
+.chat:not(.chat-board) .chat-media-overlay-end {
+  margin-left: auto;
+}
+
+.chat:not(.chat-board) .file-row-chat.file-row-image .chat-media-overlay-controls .file-actions {
+  position: static;
+  right: auto;
+  bottom: auto;
+  margin: 0;
+  justify-content: flex-end;
+}
+
+.chat:not(.chat-board) .chat-media-overlay-controls .msg-select {
+  position: static;
+  left: auto;
+  top: auto;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.45);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+}
+
+.chat:not(.chat-board) .chat-media-overlay-controls .msg-select:hover {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.chat:not(.chat-board) .chat-media-overlay-controls .msg-select.msg-select-on,
+.chat:not(.chat-board) .chat-media-overlay-controls .msg-select.msg-select-partial {
+  background: var(--focus);
+  border-color: var(--focus);
+  color: #ffffff;
+}
+
+.chat:not(.chat-board) .chat-media-overlay-controls .file-action {
+  background: var(--msg-time-bg);
+  border-color: transparent;
+  color: #ffffff;
+  min-height: 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.chat:not(.chat-board) .chat-media-overlay-controls .file-action::before {
+  margin: 0;
+}
+
+.chat:not(.chat-board) .chat-media-overlay-controls .file-action-download {
+  min-width: 30px;
+  font-size: 0;
+  justify-content: center;
+}
+
+@media (max-width: 600px) {
+  .chat:not(.chat-board) .file-row-chat.file-row-image .chat-media-overlay-controls,
+  .chat:not(.chat-board) .chat-album-grid .chat-media-overlay-controls {
+    top: 6px;
+    left: 6px;
+    right: 6px;
+  }
+
+  .chat:not(.chat-board) .chat-media-overlay-controls .msg-select,
+  .chat:not(.chat-board) .chat-media-overlay-controls .file-action {
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    border-radius: 10px;
+  }
+}

@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0b0f14" />
+    <title>Yagodka · iOS Input Assistant Repro</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0f14;
+        --panel: rgba(255, 255, 255, 0.06);
+        --line: rgba(255, 255, 255, 0.14);
+        --text: #e6edf3;
+        --muted: rgba(230, 237, 243, 0.7);
+        --accent: #ec4899;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          500 16px/1.4 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Arial,
+          sans-serif;
+      }
+      main {
+        padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+        max-width: 880px;
+        margin: 0 auto;
+        display: grid;
+        gap: 14px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: 0.02em;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel);
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+      .grid {
+        display: grid;
+        gap: 10px;
+      }
+      @media (min-width: 760px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      input[type="text"],
+      textarea,
+      .ce {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.22);
+        color: var(--text);
+        padding: 12px 12px;
+        font: inherit;
+        outline: none;
+        box-sizing: border-box;
+      }
+      textarea {
+        min-height: 112px;
+        resize: vertical;
+      }
+      input[type="text"]:focus,
+      textarea:focus,
+      .ce:focus {
+        border-color: color-mix(in srgb, var(--accent), transparent 40%);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 65%);
+      }
+      .ce {
+        min-height: 112px;
+        white-space: pre-wrap;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      .chip {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(0, 0, 0, 0.16);
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .chip input {
+        margin: 0;
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      code {
+        font-family:
+          ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Monaco,
+          Consolas,
+          "Liberation Mono",
+          monospace;
+        font-size: 12px;
+      }
+      .ok {
+        color: color-mix(in srgb, var(--accent), #ffffff 10%);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>iOS PWA: системная панель Undo/Redo/✓ над клавиатурой</h1>
+      <p>
+        Эта страница нужна, чтобы воспроизводить поведение WebKit на iOS (Safari / PWA standalone).
+        Полностью отключить системную панель в PWA нельзя, но можно сделать так, чтобы она появлялась реже.
+      </p>
+
+      <div class="card">
+        <div class="row">
+          <span class="chip"><input id="mode-predictive" type="radio" name="mode" checked /> predictive</span>
+          <span class="chip"><input id="mode-strict" type="radio" name="mode" /> strict</span>
+          <span class="chip"><input id="mode-off" type="radio" name="mode" /> off</span>
+        </div>
+        <div class="hint">
+          <span class="ok">predictive</span> — включает autocorrect/spellcheck (часто заменяет Undo‑панель на ряд подсказок).<br />
+          <span class="ok">strict</span> — выключает autocorrect/spellcheck (полезно для ID/хэндлов).<br />
+          <span class="ok">off</span> — не трогаем атрибуты (как есть).
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <label>
+            textarea
+            <textarea id="ta" placeholder="Сообщение…"></textarea>
+          </label>
+          <div class="hint"><code id="ta-attrs"></code></div>
+        </div>
+
+        <div class="card">
+          <label>
+            input[type=text]
+            <input id="inp" type="text" placeholder="Имя / логин…" />
+          </label>
+          <div class="hint"><code id="inp-attrs"></code></div>
+        </div>
+
+        <div class="card">
+          <label>
+            contenteditable (div)
+            <div id="ce" class="ce" contenteditable="true" role="textbox" aria-label="contenteditable"></div>
+          </label>
+          <div class="hint"><code id="ce-attrs"></code></div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      function applyMode(el, mode) {
+        if (!el) return;
+        if (mode === "off") return;
+
+        if (mode === "strict") {
+          el.setAttribute("autocorrect", "off");
+          el.setAttribute("spellcheck", "false");
+          el.setAttribute("autocapitalize", "off");
+          el.setAttribute("autocomplete", "off");
+          el.setAttribute("inputmode", "text");
+          el.setAttribute("enterkeyhint", "done");
+          try {
+            el.spellcheck = false;
+          } catch {}
+          return;
+        }
+
+        // predictive
+        el.setAttribute("autocorrect", "on");
+        el.setAttribute("spellcheck", "true");
+        el.setAttribute("autocapitalize", "sentences");
+        el.setAttribute("autocomplete", "off");
+        el.setAttribute("inputmode", "text");
+        el.setAttribute("enterkeyhint", "done");
+        try {
+          el.spellcheck = true;
+        } catch {}
+      }
+
+      function attrs(el) {
+        if (!el) return "";
+        const keys = ["autocomplete", "autocorrect", "autocapitalize", "spellcheck", "inputmode", "enterkeyhint"];
+        return keys
+          .map((k) => `${k}=${JSON.stringify(el.getAttribute(k) ?? "")}`)
+          .join(" ");
+      }
+
+      const ta = document.getElementById("ta");
+      const inp = document.getElementById("inp");
+      const ce = document.getElementById("ce");
+      const outTa = document.getElementById("ta-attrs");
+      const outInp = document.getElementById("inp-attrs");
+      const outCe = document.getElementById("ce-attrs");
+
+      function currentMode() {
+        if (document.getElementById("mode-strict").checked) return "strict";
+        if (document.getElementById("mode-off").checked) return "off";
+        return "predictive";
+      }
+
+      function rerender() {
+        const mode = currentMode();
+        applyMode(ta, mode);
+        applyMode(inp, mode);
+        applyMode(ce, mode);
+        outTa.textContent = attrs(ta);
+        outInp.textContent = attrs(inp);
+        outCe.textContent = attrs(ce);
+      }
+
+      document.addEventListener("change", rerender);
+      rerender();
+    </script>
+  </body>
+</html>
+

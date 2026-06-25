@@ -1,0 +1,453 @@
+/* W-1014: hard viewer/media geometry after repeated PWA screenshot regressions. */
+html.viewer-surface-open,
+html.viewer-surface-open body,
+html.viewer-surface-open #app,
+html.viewer-surface-open .overlay.overlay-viewer {
+  background: #000 !important;
+  background-color: #000 !important;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+  --viewer-w1014-top: max(58px, calc(env(safe-area-inset-top) + 52px));
+  --viewer-w1014-bottom: clamp(92px, 22dvh, 176px);
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) !important;
+  width: 100dvw;
+  max-width: 100dvw;
+  height: var(--app-vh, 100dvh);
+  max-height: var(--app-vh, 100dvh);
+  overflow: hidden;
+  background: #000 !important;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 8;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  min-height: var(--viewer-w1014-top);
+  padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 12px max(10px, env(safe-area-inset-left));
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.88), rgba(0, 0, 0, 0.42) 68%, rgba(0, 0, 0, 0));
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header-info,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header-actions {
+  pointer-events: auto;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header-info {
+  max-width: min(360px, 44vw);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-author,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-title-wrap {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header-actions {
+  justify-self: end;
+  max-width: min(56vw, 520px);
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header-actions::-webkit-scrollbar {
+  display: none;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-stage,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-stage {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--viewer-w1014-top) 0 var(--viewer-w1014-bottom);
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #000;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-media,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-img-scroll {
+  width: 100%;
+  height: 100%;
+  max-width: 100dvw;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-zoomed .viewer-img-scroll {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-img-scroll {
+  padding: 0 max(10px, env(safe-area-inset-left)) 0 max(10px, env(safe-area-inset-right));
+  box-sizing: border-box;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"]:not(.viewer-zoomed) .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"]:not(.viewer-zoomed) .viewer-video {
+  width: auto !important;
+  height: auto !important;
+  max-width: calc(100dvw - max(20px, env(safe-area-inset-left)) - max(20px, env(safe-area-inset-right))) !important;
+  max-height: calc(var(--app-vh, 100dvh) - var(--viewer-w1014-top) - var(--viewer-w1014-bottom) - 10px) !important;
+  object-fit: contain;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-load="loading"] .viewer-preloader {
+  display: grid;
+  background: rgba(0, 0, 0, 0.2);
+  color: #fff;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-load="error"] .viewer-preloader {
+  display: grid;
+  min-height: 140px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-shell {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 7;
+  max-height: var(--viewer-w1014-bottom);
+  overflow: hidden;
+  opacity: 1;
+  background: linear-gradient(0deg, #000 0%, rgba(0, 0, 0, 0.92) 70%, rgba(0, 0, 0, 0));
+  box-sizing: border-box;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-rail {
+  max-height: calc(var(--viewer-w1014-bottom) - 42px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+}
+
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+    --viewer-w1014-top: max(64px, calc(env(safe-area-inset-top) + 54px));
+    --viewer-w1014-bottom: min(158px, max(110px, 26dvh));
+    height: var(--app-vh, 100dvh);
+    min-height: var(--app-vh, 100dvh);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header-info {
+    display: none;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header-actions {
+    justify-self: end;
+    max-width: calc(100dvw - max(20px, env(safe-area-inset-left)) - max(20px, env(safe-area-inset-right)));
+    gap: 6px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-action-btn {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-switcher {
+    width: 42px;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer:not(.viewer-visual) {
+    width: 100dvw;
+    max-width: 100dvw;
+    height: var(--app-vh, 100dvh);
+    max-height: var(--app-vh, 100dvh);
+    overflow: hidden;
+    background: #0b0b0b;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer:not(.viewer-visual) .viewer-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    min-width: 0;
+    max-width: 100%;
+    padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 8px max(10px, env(safe-area-inset-left));
+    gap: 8px;
+    box-sizing: border-box;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer:not(.viewer-visual) .viewer-header-info {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer:not(.viewer-visual) .viewer-header-actions {
+    justify-self: end;
+    max-width: min(48vw, 168px);
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer:not(.viewer-visual) .viewer-header-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer:not(.viewer-visual) .viewer-action-btn {
+    flex: 0 0 38px;
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .chat:not(.chat-board) {
+    --history-mobile-media-gutter: 42px;
+    --chat-media-frame-max: min(346px, calc(100dvw - var(--history-mobile-media-gutter)));
+    --chat-media-frame-width: min(80vw, var(--chat-media-frame-max));
+  }
+
+  .chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .msg-body,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .msg-body {
+    width: var(--chat-media-frame-width) !important;
+    max-width: calc(100dvw - var(--history-mobile-media-gutter)) !important;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .file-row-chat.file-row-image,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .file-row-chat.file-row-image,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  .chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview:not(.chat-file-preview-empty),
+  .chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview:not(.chat-file-preview-empty) {
+    aspect-ratio: var(--chat-media-slot-ratio, 4 / 3);
+    max-height: min(48dvh, 360px);
+  }
+
+  .chat:not(.chat-board) .msg-attach[data-msg-file="image"]:not([data-msg-album="1"]) .chat-file-preview > .chat-file-img,
+  .chat:not(.chat-board) .msg-attach[data-msg-file="video"]:not([data-msg-album="1"]) .chat-file-preview > .chat-file-video {
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0;
+    min-height: 0;
+    object-fit: cover;
+  }
+
+  .chat:not(.chat-board) .chat-file-preview > .chat-media-progress,
+  .chat:not(.chat-board) .chat-file-preview > .chat-media-state {
+    left: 8px;
+    right: 8px;
+    max-width: calc(100% - 16px);
+    box-sizing: border-box;
+  }
+}
+
+/* W-1019: final mobile viewer allocation after iPhone screenshot regressions. */
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+  --viewer-w1019-top-pad: max(18px, env(safe-area-inset-top));
+  --viewer-w1019-bottom-pad: 0px;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-caption {
+  --viewer-w1019-bottom-pad: clamp(74px, 14dvh, 112px);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail {
+  --viewer-w1019-bottom-pad: clamp(118px, 20dvh, 156px);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-stage,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-stage {
+  padding: var(--viewer-w1019-top-pad) 0 var(--viewer-w1019-bottom-pad) !important;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-img-scroll {
+  display: grid;
+  place-items: center;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"]:not(.viewer-zoomed) .viewer-img,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"]:not(.viewer-zoomed) .viewer-video {
+  max-height: calc(var(--app-vh, 100dvh) - var(--viewer-w1019-top-pad) - var(--viewer-w1019-bottom-pad) - 8px) !important;
+}
+
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+    --viewer-w1019-top-pad: max(12px, env(safe-area-inset-top));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-caption {
+    --viewer-w1019-bottom-pad: clamp(68px, 12dvh, 96px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail {
+    --viewer-w1019-bottom-pad: clamp(108px, 18dvh, 140px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-footer-shell {
+    max-height: var(--viewer-w1019-bottom-pad);
+    background: linear-gradient(0deg, #000 0%, rgba(0, 0, 0, 0.88) 72%, rgba(0, 0, 0, 0));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-rail {
+    max-height: calc(var(--viewer-w1019-bottom-pad) - 38px);
+  }
+}
+
+/* W-1033: lift mobile album rail above bottom chrome. The rail has its own
+   thumbnail row plus the counter row, so the bottom reserve must include a
+   real safe-area lift instead of clipping the rail inside the footer shell. */
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+    --viewer-w1033-rail-lift: max(18px, env(safe-area-inset-bottom));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail {
+    --viewer-w1019-bottom-pad: clamp(136px, 22dvh, 176px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-footer-shell {
+    padding-bottom: var(--viewer-w1033-rail-lift);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-rail {
+    padding: 7px 12px 0;
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
+    min-height: 63px;
+    max-height: calc(var(--viewer-w1019-bottom-pad) - var(--viewer-w1033-rail-lift) - 30px);
+    align-items: center;
+  }
+}
+
+/* W-1035: screenshot remediation lifts the whole mobile album rail shell.
+   W-1033 only added an inner safe-area reserve, but the footer itself stayed
+   anchored to bottom:0. Keep the reserved stage area and the visual shell in
+   the same band, then move the entire counter/thumbnail rail above the bottom
+   well seen in the real iPhone screenshot. */
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+    --viewer-w1035-footer-lift: clamp(76px, 12dvh, 132px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail {
+    --viewer-w1019-bottom-pad: clamp(214px, 34dvh, 292px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-footer-shell {
+    bottom: var(--viewer-w1035-footer-lift);
+    max-height: calc(var(--viewer-w1019-bottom-pad) - var(--viewer-w1035-footer-lift));
+    padding-bottom: 0;
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-rail {
+    padding: 7px 12px 4px;
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
+    max-height: calc(var(--viewer-w1019-bottom-pad) - var(--viewer-w1035-footer-lift) - 34px);
+  }
+}
+
+/* W-1039: keep visual viewer header chrome off the photo top edge.
+   The action buttons remain visible on their own dark circles, but the header
+   row itself must not paint a gradient or blur strip over the media. */
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-header {
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* W-1050: video viewer recovery and mobile chrome polish.
+   Keep the PWA viewer canvas black, make retry controls belong to the dark
+   viewer surface, and lift the album rail clear of the iPhone bottom well. */
+html.viewer-surface-open,
+html.viewer-surface-open body,
+html.viewer-surface-open #app,
+html.viewer-surface-open .overlay.overlay-viewer,
+html.viewer-surface-open #app.app-frame::before {
+  --safe-area-bg: #000;
+  --app-frame-bg: #000;
+  --app-frame-safe-bg: #000;
+  --app-host-canvas-bg: #000;
+  background: #000 !important;
+  background-color: #000 !important;
+  color-scheme: dark;
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-preloader-retry {
+  min-height: 38px;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(0, 0, 0, 0.52);
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  backdrop-filter: blur(18px) saturate(1.15);
+}
+
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-preloader-retry:hover,
+.overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] .viewer-preloader-retry:focus-visible {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(24, 24, 28, 0.72);
+  color: #fff;
+}
+
+@media (max-width: 600px) {
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"] {
+    --viewer-w1050-footer-lift: clamp(88px, 13dvh, 144px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail {
+    --viewer-w1019-bottom-pad: clamp(232px, 36dvh, 312px);
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-footer-shell {
+    bottom: var(--viewer-w1050-footer-lift);
+    max-height: calc(var(--viewer-w1019-bottom-pad) - var(--viewer-w1050-footer-lift));
+  }
+
+  .overlay.overlay-viewer .modal.modal-viewer.viewer-visual[data-viewer-fit="stage"].viewer-has-rail .viewer-rail {
+    padding-bottom: 8px;
+    max-height: calc(var(--viewer-w1019-bottom-pad) - var(--viewer-w1050-footer-lift) - 34px);
+  }
+}

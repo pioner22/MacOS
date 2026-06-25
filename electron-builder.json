@@ -1,0 +1,67 @@
+{
+  "appId": "org.yagodka.desktop",
+  "productName": "Yagodka",
+  "asar": true,
+  "directories": {
+    "output": "desktop-dist"
+  },
+  "files": [
+    "dist/**/*",
+    "desktop/**/*",
+    "public/icons/icon-512.png",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "main": "desktop/main.cjs"
+  },
+  "publish": [
+    {
+      "provider": "generic",
+      "url": "https://yagodka.org/desktop-updates/mac",
+      "channel": "latest"
+    }
+  ],
+  "mac": {
+    "category": "public.app-category.social-networking",
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "strictVerify": true,
+    "notarize": true,
+    "entitlements": "build/entitlements.mac.plist",
+    "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+    "extendInfo": {
+      "NSCameraUsageDescription": "Ягодке нужен доступ к камере для видеосообщений и звонков.",
+      "NSMicrophoneUsageDescription": "Ягодке нужен доступ к микрофону для голосовых сообщений, видеосообщений и звонков."
+    },
+    "target": [
+      "dmg",
+      "zip"
+    ]
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ]
+  },
+  "linux": {
+    "category": "Network",
+    "target": [
+      "AppImage",
+      "deb"
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true
+  },
+  "dmg": {
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
+  },
+  "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
+}

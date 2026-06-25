@@ -1,0 +1,695 @@
+@font-face {
+  font-family: "Numbers Rounded";
+  src: url("/assets/fonts/Numbers-Rounded.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0030-0039, U+002B, U+002D;
+}
+
+:root {
+  /* ===== Core palette (legacy базовые токены) ===== */
+  --bg: #0b0f14;
+  --panel: var(--bg);
+  --panel2: var(--bg);
+  --line: #223044;
+  --text: #cbd5e1;
+  --muted: #94a3b8;
+  --good: #34d399;
+  --warn: #fbbf24;
+  --bad: #fb7185;
+  --sel: #1f2a3a;
+  --focus: #3b82f6;
+  --accent: var(--focus);
+  --overlay: rgba(0, 0, 0, 0.6);
+
+  /* ===== Typography ===== */
+  --mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-regular: var(--sans);
+  --font-monospace: var(--mono);
+  --font-rounded: -ui-rounded, "Numbers Rounded", "Roboto", "Helvetica Neue", sans-serif;
+  --font-family: var(--sans);
+  --emoji-font: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Noto Emoji", "Android Emoji",
+    "EmojiOne Color", "Twemoji Mozilla", "Segoe UI Symbol", sans-serif;
+  --font-size-20: 20px;
+  --font-size-18: 18px;
+  --font-size-16: 16px;
+  --font-size-15: 15px;
+  --font-size-14: 14px;
+  --font-size-13: 13px;
+  --font-size-12: 12px;
+  --font-size-11: 11px;
+  --font-size: var(--font-size-16);
+  --line-height-20: 26px;
+  --line-height-18: 24px;
+  --line-height-16: 21px;
+  --line-height-15: 20px;
+  --line-height-14: 18px;
+  --line-height-13: 17px;
+  --line-height-12: 16px;
+  --line-height-11: 15px;
+  --line-height: 1.3125;
+  --font-weight-normal: 400;
+  --font-weight-bold: 500;
+  --font-weight: var(--font-weight-normal);
+
+  /* ===== Spacing scale ===== */
+  --sp-1: 4px;
+  --sp-2: 6px;
+  --sp-3: 8px;
+  --sp-4: 10px;
+  --sp-5: 12px;
+  --sp-6: 18px;
+  --space: 8px;
+  --gap: var(--space);
+  --radius: calc(var(--space) * 1);
+  --radius-lg: calc(var(--space) * 2);
+  --layer-1: color-mix(in srgb, var(--text) 6%, transparent);
+  --layer-2: color-mix(in srgb, var(--text) 10%, transparent);
+  --body-bg: linear-gradient(var(--layer-1), var(--layer-1)), linear-gradient(var(--layer-2), var(--layer-2)), var(--bg);
+
+  /* ===== Golden ratio scale ===== */
+  --phi: 1.618;
+  --phi-inv: 0.618;
+  --phi-inv2: 0.382;
+  --phi-inv3: 0.236;
+  --phi-pct: 61.8%;
+  --phi-inv2-pct: 38.2%;
+  --phi-inv3-pct: 23.6%;
+
+  /* ===== Radii ===== */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+
+  /* ===== Borders / focus ===== */
+  --border-width: 1px;
+  --focus-ring-width: 2px;
+
+  /* ===== Text selection ===== */
+  --selection-bg: var(--sel);
+  --selection-text: var(--text);
+
+  /* ===== Text caret (cursor) ===== */
+  --caret-color: var(--focus);
+  --caret-thickness: 2px;
+  --caret-radius: 1px;
+  --caret-glow: color-mix(in srgb, var(--caret-color), transparent 45%);
+  --caret-blink: 1s;
+
+  /* ===== Scrollbar (best-effort, зависит от браузера) ===== */
+  --scrollbar-size: 10px;
+  --scrollbar-radius: 10px;
+  --scrollbar-track: var(--panel);
+  --scrollbar-thumb: var(--line);
+  --scrollbar-thumb-hover: var(--muted);
+
+  /* ===== App / layout tokens ===== */
+  --app-bg: var(--bg);
+  --body-bg: var(--bg);
+  --app-text: var(--text);
+  --app-muted: var(--muted);
+
+  /* Outer padding around the app (safe-area / margins on mobile). */
+  --app-outer-pad: 0px;
+
+  /* App "window" (container) sizing/styling */
+  --app-max-width: 100%;
+  --app-border-color: transparent;
+  --app-border-width: 0px;
+  --app-radius: 0px;
+  --app-shadow: none;
+  --app-overflow: hidden;
+
+  /* App grid rows: header / main / footer (composer lives inside chat column) */
+  --app-row-header: auto;
+  --app-row-main: 1fr;
+  --app-row-composer: auto;
+  --app-row-footer: auto;
+
+  /* Main grid columns + gap */
+  --grid-cols: var(--sidebar-width) minmax(0, 1fr);
+  --grid-gap: 0px;
+  --right-column-width: 420px;
+  --right-column-bg: var(--panel);
+  --right-column-border-color: var(--line);
+  --right-column-border-width: var(--border-width);
+
+  --header-bg: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--panel) 96%, #0f172a 4%),
+    color-mix(in srgb, var(--panel2) 90%, #0f172a 10%)
+  );
+  --header-border-color: color-mix(in srgb, var(--line), transparent 28%);
+  --header-border-width: var(--border-width);
+  --header-topbar-height: 56px;
+  --header-pad-y: 10px;
+  --header-pad-x: 16px;
+  --header-gap-y: 6px;
+  --header-gap-x: 12px;
+  --header-left-color: var(--text);
+  --header-right-color: var(--muted);
+  --header-label-color: var(--muted);
+  --header-id-color: var(--text);
+  --header-version-color: var(--muted);
+  --header-sep-color: var(--muted);
+  --header-title-color: var(--text);
+  --header-title-size: 16px;
+  --header-title-weight: 600;
+  --header-status-size: 12px;
+  --header-status-letter: 0.01em;
+  --header-right-max-width: min(42vw, 420px);
+  --header-shadow: 0 10px 24px rgba(12, 18, 28, 0.16);
+
+  --hdr-action-size: 34px;
+  --hdr-action-radius: 999px;
+  --hdr-action-bg: color-mix(in srgb, var(--panel2), transparent 35%);
+  --hdr-action-border-color: color-mix(in srgb, var(--line), transparent 30%);
+  --hdr-action-border-width: 1px;
+  --hdr-action-color: var(--header-right-color);
+  --hdr-action-bg-hover: color-mix(in srgb, var(--hdr-action-bg), var(--focus) 12%);
+  --hdr-action-color-hover: var(--text);
+  --hdr-action-disabled-opacity: 0.45;
+  --hdr-action-icon-size: 18px;
+  --hdr-action-gap: var(--sp-2);
+
+  --hotkeys-gap: var(--sp-2);
+  --hotkeys-pad-b: 2px;
+
+  --sidebar-bg: color-mix(in srgb, var(--panel) 94%, #0f172a 6%);
+  --sidebar-border-color: var(--line);
+  --sidebar-border-width: var(--border-width);
+  --sidebar-pad: 0px;
+  --sidebar-list-pad: 8px;
+  --sidebar-width-min: 308px;
+  --sidebar-width-max: 420px;
+  --sidebar-collapsed-width: 80px;
+  --sidebar-width: var(--current-sidebar-left-width, var(--sidebar-width-max));
+
+  --chat-bg: var(--bg);
+  --chat-pad: calc(var(--space) * var(--phi));
+  --surface-color: var(--panel2);
+
+  --composer-bg: var(--panel);
+  /* Background color for iOS safe-area (home indicator zone). */
+  --safe-area-bg: var(--app-bg);
+  --composer-border-color: var(--line);
+  --composer-border-width: var(--border-width);
+  --composer-divider-line: color-mix(in srgb, var(--composer-border-color), transparent 35%);
+  --composer-divider-glow: color-mix(in srgb, var(--composer-bg), transparent 78%);
+  --composer-divider-shadow: 0 -1px 0 var(--composer-divider-line),
+    0 calc(-1 * var(--sp-4)) calc(var(--sp-5) * var(--phi)) var(--composer-divider-glow);
+  --composer-pad-y: var(--space);
+  --composer-pad-x: calc(var(--space) * 2);
+  --composer-gap: var(--chat-input-btn-send-margin);
+  --prompt-color: var(--muted);
+
+  --footer-bg: linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--panel) 96%, #0f172a 4%),
+    color-mix(in srgb, var(--panel2) 90%, #0f172a 10%)
+  );
+  --footer-border-color: color-mix(in srgb, var(--line), transparent 28%);
+  --footer-border-width: var(--border-width);
+  --footer-pad-y: var(--sp-2);
+  --footer-pad-x: var(--sp-4);
+  --footer-color: var(--muted);
+  --footer-nav-bg: color-mix(in srgb, var(--panel2) 92%, transparent 8%);
+  --footer-nav-border: color-mix(in srgb, var(--line), transparent 35%);
+  --footer-nav-radius: 22px;
+  --footer-nav-pad: 8px;
+  --footer-tab-height: 52px;
+  --footer-tab-font-size: 11px;
+  --footer-tab-icon-size: 22px;
+  --footer-shadow: 0 -10px 24px rgba(12, 18, 28, 0.16);
+
+  /* ===== Controls ===== */
+  --field-bg: rgba(255, 255, 255, 0.02);
+  --field-border-color: var(--line);
+  --field-border-width: var(--border-width);
+  --field-text: var(--text);
+  --field-radius: 10px;
+  --field-pad-y: 10px;
+  --field-pad-x: 10px;
+  --field-focus-border: var(--focus);
+  --field-placeholder: var(--muted);
+
+  /* Chat composer field can be styled separately */
+  --composer-field-bg: color-mix(in srgb, var(--panel2) 88%, transparent);
+  --composer-field-border-color: color-mix(in srgb, var(--line), transparent 30%);
+  --composer-field-border-width: var(--field-border-width);
+  --composer-field-text: var(--field-text);
+  --chat-input-size: 54px;
+  --chat-input-padding: var(--chat-pad);
+  --chat-input-inner-padding: 8px;
+  --chat-input-border-radius: 16px;
+  --chat-input-max-width: var(--messages-container-width);
+  --chat-input-btn-send-margin: 8px;
+  --composer-field-radius: var(--chat-input-border-radius);
+  --composer-field-pad: var(--chat-input-inner-padding);
+  --composer-field-min-h: var(--chat-input-size);
+  --composer-field-max-h: 120px;
+  --composer-field-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --composer-helper-min-h: calc(var(--chat-input-size) * var(--phi-inv));
+  --composer-helper-pad-y: calc(var(--chat-pad) * var(--phi-inv2));
+  --composer-helper-pad-x: calc(var(--chat-pad) * var(--phi));
+  --composer-helper-gap: calc(var(--sp-3) * var(--phi-inv));
+  --composer-helper-radius: calc(var(--r-md) * var(--phi));
+  --composer-helper-icon-size: clamp(18px, calc(var(--chat-input-size) * var(--phi-inv)), 24px);
+  --composer-helper-action-size: clamp(
+    32px,
+    calc((var(--chat-input-size) * var(--phi-inv)) + (var(--chat-input-size) * var(--phi-inv3))),
+    42px
+  );
+  --composer-field-focus-border: var(--field-focus-border);
+  --composer-field-placeholder: var(--field-placeholder);
+  --composer-focus-ring-width: 1px;
+  /* Telegram-like: input feels better in system sans, while the rest of UI can stay terminal/mono. */
+  --composer-input-font-family: var(--sans);
+  /* 16px+ avoids iOS "auto-zoom" on focus */
+  --composer-input-font-size: max(var(--font-size), 16px);
+  --composer-input-line-height: 1.3125;
+  --composer-input-font-weight: 450;
+  --composer-input-letter-spacing: 0em;
+  --composer-input-pad-y: calc(var(--chat-pad) * var(--phi-inv));
+  --composer-btn-size: var(--composer-field-min-h);
+  --composer-icon-btn-size: calc(var(--chat-input-size) * var(--phi-inv));
+  --composer-icon-offset: calc((var(--chat-input-size) - var(--composer-icon-btn-size)) * var(--phi-inv3));
+  --composer-send-gap: var(--chat-input-btn-send-margin);
+
+  /* Send button icon (brand berry) */
+  --send-berry-glint: rgba(255, 255, 255, 0.78);
+  --send-berry-light: #ff9bb0;
+  --send-berry: #ff3b5c;
+  --send-berry-dark: #e0163c;
+  --send-leaf-light: #66e5a3;
+  --send-leaf: #2bbf6f;
+  --send-leaf-dark: #1e9e57;
+  --send-icon-berry-size: 18px;
+  --send-icon-leaf-size: 12px;
+  --send-icon-leaf-offset-x: 7px;
+  --send-icon-leaf-offset-y: -11px;
+  --send-icon-leaf-rotate: 25deg;
+  --send-icon-berry-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  --send-icon-leaf-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+
+  /* Buttons */
+  --btn-bg: rgba(255, 255, 255, 0.02);
+  --btn-border-color: var(--line);
+  --btn-border-width: var(--border-width);
+  --btn-text: var(--muted);
+  --btn-radius: 10px;
+  --btn-pad-y: 8px;
+  --btn-pad-x: 10px;
+  --btn-bg-hover: var(--panel2);
+  --btn-border-hover: var(--btn-border-color);
+  --btn-text-hover: var(--text);
+  --btn-bg-active: var(--sel);
+  --btn-translate-active-y: 1px;
+
+  /* Hotkey buttons (header) */
+  --hk-bg: transparent;
+  --hk-border-color: var(--line);
+  --hk-border-width: var(--border-width);
+  --hk-text: var(--muted);
+  --hk-radius: var(--r-sm);
+  --hk-pad-y: 4px;
+  --hk-pad-x: 8px;
+  --hk-bg-hover: var(--panel2);
+  --hk-text-hover: var(--text);
+  --hk-bg-active: var(--sel);
+
+  /* ===== Sidebar rows ===== */
+  --row-bg: transparent;
+  --row-text: var(--text);
+  --row-min-h: 56px;
+  --row-pad-y: 7px;
+  --row-pad-x: 16px;
+  --row-gap: 10px;
+  --row-radius: 12px;
+  --row-tail-min: 136px;
+  /* tweb parity token (used for hover/menu-open row background). */
+  --light-filled-secondary-text-color: color-mix(in srgb, var(--muted), transparent 90%);
+  --row-bg-hover: var(--light-filled-secondary-text-color);
+  --row-bg-menu-open: var(--light-filled-secondary-text-color);
+  --row-bg-selected: var(--focus);
+  --row-text-selected: #ffffff;
+  --row-text-selected-muted: rgba(255, 255, 255, 0.85);
+  --row-bg-selected-hover: var(--row-bg-selected);
+  --row-text-selected-hover: #ffffff;
+  --row-text-selected-muted-hover: rgba(255, 255, 255, 0.85);
+  --row-unread-selected-bg: #ffffff;
+  --row-unread-selected-text: var(--focus);
+  --chatlist-badge-transition-in: 0.25s cubic-bezier(0.35, 0.35, 0.47, 1.34);
+  --chatlist-badge-transition-out: 0.25s cubic-bezier(0.35, 0.35, 0.7, 1);
+  --row-star-color: var(--warn);
+  --row-dot-online: var(--focus);
+  --row-dot-offline: var(--muted);
+  --row-prefix-color: var(--muted);
+  --row-pin-color: var(--muted);
+
+  /* Avatars (local UI only) */
+  --avatar-size: 40px;
+  --avatar-radius: 999px;
+  --avatar-font-size: 14px;
+  --avatar-border-color: color-mix(in srgb, var(--line), transparent 15%);
+  --avatar-text: #0b0f14;
+
+  --pane-title-color: var(--text);
+  --pane-title-mb: var(--sp-3);
+  --pane-section-color: var(--muted);
+  --pane-section-mt: var(--sp-4);
+  --pane-section-mb: var(--sp-2);
+
+  /* ===== Chat messages ===== */
+  --chat-title-color: var(--muted);
+  --chat-title-mb: var(--sp-3);
+  --chat-line-gap: var(--sp-1);
+  --msg-date-top: calc(var(--chat-pad) + 6px);
+  --msg-pad-y: 0px;
+  --msg-status-read-color: var(--focus);
+  --messages-container-width: min(100%, 920px);
+  --chat-lines-max-width: var(--chat-input-max-width, var(--messages-container-width));
+  --chat-bubbles-max-width: min(100%, var(--chat-input-max-width, var(--messages-container-width)));
+  --msg-body-max-width: min(100%, 80ch);
+  --msg-media-max-width: 560px;
+  --msg-avatar-size: 36px;
+  --msg-avatar-font-size: 12px;
+  --msg-avatar-gap: var(--sp-3);
+  --msg-body-gap: var(--sp-3);
+  --msg-meta-font-size: 12px;
+  --msg-card-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  --msg-card-outline: 0 0 0 1px color-mix(in srgb, var(--msg-accent, var(--focus)) 12%, var(--line) 88%);
+  --msg-stripe-width: 4px;
+  --msg-text-size: 16px;
+  --msg-text-line: var(--line-height);
+  --msg-from-size: 14px;
+  --msg-from-letter: 0.08em;
+  --msg-from-pad-y: 2px;
+  --msg-from-pad-x: 8px;
+  --msg-from-bg: color-mix(in srgb, var(--msg-accent, var(--focus)) 14%, var(--panel) 86%);
+  --msg-from-border: color-mix(in srgb, var(--msg-accent, var(--focus)) 35%, var(--line) 65%);
+  --msg-meta-bg: color-mix(in srgb, var(--panel2), transparent 20%);
+  --msg-meta-border: color-mix(in srgb, var(--line), transparent 30%);
+  --msg-meta-pad-y: 2px;
+  --msg-meta-pad-x: 6px;
+  --msg-react-bg: color-mix(in srgb, var(--panel), transparent 35%);
+  --msg-react-border: color-mix(in srgb, var(--msg-accent, var(--focus)) 18%, var(--line) 82%);
+  --msg-react-active-bg: color-mix(in srgb, var(--msg-accent, var(--focus)) 26%, transparent 74%);
+  --msg-react-active-border: color-mix(in srgb, var(--msg-accent, var(--focus)) 48%, transparent 52%);
+  --chat-bubble-overflow: 1px;
+  --message-handhelds-margin: 5.5625rem;
+  --message-beside-button-size: 2.375rem;
+  --message-beside-button-margin: calc((var(--message-beside-button-size) + 0.5rem) * -1);
+  --message-time-background: rgba(0, 0, 0, 0.35);
+  --msg-bubble-radius: calc(var(--space) * 2);
+  --msg-bubble-pad-x: calc(var(--space) * 2);
+  --msg-bubble-pad-y: calc(var(--space) * 1.5);
+  --msg-bubble-pad-bottom: calc(var(--space) * 1.5);
+  --msg-bubble-tail-size: 8px;
+  --msg-bubble-tail-offset: 2px;
+  --msg-bubble-tail-offset-x: 5px;
+  --msg-bubble-tail-offset-y: 2px;
+  --msg-bubble-in-border-color: color-mix(in srgb, var(--line), transparent 35%);
+  --msg-bubble-out-border-color: color-mix(in srgb, var(--accent), transparent 70%);
+  --msg-in-justify: flex-start;
+  --msg-out-justify: flex-end;
+  --msg-sys-justify: flex-start;
+
+  --msg-in-color: var(--text);
+  --msg-out-color: var(--text);
+  --msg-sys-color: var(--muted);
+  --msg-time-color: var(--muted);
+  --msg-meta-color: var(--msg-time-color);
+  --msg-from-in-color: var(--text);
+  --msg-from-out-color: var(--text);
+  --msg-sep-color: var(--muted);
+  --msg-text-in-color: var(--text);
+  --msg-text-out-color: var(--text);
+
+  /* "Bubble" styling for messages */
+  --msg-in-bg: color-mix(in srgb, var(--panel), #ffffff 8%);
+  --msg-in-bg-hi: var(--msg-in-bg);
+  --msg-in-fill: var(--msg-in-bg);
+  --msg-in-border-color: color-mix(in srgb, var(--msg-accent, var(--focus)) 22%, var(--line) 78%);
+  --msg-in-border-gradient: linear-gradient(180deg, var(--msg-in-border-color), var(--msg-in-border-color));
+  --msg-in-border-width: var(--border-width);
+  --msg-in-radius: 14px;
+  --msg-in-radius-tail: 14px;
+  --msg-in-cont-corner: 10px;
+  --msg-in-pad-y: var(--sp-5);
+  --msg-in-pad-x: var(--sp-5);
+  --msg-in-pad-bottom: var(--sp-4);
+  --msg-in-stripe: none;
+  --msg-in-gloss: none;
+
+  --msg-out-bg: color-mix(in srgb, var(--panel), #ffffff 6%);
+  --msg-out-bg-hi: var(--msg-out-bg);
+  --msg-out-fill: var(--msg-out-bg);
+  --msg-out-border-color: color-mix(in srgb, var(--msg-accent, var(--focus)) 28%, var(--line) 72%);
+  --msg-out-border-gradient: linear-gradient(180deg, var(--msg-out-border-color), var(--msg-out-border-color));
+  --msg-out-border-width: var(--border-width);
+  --msg-out-radius: 14px;
+  --msg-out-radius-tail: 14px;
+  --msg-out-cont-corner: 10px;
+  --msg-out-pad-y: var(--sp-5);
+  --msg-out-pad-x: var(--sp-5);
+  --msg-out-pad-bottom: var(--sp-4);
+  --msg-out-stripe: none;
+  --msg-out-gloss: none;
+  --msg-tail-size: 0px;
+  --msg-tail-offset: 0px;
+  --msg-tail-radius: 2px;
+
+  /* ===== Modals ===== */
+  --overlay-bg: var(--overlay);
+  --overlay-blur: 8px;
+  --overlay-pad: var(--sp-6);
+  --modal-bg: var(--panel);
+  --modal-border-color: var(--line);
+  --modal-border-width: var(--border-width);
+  --modal-max-width: 620px;
+  --modal-max-height: calc(100vh - (var(--overlay-pad) * 2));
+  --modal-max-height: calc(100svh - (var(--overlay-pad) * 2));
+  --modal-max-height: calc(100dvh - (var(--overlay-pad) * 2));
+  --modal-overflow: auto;
+  --modal-radius: var(--r-lg);
+  --modal-pad: var(--sp-5);
+  --modal-shadow: 0 10px 35px rgba(0, 0, 0, 0.5);
+  --card-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  --modal-title-color: var(--text);
+  --modal-line-color: var(--muted);
+  --modal-line-mt: 6px;
+  --modal-line-mb: 6px;
+  --modal-title-mb: 10px;
+  --modal-warn-color: var(--warn);
+  --modal-warn-mt: 8px;
+  --modal-actions-gap: var(--sp-2);
+  --modal-actions-mt: 10px;
+  --viewer-pad: calc(var(--sp-4) * var(--phi));
+  --viewer-gap: calc(var(--sp-3) * var(--phi-inv));
+  --viewer-nav-size: clamp(32px, calc(var(--sp-6) * var(--phi)), 44px);
+  --viewer-nav-pad-x: calc(var(--sp-3) * var(--phi-inv));
+  --viewer-caption-pad-x: calc(var(--sp-4) * var(--phi));
+  --viewer-caption-pad-y: calc(var(--sp-3) * var(--phi-inv));
+  --viewer-actions-gap: calc(var(--sp-3) * var(--phi-inv));
+  --viewer-media-max-h: min(calc(var(--app-vh, 100vh) * var(--phi-inv)), 640px);
+  --viewer-media-max-h-mobile: min(calc(var(--app-vh, 100vh) * var(--phi-inv)), 520px);
+}
+
+:root[data-msg-wide="1"] {
+  --messages-container-width: min(100%, 1000px);
+  --chat-bubbles-max-width: min(100%, var(--messages-container-width));
+  --msg-date-top: calc(var(--chat-pad) + 6px);
+}
+
+:root[data-msg-view="bubble"] {
+  --messages-container-width: min(100%, 728px);
+  --chat-input-max-width: var(--messages-container-width);
+  --chat-line-gap: 4px;
+  --msg-body-gap: 4px;
+  --msg-text-line: var(--line-height);
+  --msg-body-max-width: min(85%, var(--chat-bubbles-max-width));
+  --msg-card-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.25);
+  --msg-card-outline: 0 0 0 0 transparent;
+  --msg-time-color: var(--muted);
+  --msg-meta-bg: transparent;
+  --msg-meta-border: transparent;
+  --msg-in-radius: var(--msg-bubble-radius);
+  --msg-in-radius-tail: var(--msg-bubble-radius);
+  --msg-out-radius: var(--msg-bubble-radius);
+  --msg-out-radius-tail: var(--msg-bubble-radius);
+  --msg-in-pad-x: var(--msg-bubble-pad-x);
+  --msg-in-pad-y: var(--msg-bubble-pad-y);
+  --msg-in-pad-bottom: var(--msg-bubble-pad-bottom);
+  --msg-out-pad-x: var(--msg-bubble-pad-x);
+  --msg-out-pad-y: var(--msg-bubble-pad-y);
+  --msg-out-pad-bottom: var(--msg-bubble-pad-bottom);
+  --msg-in-border-color: var(--msg-bubble-in-border-color);
+  --msg-out-border-color: var(--msg-bubble-out-border-color);
+  --msg-tail-size: var(--msg-bubble-tail-size);
+  --msg-tail-offset: var(--msg-bubble-tail-offset);
+  --msg-tail-offset-x: var(--msg-bubble-tail-offset-x);
+  --msg-tail-offset-y: var(--msg-bubble-tail-offset-y);
+}
+
+@media (min-width: 926px) {
+  html.sidebar-left-collapsed {
+    --sidebar-width-min: var(--sidebar-collapsed-width);
+  }
+}
+
+:root[data-msg-view="plain"] {
+  --msg-pad-y: 0px;
+  --chat-line-gap: var(--sp-4);
+  --msg-body-max-width: 100%;
+  --msg-in-justify: flex-start;
+  --msg-out-justify: flex-start;
+  --msg-avatar-size: 34px;
+  --msg-avatar-font-size: 11px;
+  --msg-avatar-gap: var(--sp-2);
+  --msg-body-gap: var(--sp-3);
+  --msg-meta-font-size: 11px;
+  --msg-card-shadow: none;
+  --msg-card-outline: 0 0 0 1px color-mix(in srgb, var(--msg-accent, var(--focus)) 35%, transparent 65%);
+  --msg-stripe-width: 3px;
+  --msg-text-size: 15px;
+  --msg-text-line: 1.55;
+  --msg-from-size: 11px;
+  --msg-from-letter: 0.06em;
+  --msg-from-bg: color-mix(in srgb, var(--panel2), transparent 10%);
+  --msg-from-border: color-mix(in srgb, var(--msg-accent, var(--focus)) 28%, var(--line) 72%);
+  --msg-meta-bg: color-mix(in srgb, var(--panel2), transparent 10%);
+  --msg-meta-border: color-mix(in srgb, var(--line), transparent 40%);
+  --msg-meta-pad-y: 2px;
+  --msg-meta-pad-x: 6px;
+  --msg-in-bg: color-mix(in srgb, var(--panel), transparent 8%);
+  --msg-in-bg-hi: var(--msg-in-bg);
+  --msg-in-fill: linear-gradient(180deg, var(--msg-in-bg) 0%, var(--msg-in-bg) 100%);
+  --msg-in-border-color: color-mix(in srgb, var(--msg-accent, var(--focus)) 32%, var(--line) 68%);
+  --msg-in-border-gradient: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--msg-accent, var(--focus)) 70%, transparent 30%),
+    color-mix(in srgb, var(--msg-in-border-color) 80%, transparent 20%),
+    color-mix(in srgb, var(--msg-accent, var(--focus)) 30%, transparent 70%)
+  );
+  --msg-in-radius: 14px;
+  --msg-in-radius-tail: 14px;
+  --msg-in-cont-corner: 10px;
+  --msg-in-pad-y: var(--sp-4);
+  --msg-in-pad-x: var(--sp-4);
+  --msg-in-pad-bottom: var(--sp-4);
+  --msg-in-stripe: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--msg-accent, var(--focus)) 40%, transparent 60%) 0 var(--msg-stripe-width),
+    transparent var(--msg-stripe-width) 100%
+  );
+  --msg-in-gloss: none;
+  --msg-out-bg: color-mix(in srgb, var(--panel), transparent 8%);
+  --msg-out-bg-hi: var(--msg-out-bg);
+  --msg-out-fill: linear-gradient(180deg, var(--msg-out-bg) 0%, var(--msg-out-bg) 100%);
+  --msg-out-border-color: color-mix(in srgb, var(--msg-accent, var(--focus)) 32%, var(--line) 68%);
+  --msg-out-border-gradient: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--msg-accent, var(--focus)) 70%, transparent 30%),
+    color-mix(in srgb, var(--msg-out-border-color) 80%, transparent 20%),
+    color-mix(in srgb, var(--msg-accent, var(--focus)) 30%, transparent 70%)
+  );
+  --msg-out-radius: 14px;
+  --msg-out-radius-tail: 14px;
+  --msg-out-cont-corner: 10px;
+  --msg-out-pad-y: var(--sp-4);
+  --msg-out-pad-x: var(--sp-4);
+  --msg-out-pad-bottom: var(--sp-4);
+  --msg-out-stripe: linear-gradient(
+    90deg,
+    transparent 0 calc(100% - var(--msg-stripe-width)),
+    color-mix(in srgb, var(--msg-accent, var(--focus)) 40%, transparent 60%) calc(100% - var(--msg-stripe-width)) 100%
+  );
+  --msg-out-gloss: none;
+  --msg-tail-size: 0px;
+  --msg-tail-offset: 0px;
+}
+
+:root[data-msg-view="compact"] {
+  --msg-pad-y: 0px;
+  --chat-line-gap: var(--sp-2);
+  --msg-body-max-width: min(100%, 560px);
+  --msg-in-justify: flex-start;
+  --msg-out-justify: flex-start;
+  --msg-avatar-size: 26px;
+  --msg-avatar-font-size: 10px;
+  --msg-avatar-gap: var(--sp-1);
+  --msg-body-gap: var(--sp-2);
+  --msg-meta-font-size: 10px;
+  --msg-card-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  --msg-card-outline: 0 0 0 1px color-mix(in srgb, var(--msg-accent, var(--focus)) 18%, transparent 82%);
+  --msg-stripe-width: 2px;
+  --msg-text-size: 13px;
+  --msg-text-line: 1.45;
+  --msg-from-size: 11px;
+  --msg-from-letter: 0.02em;
+  --msg-from-pad-y: 0px;
+  --msg-from-pad-x: 0px;
+  --msg-from-bg: transparent;
+  --msg-from-border: transparent;
+  --msg-meta-bg: transparent;
+  --msg-meta-border: transparent;
+  --msg-meta-pad-y: 0px;
+  --msg-meta-pad-x: 0px;
+  --msg-in-bg: color-mix(in srgb, var(--panel2), transparent 12%);
+  --msg-in-bg-hi: color-mix(in srgb, var(--msg-in-bg), #ffffff 4%);
+  --msg-in-fill: linear-gradient(180deg, var(--msg-in-bg-hi), var(--msg-in-bg));
+  --msg-in-border-color: color-mix(in srgb, var(--line), transparent 30%);
+  --msg-in-border-gradient: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--msg-accent, var(--focus)) 32%, transparent 68%),
+    color-mix(in srgb, var(--msg-in-border-color) 70%, transparent 30%)
+  );
+  --msg-in-radius: 12px;
+  --msg-in-radius-tail: 12px;
+  --msg-in-cont-corner: 8px;
+  --msg-in-pad-y: var(--sp-2);
+  --msg-in-pad-x: var(--sp-3);
+  --msg-in-pad-bottom: var(--sp-2);
+  --msg-in-stripe: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--msg-accent, var(--focus)) 30%, transparent 70%) 0 var(--msg-stripe-width),
+    transparent var(--msg-stripe-width) 100%
+  );
+  --msg-in-gloss: none;
+  --msg-out-bg: color-mix(in srgb, var(--panel2), transparent 12%);
+  --msg-out-bg-hi: color-mix(in srgb, var(--msg-out-bg), #ffffff 4%);
+  --msg-out-fill: linear-gradient(180deg, var(--msg-out-bg-hi), var(--msg-out-bg));
+  --msg-out-border-color: color-mix(in srgb, var(--line), transparent 30%);
+  --msg-out-border-gradient: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--msg-accent, var(--focus)) 32%, transparent 68%),
+    color-mix(in srgb, var(--msg-out-border-color) 70%, transparent 30%)
+  );
+  --msg-out-radius: 12px;
+  --msg-out-radius-tail: 12px;
+  --msg-out-cont-corner: 8px;
+  --msg-out-pad-y: var(--sp-2);
+  --msg-out-pad-x: var(--sp-3);
+  --msg-out-pad-bottom: var(--sp-2);
+  --msg-out-stripe: linear-gradient(
+    90deg,
+    transparent 0 calc(100% - var(--msg-stripe-width)),
+    color-mix(in srgb, var(--msg-accent, var(--focus)) 30%, transparent 70%) calc(100% - var(--msg-stripe-width)) 100%
+  );
+  --msg-out-gloss: none;
+  --msg-tail-size: 0px;
+  --msg-tail-offset: 0px;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}

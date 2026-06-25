@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Yagodka — iOS Input Assistant Lab</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Arial, sans-serif;
+        background: #070812;
+        color: #e8e8f4;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 8px;
+      }
+      p {
+        margin: 0 0 12px;
+        color: rgba(232, 232, 244, 0.8);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 12px 0;
+      }
+      button {
+        appearance: none;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.06);
+        color: inherit;
+        padding: 10px 12px;
+        border-radius: 12px;
+        font-weight: 600;
+      }
+      button:active {
+        transform: translateY(1px);
+      }
+      textarea {
+        width: 100%;
+        min-height: 140px;
+        resize: vertical;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.04);
+        color: inherit;
+        padding: 12px 12px;
+        font: 16px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        outline: none;
+      }
+      textarea:focus {
+        border-color: rgba(255, 64, 192, 0.7);
+        box-shadow: 0 0 0 3px rgba(255, 64, 192, 0.18);
+      }
+      .attrs {
+        margin-top: 10px;
+        font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        color: rgba(232, 232, 244, 0.7);
+        word-break: break-word;
+      }
+      code {
+        color: rgba(232, 232, 244, 0.9);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>iOS Undo/Redo/✓ над клавиатурой</h1>
+    <p>
+      Откройте на iOS Safari и сравните пресеты. Для проверки именно PWA‑режима: «Поделиться → На экран Домой», затем
+      запустите из иконки.
+    </p>
+
+    <div class="row">
+      <button id="preset-text" type="button">Preset: text (autocorrect on)</button>
+      <button id="preset-strict" type="button">Preset: strict (autocorrect off)</button>
+    </div>
+
+    <textarea
+      id="field"
+      rows="3"
+      placeholder="Напишите что‑нибудь…"
+      autocomplete="off"
+      autocorrect="on"
+      autocapitalize="none"
+      spellcheck="true"
+      inputmode="text"
+      enterkeyhint="send"
+    ></textarea>
+    <div class="attrs" id="attrs"></div>
+
+    <script>
+      const field = document.getElementById("field");
+      const attrs = document.getElementById("attrs");
+
+      function setPreset(preset) {
+        field.setAttribute("autocomplete", "off");
+        field.setAttribute("inputmode", "text");
+        field.setAttribute("enterkeyhint", "send");
+        field.setAttribute("autocapitalize", "none");
+        if (preset === "text") {
+          field.setAttribute("autocorrect", "on");
+          field.setAttribute("spellcheck", "true");
+          field.spellcheck = true;
+        } else {
+          field.setAttribute("autocorrect", "off");
+          field.setAttribute("spellcheck", "false");
+          field.spellcheck = false;
+        }
+        renderAttrs();
+      }
+
+      function renderAttrs() {
+        const keys = ["autocorrect", "spellcheck", "autocapitalize", "autocomplete", "inputmode", "enterkeyhint"];
+        const nodes = [];
+        keys.forEach((k, index) => {
+          const code = document.createElement("code");
+          code.textContent = `${k}=${String(field.getAttribute(k))}`;
+          nodes.push(code);
+          if (index < keys.length - 1) {
+            nodes.push(document.createTextNode(" · "));
+          }
+        });
+        attrs.replaceChildren(...nodes);
+      }
+
+      document.getElementById("preset-text").addEventListener("click", () => setPreset("text"));
+      document.getElementById("preset-strict").addEventListener("click", () => setPreset("strict"));
+
+      field.addEventListener("focus", renderAttrs);
+      field.addEventListener("input", renderAttrs);
+
+      setPreset("text");
+      field.focus();
+    </script>
+  </body>
+</html>

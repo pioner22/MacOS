@@ -1,0 +1,349 @@
+:root {
+  --safe-bottom-raw: env(safe-area-inset-bottom);
+  /* iPhone safe-area bottom is typically 34px; allow up to 44px to avoid cutting off the composer. */
+  --safe-bottom-pad: clamp(0px, env(safe-area-inset-bottom), 44px);
+  --app-vh: 100dvh;
+  --app-frame-vh: var(--app-vh);
+  --app-gap-bottom: 0px;
+  --app-layout-gap-bottom: var(--app-gap-bottom);
+  --app-shell-bottom-spill: 0px;
+  /* One bottom contract: the shell fills the fixed frame; scroll owners and controls choose compact live pads. */
+  --app-bottom-inset: max(var(--safe-bottom-pad), var(--app-layout-gap-bottom, var(--app-gap-bottom, 0px)));
+  --app-physical-bottom-pad: var(--app-bottom-inset);
+  /* Compact live pad is for scroll surfaces; physical pad is used only by bars that must paint the bottom frame. */
+  --app-bottom-live-pad: clamp(8px, calc(var(--app-bottom-inset) - 22px), 16px);
+  --app-frame-bottom-inset: 0px;
+  --safe-bottom-layout-pad: var(--app-bottom-live-pad);
+  --app-frame-bg: var(--app-bg);
+  --app-frame-safe-bg: var(--safe-area-bg, var(--app-frame-bg));
+  --app-host-canvas-bg: var(--safe-area-bg, var(--app-frame-bg, var(--app-bg)));
+}
+
+html,
+body {
+  height: 100%;
+  width: 100%;
+  background: var(--app-frame-bg, var(--body-bg, var(--app-bg)));
+  background-color: var(--app-host-canvas-bg, var(--safe-area-bg, var(--app-frame-bg, #eaf5f0)));
+  color: var(--app-text);
+  margin: 0;
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  font-weight: var(--font-weight);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+@supports (padding: max(0px)) {
+  html {
+    padding: 0 min(16px, env(safe-area-inset-right)) 0 min(16px, env(safe-area-inset-left));
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.app-frame-booting,
+html.app-frame-booting body {
+  --safe-area-bg: #eaf5f0;
+  --app-frame-bg: #eaf5f0;
+  --app-frame-safe-bg: #eaf5f0;
+  --app-host-canvas-bg: #eaf5f0;
+  background: #eaf5f0;
+  background-color: #eaf5f0;
+}
+
+/* iOS fullscreen/PWA: fix viewport "scroll" on focus (keyboard) and reduce bottom clipping/jumps. */
+html.is-ios {
+  position: fixed;
+  inset: 0;
+}
+
+body {
+  display: block;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.has-auth-pages,
+body.has-auth-pages {
+  background: var(--surface-color);
+  background-color: var(--surface-color);
+  --safe-area-bg: var(--surface-color);
+  --app-frame-bg: var(--surface-color);
+  --app-frame-safe-bg: var(--surface-color);
+  --app-host-canvas-bg: var(--surface-color);
+}
+
+body.has-auth-pages .hdr,
+body.has-auth-pages .grid,
+body.has-auth-pages .footer,
+body.has-auth-pages .nav-overlay,
+body.has-auth-pages .toast-host {
+  display: none;
+}
+
+body.has-auth-pages .modal-auth .auth-close {
+  display: none;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+#app {
+  /* Ensure the app background covers the whole viewport (including safe-area). */
+  background: var(--app-frame-bg, var(--app-bg));
+  background-color: var(--app-host-canvas-bg, var(--safe-area-bg, var(--app-frame-bg, #eaf5f0)));
+
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  /* Prefer dynamic viewport on modern browsers (mobile address bar / UI chrome). */
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
+  height: var(--app-vh);
+  width: 100%;
+  /* Avoid legacy 100vh quirks on iOS; keep fallbacks for older engines. */
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  min-height: var(--app-vh);
+  padding: var(--app-outer-pad);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+#app.app-frame::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--app-frame-bottom-inset);
+  background: var(--app-frame-safe-bg, var(--safe-area-bg, var(--sidebar-bg)));
+  pointer-events: none;
+  z-index: 0;
+}
+
+#app.app-frame > .app {
+  position: relative;
+  z-index: 1;
+}
+
+#app.app-frame > .boot {
+  z-index: 3;
+}
+
+#app.app-frame-booting {
+  --app-host-canvas-bg: #eaf5f0;
+  --app-frame-bg: var(--app-host-canvas-bg);
+  --app-frame-safe-bg: var(--app-host-canvas-bg);
+}
+
+/* iOS safe-area: the host app height owns the physical bottom.
+   Keep this hook zero-height so old pseudo-footer paint cannot create a separate strip. */
+body::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--app-frame-bottom-inset);
+  background: var(--app-frame-safe-bg, var(--safe-area-bg, var(--sidebar-bg)));
+  pointer-events: none;
+  z-index: 0;
+}
+
+html.app-shell-physical-bottom:not(.kbd-open):not(.has-auth-pages) {
+  --app-frame-bottom-inset: max(var(--app-gap-bottom, 0px), var(--safe-bottom-pad, 0px));
+}
+
+html.viewer-surface-open,
+html.viewer-surface-open body,
+html.viewer-surface-open #app,
+html.call-surface-open,
+html.call-surface-open body,
+html.call-surface-open #app {
+  --safe-area-bg: #000;
+  --app-frame-bg: #000;
+  --app-frame-safe-bg: #000;
+  --app-host-canvas-bg: #000;
+  background: #000;
+  background-color: #000;
+}
+
+@media (max-width: 860px) {
+  body[data-viewport-diagnostic="1"]::before,
+  #app.app-frame[data-viewport-diagnostic="1"]::before {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 18px;
+    max-width: calc(100vw - 12px);
+    padding: 2px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 999px;
+    background: rgba(174, 35, 35, 0.86);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(11, 18, 28, 0.28);
+  }
+
+  body[data-viewport-diagnostic="1"]::before {
+    content: "PHYSICAL-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom) " layout=" attr(data-app-layout-gap-bottom) " kbd=" attr(data-app-keyboard) " safe=" attr(data-app-safe-bottom) " spill=" attr(data-app-shell-spill);
+    position: fixed;
+    left: 50%;
+    bottom: max(8px, calc(var(--app-bottom-inset) + 68px));
+    transform: translateX(-50%);
+    z-index: 2147483600;
+  }
+
+  #app.app-frame[data-viewport-diagnostic="1"]::before {
+    content: "APP-FRAME-BOTTOM vh=" attr(data-app-vh) " gap=" attr(data-app-gap-bottom) " layout=" attr(data-app-layout-gap-bottom) " spill=" attr(data-app-shell-spill);
+    position: absolute;
+    left: 4px;
+    bottom: max(8px, calc(var(--app-bottom-inset) + 36px));
+    z-index: 30;
+  }
+
+  .app-frame-diagnostic-panel {
+    position: fixed;
+    top: max(86px, calc(env(safe-area-inset-top) + 70px));
+    left: 8px;
+    right: 8px;
+    z-index: 2147483647;
+    max-height: 42vh;
+    margin: 0;
+    padding: 8px 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 8px;
+    background: rgba(7, 13, 10, 0.9);
+    color: #f6fff9;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.24;
+    letter-spacing: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+  }
+}
+
+/* iOS Safari/PWA: use -webkit-fill-available only as a fallback for engines without 100dvh.
+   On modern iOS (17/18) forcing -webkit-fill-available can cause layout/scroll glitches. */
+@supports (-webkit-touch-callout: none) and (not (height: 100dvh)) {
+  #app {
+    height: -webkit-fill-available;
+    min-height: -webkit-fill-available;
+  }
+}
+
+@media (max-width: 600px) {
+  html,
+  body {
+    height: calc(var(--vh, 1vh) * 100);
+  }
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--selection-bg);
+  color: var(--selection-text);
+}
+
+/* Scrollbar theming (best-effort; browsers differ). */
+* {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: var(--scrollbar-radius);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+@media (pointer: coarse) {
+  /* Touch devices: hide persistent scrollbars (iOS "line on the right" look). */
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+/* Fancy caret (terminal-like). */
+.fancy-caret {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  width: var(--caret-thickness);
+  height: 1em;
+  background: var(--caret-color);
+  border-radius: var(--caret-radius);
+  pointer-events: none;
+  z-index: 2000;
+  opacity: 0;
+  box-shadow:
+    0 0 8px var(--caret-glow),
+    0 0 1px color-mix(in srgb, var(--caret-color), transparent 20%);
+  transform: translateZ(0);
+}
+
+.fancy-caret.on {
+  opacity: 1;
+  animation: yagodka-caret-blink var(--caret-blink) steps(1, end) infinite;
+}
+
+@keyframes yagodka-caret-blink {
+  0%,
+  54% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fancy-caret.on {
+    animation: none;
+    opacity: 1;
+  }
+}
