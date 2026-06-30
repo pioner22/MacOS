@@ -22,6 +22,12 @@
   --overlay: rgba(13, 20, 17, 0.44);
   --layer-1: transparent;
   --layer-2: transparent;
+  --app-bg: #eef3f1;
+  --app-frame-bg: #fbfcfb;
+  --app-frame-safe-bg: #fbfcfb;
+  --app-host-canvas-bg: #fbfcfb;
+  --chrome-top-bg: #fbfcfb;
+  --chrome-top-border: rgba(37, 52, 45, 0.08);
 
   --font-family: "Onest", "Manrope", "SF Pro Text", "Segoe UI", sans-serif;
   --sans: var(--font-family);
@@ -218,6 +224,16 @@
   --footer-nav-border: rgba(37, 52, 45, 0.1);
   --footer-nav-radius: 22px;
   --footer-shadow: 0 -12px 30px rgba(35, 48, 41, 0.08);
+  --premium-nav-bg: rgba(255, 255, 255, 0.78);
+  --premium-nav-border: rgba(37, 52, 45, 0.1);
+  --premium-nav-shadow: 0 18px 44px rgba(35, 48, 41, 0.14);
+  --premium-nav-active-bg: linear-gradient(135deg, rgba(215, 57, 88, 0.16), rgba(21, 138, 113, 0.14));
+  --premium-nav-active-text: #a7203d;
+  --premium-menu-row-bg: rgba(255, 255, 255, 0.62);
+  --premium-menu-row-hover-bg: rgba(255, 255, 255, 0.86);
+  --premium-menu-icon-bg: linear-gradient(135deg, rgba(215, 57, 88, 0.16), rgba(21, 138, 113, 0.16));
+  --premium-menu-icon-color: #9e2841;
+  --premium-hairline: rgba(37, 52, 45, 0.07);
 
   --overlay-bg: rgba(13, 20, 17, 0.42);
   --overlay-blur: 10px;
@@ -242,6 +258,12 @@
   --focus: #ff5c7a;
   --accent: #33c09e;
   --overlay: rgba(0, 0, 0, 0.56);
+  --app-bg: #101916;
+  --app-frame-bg: #14201c;
+  --app-frame-safe-bg: #14201c;
+  --app-host-canvas-bg: #14201c;
+  --chrome-top-bg: #14201c;
+  --chrome-top-border: rgba(234, 242, 238, 0.08);
   --selection-bg: rgba(255, 92, 122, 0.28);
   --selection-text: #ffffff;
   --scrollbar-thumb: rgba(234, 242, 238, 0.18);
@@ -317,6 +339,16 @@
   --footer-border-color: rgba(234, 242, 238, 0.08);
   --footer-nav-bg: rgba(234, 242, 238, 0.06);
   --footer-nav-border: rgba(234, 242, 238, 0.08);
+  --premium-nav-bg: rgba(19, 30, 27, 0.82);
+  --premium-nav-border: rgba(234, 242, 238, 0.1);
+  --premium-nav-shadow: 0 20px 48px rgba(0, 0, 0, 0.38);
+  --premium-nav-active-bg: linear-gradient(135deg, rgba(255, 92, 122, 0.2), rgba(51, 192, 158, 0.16));
+  --premium-nav-active-text: #ffe3e8;
+  --premium-menu-row-bg: rgba(234, 242, 238, 0.045);
+  --premium-menu-row-hover-bg: rgba(234, 242, 238, 0.075);
+  --premium-menu-icon-bg: linear-gradient(135deg, rgba(255, 92, 122, 0.2), rgba(51, 192, 158, 0.18));
+  --premium-menu-icon-color: #ffdce4;
+  --premium-hairline: rgba(234, 242, 238, 0.075);
   --modal-bg: #182722;
   --modal-border-color: rgba(234, 242, 238, 0.12);
   --modal-shadow: 0 34px 90px rgba(0, 0, 0, 0.48);

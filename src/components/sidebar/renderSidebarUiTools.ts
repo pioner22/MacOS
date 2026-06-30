@@ -15,6 +15,13 @@ import {
 
 type HeaderToolbarTab = "contacts" | "boards" | "groups" | "menu";
 
+const SIDEBAR_TAB_META: Partial<Record<MobileSidebarTab, { icon: string }>> = {
+  contacts: { icon: "contacts" },
+  groups: { icon: "groups" },
+  boards: { icon: "boards" },
+  menu: { icon: "menu" },
+};
+
 export interface SidebarRenderToolsDeps {
   body: HTMLElement;
   state: AppState;
@@ -157,6 +164,7 @@ export function createSidebarRenderTools(deps: SidebarRenderToolsDeps): SidebarR
         type: "button",
         title: "Меню",
         "aria-label": "Меню",
+        "data-sidebar-action": "menu",
       },
       ["☰"]
     ) as HTMLButtonElement;
@@ -180,6 +188,7 @@ export function createSidebarRenderTools(deps: SidebarRenderToolsDeps): SidebarR
         type: "button",
         title: createLabel,
         "aria-label": createLabel,
+        "data-sidebar-action": isBoardTab ? "create-board" : "create-group",
       },
       ["+"]
     ) as HTMLButtonElement;
@@ -203,6 +212,7 @@ export function createSidebarRenderTools(deps: SidebarRenderToolsDeps): SidebarR
         role: "tab",
         "aria-selected": String(activeTab === tab),
         title: label,
+        "data-tab-icon": SIDEBAR_TAB_META[tab]?.icon || tab,
       },
       [label]
     ) as HTMLButtonElement;

@@ -49,7 +49,7 @@
   --app-overflow: hidden;
 
   /* ===== Header ===== */
-  --header-bg: var(--bg);
+  --header-bg: #ffffff;
   --header-border-color: var(--line);
   --header-border-width: 1px;
   --header-pad-y: 10px;
@@ -196,6 +196,17 @@
   --modal-shadow: 0 12px 48px rgba(0, 0, 0, 0.2);
   --modal-max-width: 520px;
   --card-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+
+  /* ===== Profile / page surfaces ===== */
+  --tg-profile-canvas-bg: #e6ebee;
+  --tg-profile-header-bg: #ffffff;
+  --tg-profile-header-border: #dfe1e5;
+  --tg-profile-page-bg: #e6ebee;
+  --tg-profile-page-border: #dfe1e5;
+  --tg-profile-card-bg: #ffffff;
+  --tg-profile-card-border: #dfe1e5;
+  --tg-profile-id-bg: #f5f7f8;
+  --tg-profile-id-border: rgba(51, 144, 236, 0.32);
 }
 
 :root[data-theme="dark"] {
@@ -223,6 +234,7 @@
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
 
   /* ===== Header / sidebar ===== */
+  --header-bg: #17212b;
   --header-border-color: rgba(255, 255, 255, 0.06);
   --sidebar-bg: var(--panel);
   --sidebar-border-color: rgba(255, 255, 255, 0.06);
@@ -286,6 +298,78 @@
   --modal-border-color: rgba(255, 255, 255, 0.12);
   --modal-shadow: 0 16px 56px rgba(0, 0, 0, 0.45);
   --card-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+
+  /* ===== Profile / page surfaces ===== */
+  --tg-profile-canvas-bg: #0e1621;
+  --tg-profile-header-bg: #17212b;
+  --tg-profile-header-border: rgba(255, 255, 255, 0.06);
+  --tg-profile-page-bg: #0e1621;
+  --tg-profile-page-border: rgba(255, 255, 255, 0.06);
+  --tg-profile-card-bg: #17212b;
+  --tg-profile-card-border: rgba(255, 255, 255, 0.08);
+  --tg-profile-id-bg: #0e1621;
+  --tg-profile-id-border: rgba(78, 164, 246, 0.32);
+}
+
+html[data-skin="telegram-exact"].has-profile-surface:not(.has-auth-pages),
+html[data-skin="telegram-exact"].has-profile-surface:not(.has-auth-pages) body,
+html[data-skin="telegram-exact"].has-profile-surface:not(.has-auth-pages) #app {
+  --profile-surface-bg: var(--tg-profile-canvas-bg);
+  --safe-area-bg: var(--tg-profile-canvas-bg);
+  --app-frame-safe-bg: var(--tg-profile-canvas-bg);
+  --app-host-canvas-bg: var(--tg-profile-canvas-bg);
+  background-color: var(--tg-profile-canvas-bg);
+}
+
+html[data-skin="telegram-exact"].has-profile-surface:not(.has-auth-pages) body::after,
+html[data-skin="telegram-exact"].has-profile-surface:not(.has-auth-pages) #app.app-frame::after {
+  background: var(--tg-profile-canvas-bg);
+  background-color: var(--tg-profile-canvas-bg);
+}
+
+html[data-skin="telegram-exact"].has-profile-surface:not(.has-auth-pages) .hdr {
+  background: var(--tg-profile-header-bg);
+  border-bottom-color: var(--tg-profile-header-border);
+  box-shadow: none;
+}
+
+html[data-skin="telegram-exact"].has-profile-surface:not(.has-auth-pages) .chat.chat-page,
+html[data-skin="telegram-exact"].has-profile-surface:not(.has-auth-pages) .chat.chat-page .chat-host {
+  background-color: var(--tg-profile-canvas-bg);
+}
+
+html[data-skin="telegram-exact"].has-profile-surface:not(.has-auth-pages) .chat.chat-page .page.page-profile,
+html[data-skin="telegram-exact"].has-profile-surface:not(.has-auth-pages) .chat.chat-page .page.page-sessions {
+  background: var(--tg-profile-page-bg);
+  background-color: var(--tg-profile-page-bg);
+}
+
+html[data-skin="telegram-exact"] .page.page-profile,
+html[data-skin="telegram-exact"] .page.page-user,
+html[data-skin="telegram-exact"] .page.page-room {
+  background: var(--tg-profile-page-bg);
+  background-color: var(--tg-profile-page-bg);
+  border-color: var(--tg-profile-page-border);
+  box-shadow: none;
+}
+
+html[data-skin="telegram-exact"] .profile-card,
+html[data-skin="telegram-exact"] .page-card {
+  background: var(--tg-profile-card-bg);
+  background-color: var(--tg-profile-card-bg);
+  border-color: var(--tg-profile-card-border);
+  box-shadow: none;
+}
+
+html[data-skin="telegram-exact"] .profile-head {
+  background: var(--tg-profile-card-bg);
+  background-color: var(--tg-profile-card-bg);
+}
+
+html[data-skin="telegram-exact"] .profile-id-card {
+  background: var(--tg-profile-id-bg);
+  background-color: var(--tg-profile-id-bg);
+  border-color: var(--tg-profile-id-border);
 }
 
 html[data-skin="telegram-exact"] .row-title {

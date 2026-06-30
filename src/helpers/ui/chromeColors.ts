@@ -54,12 +54,18 @@ function setMaskIconColor(value: string): void {
   if (link.getAttribute("color") !== value) link.setAttribute("color", value);
 }
 
+function syncAppleStatusBarStyle(root: HTMLElement): void {
+  const theme = String(root.dataset?.theme || "").trim().toLowerCase();
+  setMeta("apple-mobile-web-app-status-bar-style", theme === "dark" ? "black-translucent" : "default");
+}
+
 export function syncChromeColors(): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   if (!root || typeof window === "undefined" || typeof window.getComputedStyle !== "function") return;
   const style = window.getComputedStyle(root);
   const color = resolveChromeColor(style);
+  syncAppleStatusBarStyle(root);
   if (!color || color === lastColor) return;
   lastColor = color;
   setMeta("theme-color", color);

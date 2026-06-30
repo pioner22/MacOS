@@ -216,6 +216,30 @@ test("messenger surface polish: W-0988 tightens history, profile and menu chrome
   assert.match(sidebarToolsSrc, /navigator\.share/);
 });
 
+test("messenger surface polish: W-1059 redraws sidebar tabs, menu rows and mobile chrome", async () => {
+  const css = await readCssWithImports("src/scss/style.css");
+  const skinCss = await readFile(new URL("../public/skins/yagodka-modern.css", import.meta.url), "utf8");
+  const chromeColorsSrc = await readFile(new URL("../src/helpers/ui/chromeColors.ts", import.meta.url), "utf8");
+  const sidebarToolsSrc = await readFile(new URL("../src/components/sidebar/renderSidebarUiTools.ts", import.meta.url), "utf8");
+
+  assert.match(css, /W-1059:\s*premium Telegram-like sidebar tabs,\s*menu chrome and PWA safe-area polish/);
+  assert.match(css, /--sidebar-tab-icon-contacts:/);
+  assert.match(css, /--sidebar-tab-icon-menu:/);
+  assert.ok(css.includes('html[data-skin="yagodka-modern"] .sidebar-tabs:not(.sidebar-tabs-bottom-nav) .sidebar-tab::before'));
+  assert.match(css, /mask:\s*var\(--sidebar-tab-icon\)\s+no-repeat\s+center\s*\/\s*contain/);
+  assert.match(css, /\.sidebar-tabs:not\(\.sidebar-tabs-bottom-nav\)\s+\.sidebar-tab-active\s*\{[\s\S]*?animation:\s*w1059-tab-pop/);
+  assert.match(css, /\.sidebar\[data-sidebar-tab="menu"\]\s+\.sidebar-menu-row::after\s*\{[\s\S]*?display:\s*none/);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+
+  assert.match(skinCss, /:root\s*\{[\s\S]*?--app-host-canvas-bg:\s*#fbfcfb;/);
+  assert.match(skinCss, /:root\[data-theme="dark"\]\s*\{[\s\S]*?--app-host-canvas-bg:\s*#14201c;/);
+  assert.match(skinCss, /--premium-nav-bg:/);
+  assert.match(chromeColorsSrc, /setMeta\("apple-mobile-web-app-status-bar-style",\s*theme === "dark"\s*\?\s*"black-translucent"\s*:\s*"default"\)/);
+  assert.match(sidebarToolsSrc, /SIDEBAR_TAB_META/);
+  assert.match(sidebarToolsSrc, /"data-tab-icon":\s*SIDEBAR_TAB_META\[tab\]\?\.icon \|\| tab/);
+  assert.match(sidebarToolsSrc, /"data-sidebar-action":\s*"menu"/);
+});
+
 test("messenger surface polish: W-0989 keeps lazy media and audio geometry stable", async () => {
   const css = await readCssWithImports("src/scss/style.css");
 

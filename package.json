@@ -1,7 +1,7 @@
 {
   "name": "yagodka-client-macos",
   "private": true,
-  "version": "0.1.935",
+  "version": "0.1.936",
   "description": "Yagodka macOS Electron client",
   "license": "GPL-3.0-or-later",
   "author": "Yagodka",
