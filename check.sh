@@ -1,5 +1,5 @@
 #!/bin/bash
-# Recovery copy audit v1.0.0 -- Bash 3.2 / macOS BSD tools.
+# Recovery copy audit v1.0.1 -- Bash 3.2 / macOS BSD tools.
 # AUDIT ONLY: no copying, removal, repair, mount changes, or network requests.
 # Reports are written only into a new directory on the external destination.
 # Size + mtime are NOT a content-integrity check. ACLs, xattrs, resource forks,
@@ -83,8 +83,15 @@ choose_dir() {
   done
 }
 meta() { stat -f '%HT|%z|%m|%d' "$1"; }
-# Append a sentinel so command substitution preserves trailing newlines in targets.
-link_text() { readlink "$1" && printf '.'; }
+# macOS Recovery may omit the standalone readlink executable.
+# BSD stat %Y reads the link target without following the link.
+# A sentinel preserves trailing newlines; reject an empty/error target.
+link_text() {
+  local text
+  text=$(stat -f '%Y' "$1" && printf '.') || return 1
+  [ "$text" != $'\n.' ] && [ "$text" != . ] || return 1
+  printf '%s' "$text"
+}
 need_entry() {
   local reason=$1 kind=$2 relative=$3 size=$4
   printf '%s\0' "$relative" >> "$WORK/todo.nul" || stop 'Cannot write candidate list.'
@@ -160,10 +167,10 @@ main() {
   set -o pipefail
   shopt -s nullglob dotglob
   [ "$(uname -s)" = Darwin ] || stop 'This script requires macOS; no disk operations performed.'
-  for tool in diskutil stat find awk mktemp readlink tail cat df; do
+  say 'RECOVERY COPY AUDIT v1.0.1'
+  for tool in diskutil stat find awk mktemp tail cat df; do
     command -v "$tool" >/dev/null || stop "Required tool is missing: $tool"
   done
-  say 'RECOVERY COPY AUDIT v1.0.0'
   say 'Audit only. No repair, formatting, copying, deletion or network access.'
   say 'Run only one disk operation at a time. Keep AC power connected.'
   check_mounts
