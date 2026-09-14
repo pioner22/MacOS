@@ -1,11 +1,13 @@
 #!/bin/bash
-# Recovery SSH web proxy 1.0.0. Bash 3.2, macOS Recovery / macOS.
+# Recovery SSH web proxy 1.0.2. Bash 3.2, macOS Recovery / macOS.
 # NOT a VPN, transparent tunnel, kill switch, or preboot proxy.
 # Runtime network settings only; no disk repair/erasure, SIP/T2 changes,
 # firewall changes, remote package installation or stored SSH passwords.
 # Requires local ssh/curl/scutil and Python 3 on the SSH server.
 
-VERSION=1.0.0
+VERSION=1.0.2
+DEFAULT_SSH_HOST=87.251.87.17
+DEFAULT_SSH_USER=admin
 STATE=/private/tmp/mac-ssh-proxy
 SOCKS_PORT=1080
 HTTP_PORT=18080
@@ -383,11 +385,16 @@ start() {
   say 'Server needs SSH TCP forwarding, remote command access and existing Python 3.'
   say 'A temporary loopback-only Python process runs on the server; no packages/config are installed.'
   say 'Runtime proxy settings are restored on stop/disconnect; direct traffic may then resume.'
-  printf 'Server IP or hostname: '; IFS= read -r HOST; host_ok "$HOST" || die 'Invalid host.'
-  printf 'SSH port [22]: '; IFS= read -r PORT; PORT=${PORT:-22}; port_ok "$PORT" || die 'Invalid port.'
+  HOST=$DEFAULT_SSH_HOST
+  LOGIN=$DEFAULT_SSH_USER
+  host_ok "$HOST" && user_ok "$LOGIN" || die 'Invalid preset server or login.'
+  printf 'SSH server: %s\nSSH login:  %s\n' "$HOST" "$LOGIN"
+  printf 'SSH port [22]: '
+  IFS= read -r PORT || die 'No interactive input. Run the script directly with bash.'
+  PORT=${PORT:-22}; port_ok "$PORT" || die 'Invalid port.'
   PORT=$((10#$PORT))
-  printf 'SSH login: '; IFS= read -r LOGIN; user_ok "$LOGIN" || die 'Invalid login.'
-  printf 'Enter 1 to connect and temporarily set system proxies: '; IFS= read -r answer
+  printf 'Enter 1 to connect and temporarily set system proxies: '
+  IFS= read -r answer || die 'Confirmation input closed.'
   [ "$answer" = 1 ] || exit 0
   mkdir -m 700 "$STATE" || die 'Cannot create private runtime directory.'
   if [ -n "$archive" ] && [ -f "$archive/known_hosts" ] && [ ! -L "$archive/known_hosts" ]; then
@@ -448,14 +455,31 @@ start() {
   say "Stop:   bash $STATE/run.sh stop"
   say "LOGS=$STATE"
 }
+is_macos() {
+  # Recovery can contain sw_vers but omit uname. Neither tool is mandatory alone.
+  local product=
+  if command -v sw_vers >/dev/null 2>&1; then
+    product=$(sw_vers -productName 2>/dev/null) || product=
+    case "$product" in
+      'Mac OS X'|'macOS'|'Mac OS X Server'|'macOS Server') return 0 ;;
+    esac
+  fi
+  if command -v uname >/dev/null 2>&1; then
+    [ "$(uname -s 2>/dev/null)" = Darwin ] && return 0
+  fi
+  return 1
+}
 main() {
-  [ "$(uname -s)" = Darwin ] || die 'This launcher requires macOS; nothing changed.'
+  case "${1:-start}" in
+    --version|version) say "RECOVERY SSH WEB PROXY $VERSION"; return 0 ;;
+  esac
+  is_macos || die 'This launcher requires macOS (sw_vers or uname); nothing changed.'
   [ "$EUID" = 0 ] || die 'Root is required. Recovery Terminal is already root.'
   case "${1:-start}" in
     start) start;; status) status;; stop) stop_proxy;;
     test) load_config; probe socks; probe http;;
     _worker) worker;; _watch) watch;;
-    *) say 'Usage: bash proxy.sh [start|status|test|stop]'; return 2;;
+    *) say 'Usage: bash proxy.sh [start|status|test|stop|--version]'; return 2;;
   esac
 }
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi
