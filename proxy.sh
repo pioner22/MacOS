@@ -1,11 +1,11 @@
 #!/bin/bash
-# Recovery SSH web proxy 1.0.2. Bash 3.2, macOS Recovery / macOS.
+# Recovery SSH web proxy 1.0.3. Bash 3.2, macOS Recovery / macOS.
 # NOT a VPN, transparent tunnel, kill switch, or preboot proxy.
 # Runtime network settings only; no disk repair/erasure, SIP/T2 changes,
 # firewall changes, remote package installation or stored SSH passwords.
 # Requires local ssh/curl/scutil and Python 3 on the SSH server.
 
-VERSION=1.0.2
+VERSION=1.0.3
 DEFAULT_SSH_HOST=87.251.87.17
 DEFAULT_SSH_USER=admin
 STATE=/private/tmp/mac-ssh-proxy
@@ -363,12 +363,32 @@ stop_proxy() {
   fi
   say 'Stop requested. Previous runtime proxy dictionaries are restored when still owned by this tool.'
 }
+# Recovery can omit nohup. Ignore HUP before exec and detach all stdio.
+# Do not inherit the starting shell's cleanup handler into the child.
+# This survives an ordinary terminal hangup, not reboot or forced termination.
+spawn_background() {
+  local logfile=$1
+  shift
+  ( trap - EXIT INT TERM; trap '' HUP; exec "$@" ) < /dev/null >> "$logfile" 2>&1 &
+  BACKGROUND_PID=$!
+  disown "$BACKGROUND_PID" 2>/dev/null || :
+}
+check_tools() {
+  local tool missing=0
+  for tool in ssh curl scutil stat awk mkdir cp mv date cat chmod sleep ps; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      printf 'MISSING_TOOL=%s\n' "$tool" >&2
+      missing=1
+    fi
+  done
+  [ -x /bin/bash ] || { say 'MISSING_TOOL=/bin/bash' >&2; missing=1; }
+  [ "$missing" = 0 ] || die 'Required tools are missing (listed above). No changes or package installation.'
+}
 start() {
   local t old service answer port_text n remoteport code workerpid self=${BASH_SOURCE[0]} archive=
   [ "$EUID" = 0 ] || die 'Run as root: sudo bash proxy.sh start (Recovery already uses root).'
-  for t in ssh curl scutil stat awk mkdir cp mv date cat chmod nohup sleep ps; do
-    command -v "$t" >/dev/null || die "Required local tool missing: $t. No packages will be installed."
-  done
+  say "RECOVERY SSH WEB PROXY $VERSION"
+  check_tools
   if [ -e "$STATE" ] || [ -L "$STATE" ]; then
     secure_state
     if [ -f "$STATE/status" ]; then
@@ -380,7 +400,6 @@ start() {
     case "$self" in "$STATE/"*) self="$archive/${self#"$STATE/"}";; esac
   fi
   SERVICE=$(primary_service) || die 'No active network service found. Connect Wi-Fi/Ethernet first.'
-  say "RECOVERY SSH WEB PROXY $VERSION"
   say 'Background SOCKS + HTTP/CONNECT proxy, not all-traffic VPN or preboot networking.'
   say 'Server needs SSH TCP forwarding, remote command access and existing Python 3.'
   say 'A temporary loopback-only Python process runs on the server; no packages/config are installed.'
@@ -420,8 +439,8 @@ start() {
   ctl check >> "$STATE/ssh.log" 2>&1 || die 'SSH master is not running.'
   remote 'command -v python3 >/dev/null && python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,6) else 1)"' \
     > "$STATE/python-check.log" 2>&1 || die 'Server Python 3.6+ unavailable (or remote command disabled). No automatic install.'
-  nohup /bin/bash "$STATE/run.sh" _worker > "$STATE/http-worker.log" 2>&1 < /dev/null &
-  workerpid=$!; printf '%s\n' "$workerpid" > "$STATE/worker.pid"
+  spawn_background "$STATE/http-worker.log" /bin/bash "$STATE/run.sh" _worker
+  workerpid=$BACKGROUND_PID; printf '%s\n' "$workerpid" > "$STATE/worker.pid"
   remoteport=
   for ((n=0;n<30;n++)); do
     remoteport=$(awk -F= '/^MSP_HTTP_PORT=[0-9]+$/ {print $2; exit}' "$STATE/http-worker.log")
@@ -436,8 +455,8 @@ start() {
   backup_key "State:/Network/Service/$SERVICE/Proxies" 1 || die 'Cannot snapshot service proxies.'
   backup_key "$GLOBAL_KEY" 2 || die 'Cannot snapshot global proxies.'
   apply_proxy || die 'Cannot confirm temporary system proxies.'
-  nohup /bin/bash "$STATE/run.sh" _watch > "$STATE/daemon.log" 2>&1 < /dev/null &
-  printf '%s\n' "$!" > "$STATE/watch.pid"
+  spawn_background "$STATE/daemon.log" /bin/bash "$STATE/run.sh" _watch
+  printf '%s\n' "$BACKGROUND_PID" > "$STATE/watch.pid"
   for ((n=0;n<20;n++)); do
     read_value status old
     [ "$old" != RUNNING ] || break
@@ -447,7 +466,8 @@ start() {
   [ "$old" = RUNNING ] || die 'Background monitor startup timed out.'
   trap - EXIT INT TERM HUP
   say 'PROXY_READY: SSH tunnel, HTTP bridge and temporary system proxy settings confirmed.'
-  say 'Return to the installer in this Recovery session. No need to keep Terminal open.'
+  say 'Background jobs started without nohup; ordinary Terminal hangup is ignored.'
+  say 'Return to the installer in this Recovery session; do not force-kill these processes.'
   say 'NOT all traffic: UDP/QUIC, some DNS and clients ignoring proxies can bypass this.'
   say 'Not persistent: Mac reboot/Internet Recovery globe stops this tunnel.'
   say 'A successful Apple HEAD test is NOT proof that every installation package is reachable.'
@@ -478,8 +498,9 @@ main() {
   case "${1:-start}" in
     start) start;; status) status;; stop) stop_proxy;;
     test) load_config; probe socks; probe http;;
+    doctor) say "RECOVERY SSH WEB PROXY $VERSION"; check_tools; say 'LOCAL_TOOLS_OK (availability only; not an end-to-end test)';;
     _worker) worker;; _watch) watch;;
-    *) say 'Usage: bash proxy.sh [start|status|test|stop|--version]'; return 2;;
+    *) say 'Usage: bash proxy.sh [start|status|test|stop|doctor|--version]'; return 2;;
   esac
 }
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi
