@@ -1,11 +1,11 @@
 #!/bin/bash
-# VLESS Recovery helper 0.1.0 (experimental). Bash 3.2, Intel macOS.
+# VLESS Recovery helper 0.1.1 (experimental). Bash 3.2, Intel macOS.
 # Public file: no personal UUID, private URI, key or SSH credential.
 # prepare: localhost-only test; start: explicit opt-in TUN routes and native DNS.
 # No scutil write/reapply loop, pf changes, disk changes, TLS bypass or reboot service.
 # Recovery compatibility is NOT established by the legacy binary's OS label.
 
-VERSION=0.1.0
+VERSION=0.1.1
 CORE_VERSION=1.14.0
 ASSET=sing-box-1.14.0-darwin-amd64-legacy-macos-10.13.tar.gz
 ASSET_SHA=99285bb2d30739dc8884144cf90f50538336eab9914ac4524290f5b82fdb5565
@@ -74,11 +74,76 @@ parse_uri() {
   unset VALUE u
 }
 
+# SHA-256 is required; OpenSSL is not. Test an installed implementation before use.
+# Feed bytes through stdin: no filename parsing/escaping or whole-file RAM buffering.
+SHA256_BACKEND=
+SHA256_TOOL=
+hash_stream() {
+  case "$SHA256_BACKEND" in
+    shasum) "$SHA256_TOOL" -a 256 ;;
+    sha256sum) "$SHA256_TOOL" ;;
+    sha256) "$SHA256_TOOL" -q ;;
+    openssl) "$SHA256_TOOL" dgst -sha256 ;;
+    perl) "$SHA256_TOOL" -MDigest::SHA -e 'binmode STDIN; print Digest::SHA->new(256)->addfile(*STDIN)->hexdigest, "\n";' ;;
+    python3|python) "$SHA256_TOOL" -c 'import hashlib,sys
+h=hashlib.sha256()
+f=getattr(sys.stdin,"buffer",sys.stdin)
+for chunk in iter(lambda:f.read(1048576),b""):
+ h.update(chunk)
+sys.stdout.write(h.hexdigest()+"\n")' ;;
+    *) return 1 ;;
+  esac
+}
+parse_digest() {
+  local out=$1
+  HASH=
+  case "$out" in *$'\n'*|*$'\r'*) return 1;; esac
+  case "$SHA256_BACKEND" in
+    openssl) out=${out##* } ;;
+    *) out=${out%%[[:space:]]*} ;;
+  esac
+  [[ "$out" =~ ^[0-9a-fA-F]{64}$ ]] || return 1
+  # Bash 3.2 does not implement ${value,,}.
+  out=${out//A/a}; out=${out//B/b}; out=${out//C/c}
+  out=${out//D/d}; out=${out//E/e}; out=${out//F/f}
+  HASH=$out
+}
+select_sha256() {
+  local candidate path out rc expected
+  SHA256_BACKEND=; SHA256_TOOL=; HASH=
+  for candidate in shasum sha256sum sha256 openssl perl python3 python; do
+    path=$(type -P "$candidate") || continue
+    [ -x "$path" ] || continue
+    SHA256_BACKEND=$candidate; SHA256_TOOL=$path
+    out=$(hash_stream </dev/null 2>/dev/null); rc=$?
+    [ "$rc" -lt 128 ] || die 'SHA-256 utility crashed. Stop and investigate this Recovery session.'
+    if [ "$rc" != 0 ] || ! parse_digest "$out" ||
+       [ "$HASH" != e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 ]; then
+      say "SHA256_CANDIDATE_FAILED=$candidate"; continue
+    fi
+    out=$(printf abc | hash_stream 2>/dev/null); rc=$?
+    [ "$rc" -lt 128 ] || die 'SHA-256 utility crashed. Stop and investigate this Recovery session.'
+    if [ "$rc" != 0 ] || ! parse_digest "$out" ||
+       [ "$HASH" != ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad ]; then
+      say "SHA256_CANDIDATE_FAILED=$candidate"; continue
+    fi
+    say "SHA256_BACKEND=$SHA256_BACKEND"
+    say 'SHA256_SELFTEST_OK (empty input and abc; not a hardware stability test)'
+    HASH=
+    return 0
+  done
+  SHA256_BACKEND=; SHA256_TOOL=; HASH=
+  say 'MISSING_CAPABILITY=working_SHA256'
+  say 'Checked installed shasum/sha256sum/sha256/openssl/Perl Digest::SHA/Python hashlib.'
+  return 1
+}
 sha256_file() {
-  local out
-  out=$(openssl dgst -sha256 "$1") || return 1
-  HASH=${out##* }
-  [[ "$HASH" =~ ^[0-9a-fA-F]{64}$ ]]
+  local out rc
+  HASH=
+  [ -n "$SHA256_BACKEND" ] || select_sha256 || return 1
+  out=$(hash_stream < "$1"); rc=$?
+  [ "$rc" = 0 ] || return 1
+  parse_digest "$out"
 }
 secure_state() {
   [ -d "$STATE" ] && [ ! -L "$STATE" ] || die 'Runtime directory missing or unsafe.'
@@ -86,12 +151,43 @@ secure_state() {
 }
 safe_file() { [ -f "$1" ] && [ ! -L "$1" ] && [ "$(stat -f '%u' "$1")" = 0 ]; }
 read_saved() { safe_file "$STATE/$1" && IFS= read -r "$2" < "$STATE/$1"; }
-need_tools() {
-  local x missing=0
-  for x in sw_vers sysctl curl openssl tar stat awk mkdir cp mv chmod ps sleep route ifconfig scutil tail cat grep rmdir; do
-    command -v "$x" >/dev/null 2>&1 || { say "MISSING_TOOL=$x"; missing=1; }
+check_tools() {
+  local x missing=0 mode=${1:-prepare}
+  local tools='sw_vers sysctl stat ps'
+  case "$mode" in
+    stop) tools="$tools mkdir rmdir sleep ifconfig" ;;
+    status) ;;
+    *) tools="$tools curl tar awk mkdir cp mv chmod sleep route ifconfig scutil tail cat grep rmdir" ;;
+  esac
+  for x in $tools; do
+    type -P "$x" >/dev/null 2>&1 || { say "MISSING_TOOL=$x"; missing=1; }
   done
-  [ "$missing" = 0 ] || die 'Required tools missing. No automatic installation.'
+  case "$mode" in
+    status|stop) ;;
+    *) select_sha256 || missing=1 ;;
+  esac
+  [ "$missing" = 0 ]
+}
+need_tools() { check_tools "${1:-prepare}" || die 'Required capabilities missing. No automatic installation or checksum bypass.'; }
+doctor() {
+  local failed=0 out rc
+  say "VLESS RECOVERY $VERSION — preflight only"
+  say 'No downloads, URI access, client launch, or route/DNS/proxy changes.'
+  check_tools prepare || failed=1
+  if type -P sw_vers >/dev/null 2>&1; then
+    out=$(sw_vers -productVersion); rc=$?
+    [ "$rc" = 0 ] || die "sw_vers failed (exit $rc); stop and inspect Recovery."
+    say "RECOVERY_VERSION=$out"
+  fi
+  if type -P sysctl >/dev/null 2>&1; then
+    out=$(sysctl -n hw.machine); rc=$?
+    [ "$rc" = 0 ] || die "sysctl failed (exit $rc); stop and inspect Recovery."
+    say "ARCH=$out"
+    [ "$out" = x86_64 ] || { say 'UNSUPPORTED_ARCH: Intel x86_64 required.'; failed=1; }
+  fi
+  [ "$failed" = 0 ] || die 'Preflight failed; do not run prepare/start.'
+  say 'PREFLIGHT_OK: required commands found and SHA-256 self-test passed.'
+  say 'Not proof of command runtime compatibility, stable RAM, VLESS, or TUN support.'
 }
 current_nic() {
   local result
@@ -312,9 +408,16 @@ main() {
   umask 077; set -o pipefail; ulimit -c 0 2>/dev/null || :
   [ "${1:-}" != --version ] || { say "VLESS RECOVERY $VERSION"; return; }
   [ "$EUID" = 0 ] || die 'Run as root in Recovery.'
-  need_tools
+  [ "${1:-}" != doctor ] || { doctor; return; }
+  need_tools "${1:-prepare}"
   case "$(sw_vers -productName)" in 'Mac OS X'|macOS) ;; *) die 'macOS required.';; esac
   [ "$(sysctl -n hw.machine)" = x86_64 ] || die 'This helper is for Intel macOS only.'
+  case "${1:-prepare}" in
+    status|stop)
+      if [ ! -e "$STATE" ] && [ ! -L "$STATE" ]; then
+        say 'CORE_NOT_RUNNING (no runtime directory in this session)'; return 0
+      fi;;
+  esac
   if [ ! -e "$STATE" ] && [ ! -L "$STATE" ]; then mkdir -m 700 "$STATE" || die 'Cannot create runtime state.'; fi
   secure_state
   say "VLESS RECOVERY $VERSION — experimental, not tested on real Recovery."
@@ -326,7 +429,7 @@ main() {
     stop) operation_lock; stop_core;;
     prepare) [ "$#" -le 2 ] || die 'Provide exactly one URI file.'; operation_lock; ensure_stopped; prepare "${2:-}";;
     start) operation_lock; ensure_stopped; start_tun;;
-    *) die 'Usage: bash vless.sh [prepare [local-link-file]|start|status|stop|--version]';;
+    *) die 'Usage: bash vless.sh [doctor|prepare [local-link-file]|start|status|stop|--version]';;
   esac
 }
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then main "$@"; fi
