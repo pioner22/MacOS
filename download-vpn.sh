@@ -1,9 +1,9 @@
 #!/bin/bash
 # A1398 / full Intel macOS 10.15+: private VLESS/REALITY client + Catalina download.
 # Not Recovery. Not a system VPN: no TUN, DNS, firewall, hosts, or proxy setting writes.
-# No personal URI or subscription token in this public file. Run WITHOUT sudo.
-# Accept a private vless:// URI or an HTTPS raw/Base64 subscription, locally only.
-VERSION=1.1.0
+# Owner-requested subscription preset. Run WITHOUT sudo.
+# WARNING: this file contains a subscription access URL. Revoke it after use.
+VERSION=1.1.1
 CORE_VERSION=1.14.0
 ASSET=sing-box-1.14.0-darwin-amd64-legacy-macos-10.13.tar.gz
 ASSET_SHA=99285bb2d30739dc8884144cf90f50538336eab9914ac4524290f5b82fdb5565
@@ -21,6 +21,8 @@ URI_FILE=
 LOCAL_ARCHIVE=
 RECONFIGURE=0
 LOCAL_PORT=2080
+# This owner-provided URL takes precedence over a previously saved profile.
+DEFAULT_SUBSCRIPTION='https://service.chitly.ru:2096/rpCJeVK8bLbbieueSSUlvrgo/mnobq2q6hijcf5rx'
 CURL=/usr/bin/curl
 SHASUM=/usr/bin/shasum
 BOOTSTRAP=(-q -4 -fL --proto '=https' --proto-redir '=https' -x '' --noproxy '*' --connect-timeout 20 --max-time 1800 --speed-time 120 --speed-limit 1024)
@@ -49,7 +51,8 @@ lock_base() {
     IFS= read -r old < "$BASE/lock/pid"
     [[ "$old" =~ ^[0-9]+$ ]] && [ "$old" -gt 1 ] || die 'Invalid lock PID.'
     kill -0 "$old" 2>/dev/null && die 'A previous wrapper process is still running.'
-    rm "$BASE/lock/pid" && rmdir "$BASE/lock" && mkdir "$BASE/lock" || die 'Cannot recover stale lock.'
+    rm "$BASE/lock/pid" && rmdir "$BASE/lock" || die 'Cannot recover stale lock.'
+    mkdir "$BASE/lock" || die 'Cannot acquire recovered lock.'
   fi
   LOCKED=1
   printf '%s\n' "$$" > "$BASE/lock/pid" || die 'Cannot write lock PID.'
@@ -306,6 +309,9 @@ get_profile() {
   local saved="$BASE/profile.uri" source
   if [ -n "$URI_FILE" ]; then
     read_uri "$URI_FILE"
+  elif [ "$RECONFIGURE" = 0 ] && [ -n "$DEFAULT_SUBSCRIPTION" ]; then
+    URI=$DEFAULT_SUBSCRIPTION
+    say 'Using the configured subscription; no link entry is required.'
   elif [ "$RECONFIGURE" = 0 ] && [ -e "$saved" ]; then
     owned_file "$saved" || die 'Unsafe saved source.'
     chmod 600 "$saved" || die 'Cannot protect saved source.'
