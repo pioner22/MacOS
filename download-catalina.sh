@@ -1,9 +1,9 @@
 #!/bin/bash
-# Catalina download helper 1.0.0. Full macOS 10.15+/Bash 3.2, not Recovery.
+# Catalina download helper 1.1.0. Full macOS 10.15+/Bash 3.2, not Recovery.
 # Downloads ONE original file. No installation, mounts, network changes or sudo.
 # Official documentation: https://curl.se/docs/manpage.html
 # HTTP success, local integrity and Apple signature verification are distinct.
-VERSION=1.0.0
+VERSION=1.1.0
 DEFAULT_URL='https://swcdn.apple.com/content/downloads/26/37/001-68446/r1dbqtmf3mtpikjnd04cq31p4jk91dceh8/InstallESDDmg.pkg'
 CURL=/usr/bin/curl
 SHASUM=/usr/bin/shasum
@@ -17,7 +17,23 @@ RESERVE_BYTES=2147483648
 LOCKED=0
 WAKE_PID=
 RUN=
+SOCKS5=
 COMMON=(-q -4 --http1.1 -fL --proto '=https' --proto-redir '=https' --max-redirs 5 -x '' --noproxy '*' --connect-timeout 20 -H 'Accept-Encoding: identity')
+
+# Explicit SOCKS5h mode: destination DNS goes to the proxy. Never auto-fallback.
+configure_transport() {
+  local port
+  COMMON=(-q -4 --http1.1 -fL --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 20 -H 'Accept-Encoding: identity')
+  if [ -n "$SOCKS5" ]; then
+    [[ "$SOCKS5" =~ ^127[.]0[.]0[.]1:[0-9]{1,5}$ ]] || die '--socks5 requires 127.0.0.1:PORT, without credentials.'
+    port=${SOCKS5##*:}; port=$((10#$port))
+    [ "$port" -ge 1024 ] && [ "$port" -le 65535 ] || die 'Invalid local SOCKS port.'
+    SOCKS5="127.0.0.1:$port"
+    COMMON+=(--proxy "socks5h://$SOCKS5" --noproxy '')
+  else
+    COMMON+=(-x '' --noproxy '*')
+  fi
+}
 
 say() { printf '%s\n' "$*"; }
 log() { say "$*"; [ -z "$RUN" ] || printf '%s\n' "$*" >> "$RUN/summary.txt"; }
@@ -215,7 +231,7 @@ verify_file() {
     [ "$rc" = 0 ] || die 'Файл получен, но pkgutil не подтвердил подпись. Файл сохранён; изучите verification.txt.'
     log 'SIGNATURE_CHECK_COMMAND_OK: проверьте подписанта и цепочку в verification.txt; установка не проверена.'
   elif [ "$trailer" = 6b6f6c79 ]; then
-    log 'Формат UDIF/DMG внутри файла .pkg: проверяем hdiutil verify, расширение не меняем.'
+    log 'Формат UDIF/DMG внутри файла .pkg: проверка образа (hdiutil), без монтирования.'
     "$HDIUTIL" verify "$FINAL" > "$RUN/verification.txt" 2>&1; rc=$?
     cat "$RUN/verification.txt"
     log "FORMAT=DMG HDIUTIL_EXIT=$rc"
@@ -240,15 +256,17 @@ main() {
   local tool model os path
   URL=$DEFAULT_URL
   DEST="$HOME/macOS-rescue/Catalina-001-68446"
-  case "${1:-}" in --help|-h) say 'bash download-catalina.sh [--output DIRECTORY] [--url HTTPS_APPLE_URL]'; return 0;; esac
+  case "${1:-}" in --help|-h) say 'bash download-catalina.sh [--output DIRECTORY] [--url HTTPS_APPLE_URL] [--socks5 127.0.0.1:PORT]'; return 0;; esac
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --output) [ "$#" -ge 2 ] || die '--output requires a path'; DEST=$2; shift 2;;
+      --socks5) [ "$#" -ge 2 ] || die '--socks5 requires an endpoint'; SOCKS5=$2; shift 2;;
       --url) [ "$#" -ge 2 ] || die '--url requires a URL'; URL=$2; shift 2;;
       *) die 'Unknown argument. Use --help.';;
     esac
   done
   [ "$EUID" != 0 ] || die 'Запускайте на A1398 в обычной macOS, БЕЗ sudo; не в Recovery.'
+  configure_transport
   allowed_url "$URL" || die 'Only an HTTPS URL on apple.com subdomains is accepted.'
   case "$DEST" in /*) ;; *) die 'Output directory must be an absolute path.';; esac
   for tool in "$CURL" "$SHASUM" "$CAFFEINATE" "$HDIUTIL" "$PKGUTIL" /usr/bin/sw_vers /usr/sbin/sysctl /usr/bin/stat; do
@@ -279,7 +297,13 @@ main() {
   log "UTC=$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   log "URL=$URL"
   log "DEST=$DEST"
-  log 'Один файл. Нет Homebrew, sudo, установки macOS, SSH/VPN, DNS или форматирования.'
+  log 'Один файл. Нет Homebrew, sudo, установки macOS или форматирования.'
+  if [ -n "$SOCKS5" ]; then
+    log "TRANSPORT=SOCKS5H ENDPOINT=$SOCKS5 DIRECT_FALLBACK=DISABLED"
+    log 'HEAD и GET используют прокси; remote_ip в curl может быть локальным адресом прокси, не адресом Apple.'
+  else
+    log 'TRANSPORT=DIRECT (HTTP/SOCKS proxy disabled for these requests)'
+  fi
   log 'Исходный журнал использовал HTTP; здесь HTTPS. Это отдельная проверка доставки.'
   "$CURL" -q --version > "$RUN/curl-version.txt" 2>&1 || die 'System curl failed.'
   "$CAFFEINATE" -is -w $$ > "$RUN/caffeinate.txt" 2>&1 &
