@@ -1,8 +1,9 @@
 #!/bin/bash
 # A1398 / full Intel macOS 10.15+: private VLESS/REALITY client + Catalina download.
 # Not Recovery. Not a system VPN: no TUN, DNS, firewall, hosts, or proxy setting writes.
-# No personal URI in this public file. Run as the normal user, WITHOUT sudo.
-VERSION=1.0.0
+# No personal URI or subscription token in this public file. Run WITHOUT sudo.
+# Accept a private vless:// URI or an HTTPS raw/Base64 subscription, locally only.
+VERSION=1.1.0
 CORE_VERSION=1.14.0
 ASSET=sing-box-1.14.0-darwin-amd64-legacy-macos-10.13.tar.gz
 ASSET_SHA=99285bb2d30739dc8884144cf90f50538336eab9914ac4524290f5b82fdb5565
@@ -62,6 +63,9 @@ core_alive() {
 cleanup() {
   local rc=$? n
   trap - EXIT INT TERM HUP
+  if [ -n "$RUN" ] && [ -d "$RUN" ]; then
+    rm -f "$RUN/subscription.body" "$RUN/subscription.decoded" "$RUN/subscription.controls"
+  fi
   # Stop the proxy first: any remaining downloader connection fails, not bypasses.
   if core_alive; then
     kill -TERM "$CORE_PID" 2>/dev/null || :
@@ -74,7 +78,7 @@ cleanup() {
   fi
   if [ -n "$WAKE_PID" ]; then kill "$WAKE_PID" 2>/dev/null || :; wait "$WAKE_PID" 2>/dev/null || :; fi
   if [ "$LOCKED" = 1 ]; then rm -f "$BASE/lock/pid"; rmdir "$BASE/lock" 2>/dev/null || :; fi
-  [ -z "$RUN" ] || say "CLIENT_LOGS=$RUN (private; do not publish profile.uri or client.json)"
+  [ -z "$RUN" ] || say "CLIENT_LOGS=$RUN (private credentials/config/subscription logs; do not publish this directory)"
   say 'Client session finished. No system network settings were changed.'
   exit "$rc"
 }
@@ -169,6 +173,122 @@ parse_uri() {
   unset VALUE u
 }
 
+# Subscription contents are DATA, never shell code or a complete client config.
+# Accepted formats: raw URI list, or standard/URL-safe Base64 of a URI list.
+SUBSCRIPTION_LIMIT=1048576
+PROFILE_INDEX=
+SUBSCRIPTION_CANDIDATES=()
+
+subscription_url_ok() {
+  local u=$1 authority host port
+  [ "${#u}" -le 4096 ] || return 1
+  # Quoted curl-config input below must not contain escapes/control characters.
+  case "$u" in https://*) ;; *) return 1;; esac
+  case "$u" in *[!\ -~]*|*\"*|*\\*|*\#*|*\ *|*\{*|*\}*|*\[*|*\]*) return 1;; esac
+  authority=${u#https://}; authority=${authority%%/*}
+  case "$authority" in *@*|*\?*|'') return 1;; esac
+  host=${authority%%:*}
+  [[ "$host" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] && [ "${#host}" -le 253 ] || return 1
+  if [ "$host" != "$authority" ]; then
+    port=${authority#*:}
+    [[ "$port" =~ ^[0-9]{1,5}$ ]] || return 1
+    [ "$((10#$port))" -ge 1 ] && [ "$((10#$port))" -le 65535 ] || return 1
+  fi
+  [ "${u#https://}" != "$authority" ]
+}
+subscription_fetch() {
+  local source=$1 rc code bytes
+  subscription_url_ok "$source" || die 'Invalid subscription URL. Use HTTPS with a hostname and no URL credentials/fragment.'
+  say 'SUBSCRIPTION_FETCH: HTTPS, normal network, no automatic redirects; private URL is not printed.'
+  # Keep the token out of ps/argv. No -L: never forward a private token to an unexpected redirect.
+  # RLIMIT_FSIZE also bounds responses with no Content-Length on old macOS curl.
+  (
+    ulimit -c 0 2>/dev/null || :
+    ulimit -f 1024 || exit 1
+    printf 'url = "%s"\n' "$source" | "$CURL" -q --config - -4 -sS -f --globoff \
+      --proto '=https' --http1.1 -x '' --noproxy '*' --connect-timeout 15 --max-time 60 \
+      --max-filesize "$SUBSCRIPTION_LIMIT" -H 'Accept: text/plain' -H 'Accept-Encoding: identity' \
+      -D "$RUN/subscription.headers" -o "$RUN/subscription.body" -w '%{http_code}'
+  ) > "$RUN/subscription.code" 2> "$RUN/subscription.stderr"
+  rc=$?; code=$(cat "$RUN/subscription.code")
+  [[ "$code" =~ ^[0-9]{3}$ ]] || code=000
+  say "SUBSCRIPTION_FETCH: curl=$rc HTTP=$code"
+  [ "$rc" = 0 ] || die 'Subscription fetch failed. Private stderr retained; TLS verification must not be disabled.'
+  [ "$code" = 200 ] || die 'Subscription did not return HTTP 200. Redirect/login pages are not imported.'
+  bytes=$(stat -f '%z' "$RUN/subscription.body") || die 'Cannot inspect subscription response.'
+  [[ "$bytes" =~ ^[0-9]+$ ]] && [ "$bytes" -gt 0 ] && [ "$bytes" -le "$SUBSCRIPTION_LIMIT" ] || die 'Subscription is empty or exceeds 1 MiB.'
+}
+subscription_text_ok() {
+  # Reject NUL, DEL, terminal escape codes and all C0 controls other than TAB/CR/LF.
+  LC_ALL=C tr -d '\011\012\015\040-\176\200-\377' < "$1" > "$RUN/subscription.controls" || return 1
+  [ ! -s "$RUN/subscription.controls" ]
+}
+subscription_decode() {
+  local input=$1 bytes encoded canon flag
+  bytes=$(stat -f '%z' "$input") || die 'Cannot read subscription size.'
+  [[ "$bytes" =~ ^[0-9]+$ ]] && [ "$bytes" -gt 0 ] && [ "$bytes" -le "$SUBSCRIPTION_LIMIT" ] || die 'Subscription size is invalid.'
+  subscription_text_ok "$input" || die 'Subscription contains forbidden control bytes.'
+  # Actual records are validated below; merely containing :// does not make HTML acceptable.
+  if grep -aq '://' "$input"; then
+    SUBSCRIPTION_TEXT=$input; say 'SUBSCRIPTION_FORMAT=RAW_LINKS'; return
+  fi
+  encoded=$(LC_ALL=C tr -d ' \t\r\n' < "$input") || die 'Cannot normalize subscription.'
+  encoded=${encoded#$'\357\273\277'}
+  [[ "$encoded" =~ ^[A-Za-z0-9+/_-]+={0,2}$ ]] || die 'Expected a raw/Base64 URI list, not HTML, JSON or YAML.'
+  encoded=${encoded//-/+}; encoded=${encoded//_/\/}
+  encoded=${encoded%%=*}
+  case "$((${#encoded}%4))" in
+    0) ;; 2) encoded=$encoded'==';; 3) encoded=$encoded'=';; *) die 'Malformed Base64 subscription.';;
+  esac
+  command -v base64 >/dev/null || die 'System base64 is unavailable; no package installation attempted.'
+  if base64 -D </dev/null >/dev/null 2>&1; then flag=-D; else flag=-d; fi
+  printf '%s' "$encoded" | base64 "$flag" > "$RUN/subscription.decoded" 2> "$RUN/subscription.decode-error" || die 'Base64 subscription could not be decoded.'
+  subscription_text_ok "$RUN/subscription.decoded" || die 'Decoded subscription contains forbidden control bytes.'
+  canon=$(base64 < "$RUN/subscription.decoded" | tr -d '\r\n') || die 'Base64 round-trip failed.'
+  [ "${canon%%=*}" = "${encoded%%=*}" ] || die 'Base64 subscription is not canonical.'
+  SUBSCRIPTION_TEXT="$RUN/subscription.decoded"
+  say 'SUBSCRIPTION_FORMAT=BASE64_LINKS'
+}
+subscription_select() {
+  local file=$1 line seen=0 skipped=0 index chosen n first=1
+  SUBSCRIPTION_CANDIDATES=()
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ "$first" = 1 ]; then line=${line#$'\357\273\277'}; first=0; fi
+    line=${line%$'\r'}
+    line=${line#"${line%%[!$' \t']*}"}; line=${line%"${line##*[!$' \t']}"}
+    case "$line" in ''|\#*) continue;; esac
+    seen=$((seen+1)); [ "$seen" -le 128 ] || die 'Subscription exceeds 128 records.'
+    [ "${#line}" -le 4096 ] || die 'Subscription record is too long.'
+    # Reuse strict VLESS/REALITY/Vision parser; untrusted records cannot supply routes or scripts.
+    if [[ "$line" == vless://* ]] && (parse_uri "$line") >/dev/null 2>&1; then
+      SUBSCRIPTION_CANDIDATES+=("$line")
+    elif [[ "$line" =~ ^[A-Za-z][A-Za-z0-9+.-]*:// ]]; then
+      skipped=$((skipped+1))
+    else
+      die 'Response is not a plain URI list. Export raw/Base64 links from the provider.'
+    fi
+  done < "$file"
+  n=${#SUBSCRIPTION_CANDIDATES[@]}
+  say "SUBSCRIPTION_PROFILES=$n UNSUPPORTED_RECORDS=$skipped"
+  [ "$n" -gt 0 ] || die 'No supported VLESS/REALITY/Vision/TCP/chrome profile. Other transports are not silently converted.'
+  if [ -n "$PROFILE_INDEX" ]; then
+    chosen=$PROFILE_INDEX
+  elif [ "$n" = 1 ]; then
+    chosen=1
+  else
+    say 'Choose a supported profile; credential and provider remarks are not displayed:'
+    for ((index=0;index<n;index++)); do
+      (parse_uri "${SUBSCRIPTION_CANDIDATES[$index]}" >/dev/null; printf '%s) %s:%s (VLESS REALITY)\n' "$((index+1))" "$HOST" "$PORT")
+    done
+    printf 'Profile number [1]: '; IFS= read -r chosen || die 'Profile selection needs input, or use --profile-index N.'
+    chosen=${chosen:-1}
+  fi
+  [[ "$chosen" =~ ^[1-9][0-9]{0,2}$ ]] && [ "$chosen" -le "$n" ] || die 'Invalid profile number.'
+  URI=${SUBSCRIPTION_CANDIDATES[$((chosen-1))]}
+  SUBSCRIPTION_CANDIDATES=()
+  say "SELECTED_PROFILE=$chosen"
+}
+
 read_uri() {
   local source=$1 extra
   [ -f "$source" ] && [ ! -L "$source" ] || die 'URI file missing or unsafe.'
@@ -183,26 +303,37 @@ read_uri() {
   } < "$source"
 }
 get_profile() {
-  local saved="$BASE/profile.uri"
+  local saved="$BASE/profile.uri" source
   if [ -n "$URI_FILE" ]; then
     read_uri "$URI_FILE"
   elif [ "$RECONFIGURE" = 0 ] && [ -e "$saved" ]; then
-    owned_file "$saved" || die 'Unsafe saved URI.'
-    chmod 600 "$saved" || die 'Cannot protect saved URI.'
-    say 'Using the saved private VLESS profile (no credential displayed).'
+    owned_file "$saved" || die 'Unsafe saved source.'
+    chmod 600 "$saved" || die 'Cannot protect saved source.'
+    say 'Using the saved private VPN source (no credential displayed).'
     read_uri "$saved"
   else
-    say 'Paste your VLESS URI at the hidden prompt. It is saved only locally, mode 600.'
-    printf 'VLESS URI: '
+    say 'Paste a VLESS URI or HTTPS subscription. Hidden input; saved only locally, mode 600.'
+    printf 'VPN link (vless:// or https://): '
     IFS= read -rs URI || die 'No interactive input. Use --uri-file PATH instead.'
     printf '\n'
     URI=${URI%$'\r'}
   fi
+  source=$URI
+  case "$source" in
+    https://*)
+      subscription_fetch "$source"
+      subscription_decode "$RUN/subscription.body"
+      subscription_select "$SUBSCRIPTION_TEXT" ;;
+    vless://*) ;;
+    *) die 'Provide a vless:// profile or HTTPS raw/Base64 subscription URL.';;
+  esac
   parse_uri "$URI"
-  [ ! -L "$saved" ] || die 'Unsafe saved URI path.'
-  printf '%s\n' "$URI" > "$RUN/profile.new" && chmod 600 "$RUN/profile.new" && mv "$RUN/profile.new" "$saved" || die 'Cannot store private profile.'
-  unset URI VALUE
+  [ ! -L "$saved" ] || die 'Unsafe saved source path.'
+  # Keep the subscription URL, not a stale node. It is fetched afresh on later runs.
+  printf '%s\n' "$source" > "$RUN/profile.new" && chmod 600 "$RUN/profile.new" && mv "$RUN/profile.new" "$saved" || die 'Cannot store private VPN source.'
+  unset URI VALUE source SUBSCRIPTION_TEXT
 }
+
 choose_port() {
   local n
   for ((n=2080;n<=2090;n++)); do
@@ -261,7 +392,9 @@ main() {
       --core-archive) [ "$#" -ge 2 ] || die 'Missing archive filename.'; LOCAL_ARCHIVE=$2; shift 2;;
       --output) [ "$#" -ge 2 ] || die 'Missing output directory.'; OUTPUT=$2; shift 2;;
       --reconfigure) RECONFIGURE=1; shift;;
-      --help|-h) say 'bash download-vpn.sh [--uri-file PATH] [--reconfigure] [--core-archive PATH] [--output ABSOLUTE_PATH]'; return 0;;
+      --profile-index) [ "$#" -ge 2 ] || die 'Missing profile number.'; PROFILE_INDEX=$2; [[ "$PROFILE_INDEX" =~ ^[1-9][0-9]{0,2}$ ]] || die 'Invalid profile number.'; shift 2;;
+      --version) say "CATALINA VIA VLESS $VERSION"; return 0;;
+      --help|-h) say 'bash download-vpn.sh [--uri-file PATH] [--reconfigure] [--profile-index N] [--core-archive PATH] [--output ABSOLUTE_PATH]'; return 0;;
       *) die 'Unknown option. Do not pass a secret URI in command-line arguments.';;
     esac
   done
@@ -269,7 +402,7 @@ main() {
   for tool in "$CURL" "$SHASUM" /usr/bin/sw_vers /usr/sbin/sysctl /usr/bin/stat /usr/sbin/lsof /usr/bin/caffeinate /usr/bin/tar; do
     [ -x "$tool" ] || die "Required tool missing: $tool (no Homebrew install attempted)."
   done
-  for tool in mkdir chmod cp mv rm rmdir ps grep mktemp sleep cat; do command -v "$tool" >/dev/null || die "Missing tool: $tool"; done
+  for tool in mkdir chmod cp mv rm rmdir ps grep mktemp sleep cat tr; do command -v "$tool" >/dev/null || die "Missing tool: $tool"; done
   os=$(/usr/bin/sw_vers -productVersion) || die 'Cannot identify macOS.'
   major=${os%%.*}; minor=${os#*.}; minor=${minor%%.*}
   [[ "$major" =~ ^[0-9]+$ ]] && [[ "$minor" =~ ^[0-9]+$ ]] || die 'Invalid macOS version.'
@@ -286,14 +419,15 @@ main() {
   RUN=$(mktemp -d "$BASE/session.XXXXXX") || die 'Cannot create session directory.'
   say "CATALINA VIA VLESS $VERSION | macOS=$os"
   say 'This installs a per-user client, not a system-wide VPN. No sudo, TUN or DNS changes.'
-  say 'GitHub bootstrap and DNS of the VLESS server use the current network; Apple download uses VLESS.'
+  say 'Subscription/GitHub bootstrap and DNS of the VLESS server use the current network; Apple download uses VLESS.'
   /usr/bin/caffeinate -is -w $$ > "$RUN/caffeinate.log" 2>&1 &
   WAKE_PID=$!
   sleep 1; kill -0 "$WAKE_PID" 2>/dev/null || die 'caffeinate did not start.'
+  get_profile
   prepare_core
   fetch_checked "https://raw.githubusercontent.com/pioner22/MacOS/$DL_REF/download-catalina.sh" "$RUN/download-catalina.sh" "$DL_SHA"
   /bin/bash -n "$RUN/download-catalina.sh" || die 'Downloader syntax check failed.'
-  get_profile; choose_port; write_config; start_client
+  choose_port; write_config; start_client
   say 'Starting the original Catalina file download THROUGH VLESS. Keep this Terminal window open.'
   /bin/bash "$RUN/download-catalina.sh" --socks5 "127.0.0.1:$LOCAL_PORT" --output "$OUTPUT" &
   DL_PID=$!
