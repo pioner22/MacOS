@@ -1,11 +1,11 @@
 #!/bin/bash
-# VLESS Recovery helper 0.1.1 (experimental). Bash 3.2, Intel macOS.
+# VLESS Recovery helper 0.1.2 (experimental). Bash 3.2, Intel macOS.
 # Public file: no personal UUID, private URI, key or SSH credential.
 # prepare: localhost-only test; start: explicit opt-in TUN routes and native DNS.
 # No scutil write/reapply loop, pf changes, disk changes, TLS bypass or reboot service.
 # Recovery compatibility is NOT established by the legacy binary's OS label.
 
-VERSION=0.1.1
+VERSION=0.1.2
 CORE_VERSION=1.14.0
 ASSET=sing-box-1.14.0-darwin-amd64-legacy-macos-10.13.tar.gz
 ASSET_SHA=99285bb2d30739dc8884144cf90f50538336eab9914ac4524290f5b82fdb5565
@@ -78,8 +78,77 @@ parse_uri() {
 # Feed bytes through stdin: no filename parsing/escaping or whole-file RAM buffering.
 SHA256_BACKEND=
 SHA256_TOOL=
+# Self-contained fallback: core Perl only; no Digest::SHA, CPAN or downloads.
+# Initial trust is the HTTPS-delivered script, exactly as for its shell code.
+# Self-tests detect computation defects, not the authenticity of this script.
+perl_core_sha256() {
+  PERL5OPT= PERL5LIB= "$SHA256_TOOL" -e '
+# Module-free streaming SHA-256, for checking small bootstrap archives/configs.
+# FIPS 180-4 algorithm; not a validated cryptographic module. No Perl .pm/XS files.
+# Capped at 256 MiB: do not use this slow fallback to hash a macOS installer.
+BEGIN { @INC = (); }
+my @K = map { hex($_) } qw(
+428a2f98 71374491 b5c0fbcf e9b5dba5 3956c25b 59f111f1 923f82a4 ab1c5ed5
+ d807aa98 12835b01 243185be 550c7dc3 72be5d74 80deb1fe 9bdc06a7 c19bf174
+ e49b69c1 efbe4786 0fc19dc6 240ca1cc 2de92c6f 4a7484aa 5cb0a9dc 76f988da
+ 983e5152 a831c66d b00327c8 bf597fc7 c6e00bf3 d5a79147 06ca6351 14292967
+ 27b70a85 2e1b2138 4d2c6dfc 53380d13 650a7354 766a0abb 81c2c92e 92722c85
+ a2bfe8a1 a81a664b c24b8b70 c76c51a3 d192e819 d6990624 f40e3585 106aa070
+ 19a4c116 1e376c08 2748774c 34b0bcb5 391c0cb3 4ed8aa4a 5b9cca4f 682e6ff3
+ 748f82ee 78a5636f 84c87814 8cc70208 90befffa a4506ceb bef9a3f7 c67178f2);
+my @H = map { hex($_) } qw(6a09e667 bb67ae85 3c6ef372 a54ff53a 510e527f 9b05688c 1f83d9ab 5be0cd19);
+my $MASK = 0xffffffff;
+sub ror {
+    my ($x, $n) = @_;
+    return (($x >> $n) | (($x << (32-$n)) & 0xffffffff)) & 0xffffffff;
+}
+my $block = sub {
+    my ($bytes) = @_;
+    my @W = unpack("N16", $bytes);
+    for my $i (16..63) {
+        my $x = $W[$i-15]; my $y = $W[$i-2];
+        my $s0 = ror($x,7) ^ ror($x,18) ^ ($x >> 3);
+        my $s1 = ror($y,17) ^ ror($y,19) ^ ($y >> 10);
+        $W[$i] = ($W[$i-16] + $s0 + $W[$i-7] + $s1) & $MASK;
+    }
+    my ($a,$b,$c,$d,$e,$f,$g,$h) = @H;
+    for my $i (0..63) {
+        my $s1 = ror($e,6) ^ ror($e,11) ^ ror($e,25);
+        my $ch = ($e & $f) ^ (($e ^ $MASK) & $g);
+        my $t1 = ($h + $s1 + $ch + $K[$i] + $W[$i]) & $MASK;
+        my $s0 = ror($a,2) ^ ror($a,13) ^ ror($a,22);
+        my $maj = ($a & $b) ^ ($a & $c) ^ ($b & $c);
+        my $t2 = ($s0 + $maj) & $MASK;
+        ($h,$g,$f,$e,$d,$c,$b,$a) = ($g,$f,$e,($d+$t1)&$MASK,$c,$b,$a,($t1+$t2)&$MASK);
+    }
+    my @state = ($a,$b,$c,$d,$e,$f,$g,$h);
+    for my $i (0..7) { $H[$i] = ($H[$i]+$state[$i]) & $MASK; }
+};
+binmode(STDIN) or die "SHA256 stdin binary mode failed: $!\n";
+my ($pending, $total) = ("", 0);
+while (1) {
+    my $chunk = "";
+    my $n = read(STDIN, $chunk, 65536);
+    defined($n) or die "SHA256 input read failed: $!\n";
+    last if $n == 0;
+    $total += $n;
+    $total <= 268435456 or die "SHA256 Perl fallback limited to 256 MiB bootstrap files\n";
+    $pending .= $chunk;
+    my $full = length($pending) - length($pending)%64;
+    for (my $off=0; $off<$full; $off+=64) { $block->(substr($pending,$off,64)); }
+    substr($pending,0,$full,"");
+}
+$pending .= "\x80";
+$pending .= "\0" x ((56-length($pending)%64+64)%64);
+$pending .= pack("N2", int($total/536870912), ($total%536870912)*8);
+for (my $off=0; $off<length($pending); $off+=64) { $block->(substr($pending,$off,64)); }
+print(join("", map { sprintf("%08x", $_) } @H), "\n") or die "SHA256 output failed: $!\n";
+
+'
+}
 hash_stream() {
   case "$SHA256_BACKEND" in
+    perl-core) perl_core_sha256 ;;
     shasum) "$SHA256_TOOL" -a 256 ;;
     sha256sum) "$SHA256_TOOL" ;;
     sha256) "$SHA256_TOOL" -q ;;
@@ -111,8 +180,12 @@ parse_digest() {
 select_sha256() {
   local candidate path out rc expected
   SHA256_BACKEND=; SHA256_TOOL=; HASH=
-  for candidate in shasum sha256sum sha256 openssl perl python3 python; do
-    path=$(type -P "$candidate") || continue
+  for candidate in shasum sha256sum sha256 openssl perl python3 python perl-core; do
+    if [ "$candidate" = perl-core ]; then
+      path=$(type -P perl) || continue
+    else
+      path=$(type -P "$candidate") || continue
+    fi
     [ -x "$path" ] || continue
     SHA256_BACKEND=$candidate; SHA256_TOOL=$path
     out=$(hash_stream </dev/null 2>/dev/null); rc=$?
@@ -127,14 +200,23 @@ select_sha256() {
        [ "$HASH" != ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad ]; then
       say "SHA256_CANDIDATE_FAILED=$candidate"; continue
     fi
+    out=$(printf '%s' 'abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq' | hash_stream 2>/dev/null); rc=$?
+    [ "$rc" -lt 128 ] || die 'SHA-256 utility crashed. Stop and investigate this Recovery session.'
+    if [ "$rc" != 0 ] || ! parse_digest "$out" ||
+       [ "$HASH" != 248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1 ]; then
+      say "SHA256_CANDIDATE_FAILED=$candidate"; continue
+    fi
     say "SHA256_BACKEND=$SHA256_BACKEND"
-    say 'SHA256_SELFTEST_OK (empty input and abc; not a hardware stability test)'
+    say 'SHA256_SELFTEST_OK (empty input, abc, multiblock; not a hardware stability test)'
+    if [ "$SHA256_BACKEND" = perl-core ]; then
+      say 'SHA256_FALLBACK: core Perl, no modules; slow, for bootstrap files <=256 MiB only.'
+    fi
     HASH=
     return 0
   done
   SHA256_BACKEND=; SHA256_TOOL=; HASH=
   say 'MISSING_CAPABILITY=working_SHA256'
-  say 'Checked installed shasum/sha256sum/sha256/openssl/Perl Digest::SHA/Python hashlib.'
+  say 'Checked installed hash tools and the embedded module-free Perl fallback.'
   return 1
 }
 sha256_file() {
