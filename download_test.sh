@@ -1,5 +1,5 @@
 #!/bin/bash
-# Download integrity test. No internal SSD writes; payloads stream directly to SHA-256.
+# Multi-size download integrity test. No internal SSD writes; payloads stream to SHA-256.
 set +u
 export LC_ALL=C
 LOG='/tmp/download-test.log'; : > "$LOG"
@@ -9,55 +9,80 @@ if command -v sha256sum >/dev/null 2>&1; then SHA=sha256sum
 elif command -v shasum >/dev/null 2>&1; then SHA=shasum
 else say 'RESULT=INCONCLUSIVE no_sha256_tool'; exit 3; fi
 
-URL_A='https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.1/clang%2Bllvm-23.1.1-aarch64-pc-windows-msvc.tar.zst'
-SHA_A='0f9d0308a93b76318eae633806eddbec098fb96f27a706fed5ada399f9e391b5'
-SIZE_A=425456048
-URL_B='https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.1/clang%2Bllvm-23.1.1-aarch64-pc-windows-msvc.tar.xz'
-SHA_B='c8cd61f6624accf0d0f9f4519ddcc97745c6a865205bb43f364b6aaf9c50a31e'
-SIZE_B=763828684
-ERR=0
+FIXBASE='https://github.com/pioner22/MacOS/releases/download/diagnostic-fixtures-v1'
+ERR=0; RUNS=0; BYTES_EXPECTED=0
 say '============================================================'
-say 'MODE=DOWNLOAD_INTEGRITY_V2'
-say 'RU: Проверка именно целостности больших скачиваний по опубликованным SHA-256.'
-say 'EN: Large-download byte-integrity test against published SHA-256 values.'
+say 'MODE=DOWNLOAD_MULTI_SIZE_INTEGRITY_V3'
+say 'RU: Проверка загрузок разного размера с точным SHA-256: 1/8/32/128/512 MiB.'
+say 'EN: Multi-size download integrity with exact SHA-256: 1/8/32/128/512 MiB.'
 say 'INTERNAL_SSD_WRITE=NONE'
-say 'RU: Поток идёт напрямую в SHA-256; внутренний SSD в тесте не участвует.'
-say 'EN: Download bytes stream directly into SHA-256; the internal SSD is not involved.'
+say 'RU: Поток идёт прямо в SHA-256; внутренний SSD не участвует.'
+say 'EN: Bytes stream directly into SHA-256; the internal SSD is not involved.'
 say '============================================================'
 
 stream_check(){
-  LABEL=$1; URL=$2; EXPECT=$3; BYTES=$4; RUN=$5
-  H="/tmp/download-hash-$$"; : > "$H"
+  LABEL=$1; URL=$2; EXPECT=$3; BYTES=$4; N=$5
+  H="/tmp/download-hash-$$-$N"; : > "$H"
+  say "DOWNLOAD_START asset=$LABEL run=$N expected_bytes=$BYTES"
   if [ "$SHA" = sha256sum ]; then
-    curl -fL --http1.1 --tlsv1.2 --retry 2 --connect-timeout 20 --max-time 2400 "$URL" 2>>"$LOG" | sha256sum > "$H"
+    curl -fL --http1.1 --tlsv1.2 --retry 2 --connect-timeout 20 --max-time 3600 "$URL" 2>>"$LOG" | sha256sum > "$H"
   else
-    curl -fL --http1.1 --tlsv1.2 --retry 2 --connect-timeout 20 --max-time 2400 "$URL" 2>>"$LOG" | shasum -a 256 > "$H"
+    curl -fL --http1.1 --tlsv1.2 --retry 2 --connect-timeout 20 --max-time 3600 "$URL" 2>>"$LOG" | shasum -a 256 > "$H"
   fi
   P=("${PIPESTATUS[@]}"); GOT=$(awk '{print $1}' "$H"); rm -f "$H"
+  RUNS=$((RUNS+1)); BYTES_EXPECTED=$((BYTES_EXPECTED+BYTES))
   if [ "${P[0]:-99}" -eq 0 ] && [ "${P[1]:-99}" -eq 0 ] && [ "$GOT" = "$EXPECT" ]; then
-    say "DOWNLOAD_PASS asset=$LABEL run=$RUN expected_bytes=$BYTES sha256=$GOT"
+    say "DOWNLOAD_PASS asset=$LABEL run=$N sha256=$GOT"
     return 0
   fi
-  say "DOWNLOAD_FAIL asset=$LABEL run=$RUN curl=${P[0]:-99} hash=${P[1]:-99} got=$GOT expected=$EXPECT"
+  say "DOWNLOAD_FAIL asset=$LABEL run=$N curl=${P[0]:-99} hash=${P[1]:-99} got=$GOT expected=$EXPECT"
   return 1
 }
 
-I=1
-while [ "$I" -le 3 ]; do stream_check LLVM_ZST "$URL_A" "$SHA_A" "$SIZE_A" "$I" || ERR=$((ERR+1)); I=$((I+1)); done
-stream_check LLVM_XZ "$URL_B" "$SHA_B" "$SIZE_B" 1 || ERR=$((ERR+1))
+own_fixture(){
+  S=$1; H=$2; CNT=$3
+  N=$(printf 'nettest-%03dMiB.bin' "$S")
+  I=1
+  while [ "$I" -le "$CNT" ]; do
+    stream_check "$N" "$FIXBASE/$N" "$H" $((S*1048576)) "$I" || ERR=$((ERR+1))
+    I=$((I+1))
+  done
+}
 
+READY=0
+curl -fsIL --http1.1 --tlsv1.2 --connect-timeout 15 --max-time 45 "$FIXBASE/nettest-001MiB.bin" >/dev/null 2>>"$LOG" && READY=1
+
+if [ "$READY" -eq 1 ]; then
+  say 'FIXTURE_SOURCE=OWN_GITHUB_RELEASE'
+  own_fixture 1   '85c3ea1f26f1a18ba9c7b1adb12ca91a157ad1330c5d1fe3d542cfee13b4e7a8' 5
+  own_fixture 8   '9bedc7cb90624f439e2baffd0ce25d69682da41aa2b521e26c879059cfc85949' 4
+  own_fixture 32  '5aa0f6b39ed47a7a648b17d92daa61bc7ec25a1c46ecabd2f2c757f820cd7a38' 3
+  own_fixture 128 'a18494ea78d4e7a610cc165ff66b4d7caf8db32aebb6b7b289e89d9207409e7c' 2
+  own_fixture 512 '924d46bc2b284f264d08ac11ed2385723c1b094df2ea8652583b807711083110' 2
+else
+  say 'FIXTURE_SOURCE=FALLBACK_PUBLIC_GITHUB_RELEASES'
+  say 'RU: Собственный release ещё недоступен; временно используем публичные GitHub assets с опубликованными SHA-256.'
+  say 'EN: Dedicated release is not available yet; using public GitHub assets with published SHA-256 as fallback.'
+  stream_check PS_23M 'https://github.com/PowerShell/PowerShell/releases/download/v7.6.6/PowerShell-7.6.6-win-fxdependent.zip' 'ea3c73ac3bf7afa07432c65b8d9f16b8945befa216cec38a51b6e213dc8fa709' 23012318 1 || ERR=$((ERR+1))
+  stream_check PS_75M 'https://github.com/PowerShell/PowerShell/releases/download/v7.6.6/powershell-7.6.6-osx-x64.pkg' '68fd85010f02e5e16634f811da8d72a5ee58e01c24b353df5bf4acd3a645f56e' 75026625 1 || ERR=$((ERR+1))
+  stream_check PS_106M 'https://github.com/PowerShell/PowerShell/releases/download/v7.6.6/PowerShell-7.6.6-win-x64.zip' '02fe458be20493fbdf43f61ea20610b811ee6c738ab1676c61b9cfcd1a33c860' 106328873 1 || ERR=$((ERR+1))
+  stream_check PS_352M 'https://github.com/PowerShell/PowerShell/releases/download/v7.6.6/PowerShell-7.6.6.msixbundle' 'ad992bc654ad8e6fa7070baedfbc0edbf8cab5b6bcb4f9f7a891fd2438fafe4b' 352172261 1 || ERR=$((ERR+1))
+  stream_check LLVM_425M 'https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.1/clang%2Bllvm-23.1.1-aarch64-pc-windows-msvc.tar.zst' '0f9d0308a93b76318eae633806eddbec098fb96f27a706fed5ada399f9e391b5' 425456048 1 || ERR=$((ERR+1))
+fi
+
+say "DOWNLOAD_SUMMARY runs=$RUNS errors=$ERR expected_bytes=$BYTES_EXPECTED"
 if [ "$ERR" -eq 0 ]; then
   say 'RESULT=PASS'
-  say 'RU: Четыре крупные загрузки завершились; каждый поток совпал с опубликованным SHA-256.'
-  say 'EN: Four large transfers completed and every stream matched the published SHA-256.'
-  say 'NEXT_RU: Если именно Apple Installer всё равно рвётся, запускайте NETWORK TEST и проверяйте Recovery/T2/firmware/RAM.'
-  say 'NEXT_EN: If Apple Installer still fails, run NETWORK TEST and investigate Recovery/T2/firmware/RAM.'
+  say 'RU: Все выполненные загрузки завершились без обрыва и побитово совпали с эталонными SHA-256.'
+  say 'EN: All completed transfers finished without interruption and matched ground-truth SHA-256 exactly.'
+  say 'NEXT_RU: Если Apple Installer всё равно обрывается, отдельно проверяйте NETWORK, RAM и Recovery/T2/firmware.'
+  say 'NEXT_EN: If Apple Installer still fails, separately investigate NETWORK, RAM and Recovery/T2/firmware.'
   exit 0
 else
-  say "RESULT=FAIL errors=$ERR"
-  say 'RU: Зафиксирован обрыв передачи или побитовое несовпадение с эталонным SHA-256.'
-  say 'EN: A transfer interruption or byte-level mismatch against ground-truth SHA-256 was detected.'
-  say 'NEXT_RU: Сначала исключите RAM. Затем повторите NETWORK TEST по Ethernet/другой сети.'
-  say 'NEXT_EN: Exclude RAM first, then repeat NETWORK TEST over Ethernet/another network.'
+  say 'RESULT=FAIL'
+  say 'RU: Обнаружен обрыв передачи или несовпадение SHA-256.'
+  say 'EN: A transfer interruption or SHA-256 mismatch was detected.'
+  say 'NEXT_RU: Сначала исключите RAM, затем повторите NETWORK/DOWNLOAD через Ethernet и другую сеть.'
+  say 'NEXT_EN: Exclude RAM first, then repeat NETWORK/DOWNLOAD over Ethernet and another network.'
   exit 2
 fi
