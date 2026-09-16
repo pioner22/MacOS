@@ -99,6 +99,11 @@ case "$RC" in
     echo 'STATE_EN=INCONCLUSIVE'
     echo 'RU: Текущая среда не позволила получить достоверный PASS/FAIL.'
     echo 'EN: The current environment could not produce a reliable PASS/FAIL.';;
+  4)
+    echo 'STATE_RU=REBOOT_REQUIRED/НУЖНА_ПЕРЕЗАГРУЗКА'
+    echo 'STATE_EN=REBOOT_REQUIRED'
+    echo 'RU: Этап успешно завершён, но продолжение требует реальной перезагрузки для холодной проверки.'
+    echo 'EN: Stage completed successfully, but continuation requires a real reboot for cold verification.';;
   *)
     echo 'STATE_RU=ERROR/ТЕСТ_ПРЕРВАН'
     echo 'STATE_EN=ERROR/TEST_INTERRUPTED'
