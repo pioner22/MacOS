@@ -76,7 +76,7 @@ say '============================================================'
 # Each 4096-byte sector is 256 repetitions of a 16-byte token.
 # Token A = [LBA32, ~LBA32, A5A5A5A5, 5A5A5A5A]
 # Token B = [~LBA32, LBA32, 3C3C3C3C, C3C3C3C3]
-# The 1TB target has <2^32 4KiB sectors, so LBA32 is sufficient and exact.
+# Output is buffered in 1MiB batches to avoid millions of tiny writes from Perl.
 gen_pattern(){
   PAT=$1; IDX=$2; NSECS=$3
   STARTSEC=$((IDX*CHUNK_SECTORS))
@@ -86,17 +86,17 @@ use warnings;
 binmode STDOUT;
 my ($pat,$start,$count)=@ARGV;
 my ($c1,$c2) = $pat eq 'A' ? (2779096485,1515870810) : (1010580540,3284386755);
+my $buf='';
 for (my $i=0; $i<$count; $i++) {
     my $lba = $start + $i;
     my $inv = 4294967295 - $lba;
-    my $token;
-    if ($pat eq 'A') {
-        $token = pack('V4',$lba,$inv,$c1,$c2);
-    } else {
-        $token = pack('V4',$inv,$lba,$c1,$c2);
-    }
-    print $token x 256;
+    my $token = $pat eq 'A'
+        ? pack('V4',$lba,$inv,$c1,$c2)
+        : pack('V4',$inv,$lba,$c1,$c2);
+    $buf .= ($token x 256);
+    if (length($buf) >= 1048576) { print $buf; $buf=''; }
 }
+print $buf if length($buf);
 PERL
 }
 
