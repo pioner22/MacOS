@@ -59,29 +59,30 @@ curl -L https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh|bash
 
 Меню включает:
 
-- чистый SSD/HDD full-LBA test;
-- RAM Quick;
+- чистый destructive SSD/HDD full-LBA test;
+- RAM Quick 8 GiB;
 - RAM Full Hardcore;
 - RAM Map;
 - CPU/Cache;
 - GPU/VRAM + Metal verifier;
 - Video/Display;
-- Network DNS/TCP/TLS;
-- Download Integrity;
+- Network DNS/TCP/TLS/HTTP;
+- Download Integrity + HTTP Range/resume;
 - Power/Thermal;
 - Hardware Snapshot;
 - Safe Full Suite;
-- Full Complex с RAM-gate перед destructive SSD.
+- Full Complex с dependency gates;
+- Toolkit Selftest для проверки самих диагностических файлов.
 
-Каждый тест выводит `PASS`, `FAIL` или `INCONCLUSIVE`, русское и английское объяснение результата и следующий рекомендуемый шаг.
+Результаты различаются как `PASS`, `FAIL`, `INCONCLUSIVE` и `REBOOT_REQUIRED`. Для каждого режима выводятся RU/EN объяснение и следующий шаг. `REBOOT_REQUIRED` у многоэтапного SSD-теста не является полным PASS.
 
 ### GitHub network fixtures
 
-Для проверки сети подготовлен детерминированный набор файлов 1/8/32/128/512 MiB. Генератор: `tools/generate_network_fixtures.py`; эталоны: `network-fixtures.sha256` и `network-fixtures.tsv`; публикация: `.github/workflows/network-fixtures.yml` в Release `diagnostic-fixtures-v1`.
+Для проверки сети подготовлен детерминированный набор файлов 1/8/32/128/512 MiB. Генератор: `tools/generate_network_fixtures.py`; эталоны: `network-fixtures.sha256` и `network-fixtures.tsv`; публикация: `.github/workflows/network-fixtures.yml` или `publish_network_fixtures.sh` в Release `diagnostic-fixtures-v1`.
 
-`DOWNLOAD TEST` использует эти файлы как основной источник. Если Release временно недоступен, тест автоматически переключается на публичные GitHub Release assets PowerShell/LLVM с опубликованными SHA-256.
+`DOWNLOAD TEST` выполняет full-stream SHA-256 и, когда dedicated Release доступен, дополнительно проверяет HTTP Range на известном 16 MiB диапазоне внутри 512 MiB объекта. Если Release недоступен, тест автоматически переключается на публичные GitHub Release assets PowerShell/LLVM с опубликованными SHA-256.
 
-Подробное описание, ограничения, коды ошибок и правила интерпретации: [`DIAGNOSTICS.md`](DIAGNOSTICS.md).
+Подробное описание, ограничения, коды состояний и dependency-логика: [`DIAGNOSTICS.md`](DIAGNOSTICS.md).
 
 ## License
 
