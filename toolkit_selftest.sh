@@ -8,13 +8,17 @@ mkdir -p "$TMPDIR_SELF" || exit 3
 trap 'rm -rf "$TMPDIR_SELF"' EXIT INT TERM HUP
 say(){ printf '%s\n' "$*"; }
 FAILS=0; CHECKS=0
-check(){ CHECKS=$((CHECKS+1)); "$@" || FAILS=$((FAILS+1)); }
 
-say 'MODE=TOOLKIT_SELFTEST_V1'
+say 'MODE=TOOLKIT_SELFTEST_V2'
 say 'RU: Проверяется логика комплекта: доступность файлов, bash-синтаксис, сборка SSD-движка и контрольные константы.'
 say 'EN: Validates toolkit wiring: file availability, bash syntax, SSD-engine assembly, and known constants.'
 
-SCRIPTS='st.sh current.sh ssd_test.sh ram_quick_test.sh ram_full_test.sh ram_triage.sh ram_map.sh cpu_test.sh gpu_test.sh display_video_test.sh network_test.sh download_test.sh power_thermal_test.sh hardware_probe.sh full_safe_suite.sh full_all_suite.sh publish_network_fixtures.sh'
+for C in curl grep dd awk date cat mkdir rm; do
+  CHECKS=$((CHECKS+1))
+  if command -v "$C" >/dev/null 2>&1; then say "SELFTEST_ENV_PASS tool=$C"; else say "SELFTEST_ENV_FAIL tool=$C"; FAILS=$((FAILS+1)); fi
+done
+
+SCRIPTS='st.sh current.sh ssd_test.sh ram_quick_test.sh ram_full_test.sh ram_triage.sh ram_map.sh cpu_test.sh gpu_test.sh display_video_test.sh network_test.sh download_test.sh power_thermal_test.sh hardware_probe.sh full_safe_suite.sh full_all_suite.sh publish_network_fixtures.sh toolkit_selftest.sh'
 for F in $SCRIPTS; do
   O="$TMPDIR_SELF/$F"
   if curl -fsSL --connect-timeout 20 -H 'Cache-Control: no-cache' "$BASE/$F?t=$(date +%s 2>/dev/null || echo 0)" -o "$O"; then
@@ -23,6 +27,17 @@ for F in $SCRIPTS; do
     say "SELFTEST_SCRIPT_FAIL file=$F reason=fetch"; FAILS=$((FAILS+1))
   fi
   CHECKS=$((CHECKS+1))
+done
+
+# Auxiliary source/manifest files referenced by the shell launchers.
+for F in metal_vram_test.m tools/generate_network_fixtures.py network-fixtures.sha256 network-fixtures.tsv; do
+  O="$TMPDIR_SELF/aux-$(printf '%s' "$F" | tr '/' '_')"
+  CHECKS=$((CHECKS+1))
+  if curl -fsSL --connect-timeout 20 "$BASE/$F?t=$(date +%s 2>/dev/null || echo 0)" -o "$O" && [ -s "$O" ]; then
+    say "SELFTEST_AUX_PASS file=$F"
+  else
+    say "SELFTEST_AUX_FAIL file=$F"; FAILS=$((FAILS+1))
+  fi
 done
 
 # Assemble exactly the same pure-storage engine used by ssd_test.sh, but never execute it.
@@ -39,7 +54,7 @@ done
 if /bin/bash -n "$SSD"; then say 'SELFTEST_SSD_ASSEMBLY=PASS'; else say 'SELFTEST_SSD_ASSEMBLY=FAIL'; FAILS=$((FAILS+1)); fi
 CHECKS=$((CHECKS+1))
 
-# Verify versioned fixture manifest contains the exact hashes expected by download_test.sh.
+# Verify versioned fixture manifest contains the exact hashes hard-coded by download_test.sh.
 MAN="$TMPDIR_SELF/network-fixtures.sha256"
 if curl -fsSL --connect-timeout 20 "$BASE/network-fixtures.sha256" -o "$MAN"; then
   for ROW in \
@@ -48,7 +63,8 @@ if curl -fsSL --connect-timeout 20 "$BASE/network-fixtures.sha256" -o "$MAN"; th
     '5aa0f6b39ed47a7a648b17d92daa61bc7ec25a1c46ecabd2f2c757f820cd7a38  nettest-032MiB.bin' \
     'a18494ea78d4e7a610cc165ff66b4d7caf8db32aebb6b7b289e89d9207409e7c  nettest-128MiB.bin' \
     '924d46bc2b284f264d08ac11ed2385723c1b094df2ea8652583b807711083110  nettest-512MiB.bin'; do
-      CHECKS=$((CHECKS+1)); grep -Fqx "$ROW" "$MAN" && say "SELFTEST_FIXTURE_MANIFEST_PASS file=${ROW##*  }" || { say "SELFTEST_FIXTURE_MANIFEST_FAIL row=$ROW"; FAILS=$((FAILS+1)); }
+      CHECKS=$((CHECKS+1))
+      if grep -Fqx "$ROW" "$MAN"; then say "SELFTEST_FIXTURE_MANIFEST_PASS row=$ROW"; else say "SELFTEST_FIXTURE_MANIFEST_FAIL row=$ROW"; FAILS=$((FAILS+1)); fi
   done
 else
   say 'SELFTEST_FIXTURE_MANIFEST_FAIL reason=fetch'; FAILS=$((FAILS+1)); CHECKS=$((CHECKS+1))
