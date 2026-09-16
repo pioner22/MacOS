@@ -1,189 +1,241 @@
 #!/bin/bash
-# Sequoia Recovery auto-builder for A2141.
-# Reuses an already downloaded valid InstallAssistant.pkg when present, verifies
-# its full XAR checksums, extracts the Apple-Archive Payload, reconstructs the
-# installer app, and rebuilds ONLY /dev/disk0s3 as the internal installer.
-# It never erases disk0, disk0s2, or /Volumes/Apple.
+# A2141 Recovery helper.
+# 1) If a Catalina macOS Install Data cache is present, safely resumes/verifies
+#    InstallESDDmg.pkg and leaves a completed verified package in that cache.
+# 2) Otherwise, outside Catalina Recovery, falls back to the known-good Sequoia
+#    internal-installer builder pinned to a prior commit.
+# Bash 3.2 compatible. Never erases disk0/disk0s2 in Catalina-resume mode.
 set -u
 
-URL='https://swcdn.apple.com/content/downloads/24/14/142-16660-A_CTI1XX4VYC/dwxnuxoud4401qcf8to49p8iq1ij987j1e/InstallAssistant.pkg'
-EXPECTED='15664077639'
-BASE='/Volumes/Apple/Sequoia-15.8-24H23'
-PKG="$BASE/InstallAssistant.pkg"
-PART="$BASE/InstallAssistant.pkg.new.part"
-XARWORK="$BASE/xar-new"
-STAGE="$BASE/app-stage"
-APPROOT='/Volumes/Apple/Applications'
-FINALAPP="$APPROOT/Install macOS Sequoia.app"
-TARGET='/dev/disk0s3'
+SEQUOIA_FALLBACK='https://raw.githubusercontent.com/pioner22/MacOS/db695a426f3893464682eaa90d99cef811305372/s.sh'
+URL_CACHE='/Volumes/Apple/Catalina-InstallESDDmg.url'
 
 say(){ printf '%s\n' "$*"; }
 fail(){ printf 'STOP: %s\n' "$*" >&2; exit 1; }
-need(){ command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"; }
 size(){ stat -f '%z' "$1" 2>/dev/null || printf '0\n'; }
+need(){ command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"; }
 
-for c in curl diskutil stat awk grep find mkdir rm mv date df caffeinate bless; do need "$c"; done
+for c in curl stat grep awk date mkdir rm mv sleep; do need "$c"; done
 [ -x /usr/bin/xar ] || fail 'xar not found'
-[ -x /usr/bin/ditto ] || fail 'ditto not found'
-[ -x /usr/bin/hdiutil ] || fail 'hdiutil not found'
-[ -d /Volumes/Apple ] || fail '/Volumes/Apple is not mounted'
 
-AA=''
-if [ -x /usr/bin/aa ]; then
-  AA='/usr/bin/aa'
-elif [ -x /usr/bin/yaa ]; then
-  AA='/usr/bin/yaa'
-else
-  fail 'Apple Archive extractor aa/yaa not found in this Recovery'
+# Keep Recovery awake while the helper works.
+if command -v caffeinate >/dev/null 2>&1; then
+  caffeinate -di -w $$ >/tmp/a2141-helper-caffeinate.log 2>&1 &
+  CAFF=$!
+  trap 'kill "$CAFF" 2>/dev/null || true' EXIT INT TERM
 fi
-say "APPLE_ARCHIVE_TOOL=$AA"
 
-caffeinate -di -w $$ >/tmp/sequoia-auto-caffeinate.log 2>&1 &
-CAFF=$!
-trap 'kill "$CAFF" 2>/dev/null || true' EXIT INT TERM
+RECOVERY_VER='unknown'
+if command -v sw_vers >/dev/null 2>&1; then
+  RECOVERY_VER=$(sw_vers -productVersion 2>/dev/null || printf unknown)
+fi
+say "RECOVERY_VERSION=$RECOVERY_VER"
 
-# Safety: Apple must be the large internal APFS volume.
-INFO=$(diskutil info /Volumes/Apple) || fail 'cannot inspect /Volumes/Apple'
-printf '%s\n' "$INFO" | grep -q 'Device Location:.*Internal' || fail '/Volumes/Apple is not internal'
-printf '%s\n' "$INFO" | grep -q 'File System Personality:.*APFS' || fail '/Volumes/Apple is not APFS'
-FREE=$(df -k /Volumes/Apple | awk 'NR==2 {print $4}')
-[ -n "$FREE" ] || fail 'cannot determine free space on Apple'
-[ "$FREE" -gt 41943040 ] || fail 'need at least 40 GiB free on Apple'
+CAT_DIR=''
+CAT_PART=''
+CAT_FINAL=''
+for D in /Volumes/*/'macOS Install Data'; do
+  [ -d "$D" ] || continue
+  if [ -f "$D/InstallESDDmg.pkg.partial" ] || [ -f "$D/InstallESDDmg.pkg" ]; then
+    CAT_DIR=$D
+    [ -f "$D/InstallESDDmg.pkg.partial" ] && CAT_PART="$D/InstallESDDmg.pkg.partial"
+    [ -f "$D/InstallESDDmg.pkg" ] && CAT_FINAL="$D/InstallESDDmg.pkg"
+    break
+  fi
+done
 
-# Safety: exact dedicated internal HFS+ installer partition only.
-TINFO=$(diskutil info "$TARGET") || fail "$TARGET not found"
-printf '%s\n' "$TINFO" | grep -q 'Device Location:.*Internal' || fail "$TARGET is not internal"
-printf '%s\n' "$TINFO" | grep -q 'Part of Whole:.*disk0' || fail "$TARGET is not part of disk0"
-printf '%s\n' "$TINFO" | grep -Eq 'File System Personality:.*(Journaled HFS\+|Mac OS Extended)' || fail "$TARGET is not HFS+"
-TBYTES=$(printf '%s\n' "$TINFO" | awk -F'[()]' '/Disk Size:/ {x=$2; gsub(/[^0-9]/,"",x); print x; exit}')
-[ -n "$TBYTES" ] || fail 'cannot read target size'
-[ "$TBYTES" -gt 60000000000 ] && [ "$TBYTES" -lt 80000000000 ] || fail "unexpected target size: $TBYTES bytes"
-ROOTDEV=$(df / | awk 'NR==2 {print $1}')
-case "$ROOTDEV" in /dev/disk0s3|/dev/rdisk0s3) fail 'current system is running from disk0s3; reboot Internet Recovery first';; esac
-say "TARGET_OK=$TARGET bytes=$TBYTES root=$ROOTDEV"
+# If Catalina has created macOS Install Data but neither package file exists yet,
+# remember the directory only in Catalina Recovery. We do not create a competing
+# download while Apple's installer may still be starting.
+if [ -z "$CAT_DIR" ]; then
+  case "$RECOVERY_VER" in
+    10.15*)
+      for D in /Volumes/*/'macOS Install Data'; do
+        [ -d "$D" ] || continue
+        CAT_DIR=$D
+        break
+      done
+      ;;
+  esac
+fi
 
-mkdir -p "$BASE" "$APPROOT" || fail 'cannot create working directories'
+find_installesd_url(){
+  FOUND_URL=''
+  local L U F
+  for L in /var/log/install.log /private/var/log/install.log; do
+    [ -f "$L" ] || continue
+    U=$(grep -aoE 'https?://[^[:space:]]*InstallESDDmg\.pkg' "$L" 2>/dev/null | tail -n 1)
+    [ -n "$U" ] && FOUND_URL=$U
+  done
+  if [ -z "$FOUND_URL" ] && [ -n "$CAT_DIR" ]; then
+    for F in "$CAT_DIR"/*.log "$CAT_DIR"/*.plist "$CAT_DIR"/*.xml "$CAT_DIR"/*.txt; do
+      [ -f "$F" ] || continue
+      U=$(grep -aoE 'https?://[^[:space:]]*InstallESDDmg\.pkg' "$F" 2>/dev/null | tail -n 1)
+      [ -n "$U" ] && FOUND_URL=$U
+    done
+  fi
+  if [ -z "$FOUND_URL" ] && [ -f "$URL_CACHE" ]; then
+    IFS= read -r FOUND_URL < "$URL_CACHE" || true
+  fi
+  if [ -n "$FOUND_URL" ] && [ -d /Volumes/Apple ]; then
+    printf '%s\n' "$FOUND_URL" > "$URL_CACHE" 2>/dev/null || true
+  fi
+}
 
-fresh_download(){
-  rm -f "$PART"
-  say 'Downloading a fresh macOS Sequoia 15.8 InstallAssistant.pkg from Apple CDN...'
-  ATTEMPT=1
-  while [ "$ATTEMPT" -le 40 ]; do
-    HAVE=$(size "$PART")
-    say "DOWNLOAD_ATTEMPT=$ATTEMPT existing_bytes=$HAVE"
-    if [ "$HAVE" -gt 0 ]; then
-      curl -fL -C - -H 'Cache-Control: no-cache' --connect-timeout 20 --speed-time 180 --speed-limit 1024 -o "$PART" "$URL"
-    else
-      curl -fL -H 'Cache-Control: no-cache' --connect-timeout 20 --speed-time 180 --speed-limit 1024 -o "$PART" "$URL"
+file_is_open(){
+  local F=$1
+  if command -v lsof >/dev/null 2>&1; then
+    lsof "$F" 2>/dev/null | awk 'NR>1 {found=1} END{exit(found?0:1)}'
+    return $?
+  fi
+  return 1
+}
+
+verify_catalina_pkg(){
+  local F=$1 VBASE RC
+  [ -f "$F" ] || return 1
+  if [ -d /Volumes/Apple ]; then
+    VBASE='/Volumes/Apple/.Catalina-InstallESD-verify'
+  else
+    VBASE="$CAT_DIR/.InstallESD-verify"
+  fi
+  rm -rf "$VBASE"
+  mkdir -p "$VBASE" || return 1
+  say "VERIFY_XAR=$F"
+  /usr/bin/xar -xf "$F" -C "$VBASE" >/tmp/catalina-xar.log 2>&1
+  RC=$?
+  rm -rf "$VBASE"
+  if [ "$RC" = 0 ]; then
+    say 'CATALINA_XAR_VERIFY_OK'
+    return 0
+  fi
+  say 'CATALINA_XAR_VERIFY_FAILED'
+  tail -n 8 /tmp/catalina-xar.log 2>/dev/null || true
+  return 1
+}
+
+finalize_partial(){
+  local STAMP
+  [ -n "$CAT_PART" ] && [ -f "$CAT_PART" ] || fail 'partial package disappeared'
+  if [ -f "$CAT_DIR/InstallESDDmg.pkg" ]; then
+    STAMP=$(date +%Y%m%d-%H%M%S 2>/dev/null || echo old)
+    mv "$CAT_DIR/InstallESDDmg.pkg" "$CAT_DIR/InstallESDDmg.pkg.bad-$STAMP" || fail 'cannot quarantine old final package'
+  fi
+  mv "$CAT_PART" "$CAT_DIR/InstallESDDmg.pkg" || fail 'cannot finalize InstallESDDmg.pkg'
+  chmod 0644 "$CAT_DIR/InstallESDDmg.pkg" 2>/dev/null || true
+  command -v sync >/dev/null 2>&1 && sync
+  CAT_FINAL="$CAT_DIR/InstallESDDmg.pkg"
+  CAT_PART=''
+  say "CATALINA_PACKAGE_READY=$CAT_FINAL"
+  say 'NEXT: restart the Catalina install; the verified package is now in macOS Install Data.'
+}
+
+resume_catalina(){
+  local S1 S2 URL ATTEMPT RC HAVE STAMP
+  say "CATALINA_CACHE=$CAT_DIR"
+
+  # If a completed file already exists, do not redownload it when it verifies.
+  if [ -n "$CAT_FINAL" ] && [ -f "$CAT_FINAL" ]; then
+    if file_is_open "$CAT_FINAL"; then
+      say 'CATALINA_INSTALLER_ACTIVE: final package is currently open; not touching it.'
+      return 0
     fi
+    if verify_catalina_pkg "$CAT_FINAL"; then
+      say "CATALINA_PACKAGE_READY=$CAT_FINAL"
+      return 0
+    fi
+    STAMP=$(date +%Y%m%d-%H%M%S 2>/dev/null || echo old)
+    mv "$CAT_FINAL" "$CAT_FINAL.bad-$STAMP" || fail 'cannot quarantine invalid final package'
+    CAT_FINAL=''
+  fi
+
+  [ -n "$CAT_PART" ] && [ -f "$CAT_PART" ] || {
+    say 'CATALINA_CACHE_FOUND_BUT_NO_PARTIAL: nothing to resume yet.'
+    say 'If the Apple installer fails, rerun the same one-line command; it will pick up the partial automatically.'
+    return 0
+  }
+
+  # Never race Apple's downloader. If the file is open or still growing, leave it alone.
+  if file_is_open "$CAT_PART"; then
+    say 'CATALINA_DOWNLOAD_ACTIVE: partial is open by another process; not touching it.'
+    return 0
+  fi
+  S1=$(size "$CAT_PART")
+  sleep 8
+  S2=$(size "$CAT_PART")
+  say "CATALINA_PARTIAL_BYTES=$S2"
+  if [ "$S1" != "$S2" ]; then
+    say 'CATALINA_DOWNLOAD_ACTIVE: partial is still growing; not touching it.'
+    return 0
+  fi
+
+  # It may already be complete but still carry the .partial suffix.
+  if verify_catalina_pkg "$CAT_PART"; then
+    finalize_partial
+    return 0
+  fi
+
+  find_installesd_url
+  URL=$FOUND_URL
+  [ -n "$URL" ] || {
+    say 'CATALINA_URL_NOT_FOUND: InstallESDDmg.pkg URL was not found in current logs/cache.'
+    say 'Do not delete the partial; rerun after the installer logs another download attempt.'
+    return 0
+  }
+  say "CATALINA_URL=$URL"
+
+  ATTEMPT=1
+  while [ "$ATTEMPT" -le 30 ]; do
+    HAVE=$(size "$CAT_PART")
+    say "CATALINA_RESUME_ATTEMPT=$ATTEMPT existing_bytes=$HAVE"
+    curl -fL -C - --connect-timeout 20 --speed-time 180 --speed-limit 1024 -o "$CAT_PART" "$URL"
     RC=$?
-    HAVE=$(size "$PART")
+    HAVE=$(size "$CAT_PART")
     say "CURL_EXIT=$RC bytes=$HAVE"
-    if [ "$RC" = 0 ]; then break; fi
+    if [ "$RC" = 0 ]; then
+      break
+    fi
+    if [ "$RC" = 33 ]; then
+      say 'CATALINA_RESUME_REJECTED: server rejected Range resume; preserving the partial unchanged.'
+      return 0
+    fi
     ATTEMPT=$((ATTEMPT+1))
-    [ "$ATTEMPT" -le 40 ] || fail 'download did not complete; partial file preserved'
+    [ "$ATTEMPT" -le 30 ] || {
+      say 'CATALINA_RESUME_INCOMPLETE: partial preserved for the next run.'
+      return 0
+    }
     sleep 5
   done
-  [ "$(size "$PART")" = "$EXPECTED" ] || fail "download size mismatch: got $(size "$PART"), expected $EXPECTED"
-  mv "$PART" "$PKG" || fail 'cannot finalize package'
-  say "DOWNLOAD_OK size=$(size "$PKG")"
+
+  if verify_catalina_pkg "$CAT_PART"; then
+    finalize_partial
+    return 0
+  fi
+
+  STAMP=$(date +%Y%m%d-%H%M%S 2>/dev/null || echo old)
+  mv "$CAT_PART" "$CAT_PART.bad-$STAMP" || true
+  CAT_PART=''
+  say 'CATALINA_RESUMED_FILE_FAILED_VERIFY: bad resumed file quarantined.'
+  say 'Rerun the same one-line command after Apple creates a new partial; no disk partition is changed.'
+  return 0
 }
 
-verify_xar(){
-  rm -rf "$XARWORK"
-  mkdir -p "$XARWORK" || return 1
-  say 'VERIFY: fully extracting XAR and checking archived checksums...'
-  /usr/bin/xar -xf "$PKG" -C "$XARWORK"
-}
-
-# Reuse the second, already-good download instead of downloading 15.6 GB again.
-if [ -f "$PKG" ] && [ "$(size "$PKG")" = "$EXPECTED" ]; then
-  say "USING_EXISTING_PACKAGE size=$(size "$PKG")"
-  if verify_xar; then
-    say 'XAR_VERIFY_OK'
-  else
-    say 'Existing package failed XAR verification; quarantining and downloading once more.'
-    STAMP=$(date +%Y%m%d-%H%M%S 2>/dev/null || echo old)
-    mv "$PKG" "$BASE/InstallAssistant.pkg.bad-$STAMP" || fail 'cannot quarantine invalid package'
-    fresh_download
-    verify_xar || fail 'fresh package failed XAR checksum verification; do NOT build installer'
-    say 'XAR_VERIFY_OK'
-  fi
-else
-  if [ -f "$PKG" ]; then
-    STAMP=$(date +%Y%m%d-%H%M%S 2>/dev/null || echo old)
-    mv "$PKG" "$BASE/InstallAssistant.pkg.bad-$STAMP" || fail 'cannot quarantine wrong-size package'
-  fi
-  fresh_download
-  verify_xar || fail 'fresh package failed XAR checksum verification; do NOT build installer'
-  say 'XAR_VERIFY_OK'
+# Catalina cache takes priority whenever one exists.
+if [ -n "$CAT_DIR" ]; then
+  resume_catalina
+  exit 0
 fi
 
-PAYLOAD=$(/usr/bin/find "$XARWORK" -type f -name Payload -print | head -n 1)
-[ -n "$PAYLOAD" ] || fail 'Payload not found after XAR extraction'
-say "PAYLOAD=$PAYLOAD"
+# In Catalina Recovery, never fall through into the Sequoia disk-builder merely
+# because no partial has appeared yet.
+case "$RECOVERY_VER" in
+  10.15*)
+    say 'CATALINA_NO_INSTALL_DATA_FOUND: start/retry Catalina once, then rerun this same command if it fails.'
+    exit 0
+    ;;
+esac
 
-# Modern InstallAssistant Payload is Apple Archive, not tar.
-rm -rf "$STAGE"
-mkdir -p "$STAGE" || fail 'cannot create app staging directory'
-say 'Checking Apple Archive Payload...'
-"$AA" list -i "$PAYLOAD" >/dev/null 2>&1 || fail 'aa/yaa cannot read Payload'
-say 'Extracting installer application from Apple Archive Payload...'
-"$AA" extract -i "$PAYLOAD" -d "$STAGE" -ignore-eperm || fail 'Apple Archive Payload extraction failed'
-
-FOUND=$(/usr/bin/find "$STAGE" -type d -name 'Install macOS Sequoia.app' -print | head -n 1)
-[ -n "$FOUND" ] && [ -d "$FOUND" ] || fail 'Install macOS Sequoia.app not found in Payload'
-CIM="$FOUND/Contents/Resources/createinstallmedia"
-[ -x "$CIM" ] || fail 'createinstallmedia is missing from extracted app'
-say "APP_EXTRACT_OK=$FOUND"
-
-# Reproduce Apple's InstallAssistant postinstall behavior: the hybrid PKG itself
-# is placed in Contents/SharedSupport as SharedSupport.dmg.
-SSDIR="$FOUND/Contents/SharedSupport"
-SS="$SSDIR/SharedSupport.dmg"
-mkdir -p "$SSDIR" || fail 'cannot create SharedSupport directory'
-rm -f "$SS"
-if /bin/cp -c "$PKG" "$SS" 2>/dev/null; then
-  say 'SHARED_SUPPORT_CLONE_OK'
-else
-  say 'APFS clone copy unavailable; copying SharedSupport.dmg normally...'
-  /bin/cp "$PKG" "$SS" || fail 'cannot create SharedSupport.dmg from InstallAssistant.pkg'
-fi
-/bin/chmod 0644 "$SS" || fail 'cannot set SharedSupport.dmg permissions'
-/usr/bin/hdiutil imageinfo "$SS" >/dev/null 2>&1 || fail 'SharedSupport.dmg is not recognized as a disk image'
-say 'SHARED_SUPPORT_OK'
-
-# Validate the Apple-signed createinstallmedia binary when codesign is available.
-if [ -x /usr/bin/codesign ]; then
-  /usr/bin/codesign -v -R='anchor apple' "$CIM" || fail 'createinstallmedia Apple code signature check failed'
-  say 'CODESIGN_OK'
-fi
-
-# Move app on the same APFS volume, preserving clone/link semantics.
-rm -rf "$FINALAPP"
-/bin/mv "$FOUND" "$FINALAPP" || fail 'cannot move installer app to /Volumes/Apple/Applications'
-CIM="$FINALAPP/Contents/Resources/createinstallmedia"
-[ -x "$CIM" ] || fail 'final createinstallmedia is missing'
-say "APP_READY=$FINALAPP"
-
-# XAR expansion is no longer needed; remove it to free temporary space.
-rm -rf "$XARWORK" "$STAGE"
-
-# Final safety check immediately before the only destructive step.
-TINFO=$(diskutil info "$TARGET") || fail "$TARGET disappeared before build"
-printf '%s\n' "$TINFO" | grep -q 'Device Location:.*Internal' || fail 'target identity changed'
-printf '%s\n' "$TINFO" | grep -q 'Part of Whole:.*disk0' || fail 'target parent changed'
-ROOTDEV=$(df / | awk 'NR==2 {print $1}')
-case "$ROOTDEV" in /dev/disk0s3|/dev/rdisk0s3) fail 'refusing to erase current root source';; esac
-
-diskutil mount "$TARGET" >/dev/null 2>&1 || true
-MOUNT=$(diskutil info "$TARGET" | awk -F: '/Mount Point/ {sub(/^[ \t]+/,"",$2); print $2; exit}')
-[ -n "$MOUNT" ] && [ "$MOUNT" != 'Not mounted' ] && [ -d "$MOUNT" ] || fail 'target is not mounted'
-say "BUILD: createinstallmedia will erase ONLY $TARGET mounted at $MOUNT"
-"$CIM" --volume "$MOUNT" --nointeraction || fail 'createinstallmedia failed'
-
-NEWMOUNT=$(diskutil info "$TARGET" | awk -F: '/Mount Point/ {sub(/^[ \t]+/,"",$2); print $2; exit}')
-[ -n "$NEWMOUNT" ] && [ "$NEWMOUNT" != 'Not mounted' ] || fail 'rebuilt installer is not mounted'
-bless --info "$NEWMOUNT" || fail 'bless does not recognize rebuilt installer'
-say 'BUILD_OK: fresh internal Install macOS Sequoia created on disk0s3.'
-say 'NEXT: shut down, hold Option at power-on, choose Install macOS Sequoia, install to Apple (~930 GB).'
+# No Catalina recovery work is pending: preserve the previous Sequoia-builder behavior.
+say 'NO_CATALINA_CACHE: launching pinned Sequoia internal-installer builder.'
+curl -qfLo /tmp/sequoia-builder.sh "$SEQUOIA_FALLBACK" || fail 'cannot download pinned Sequoia builder'
+exec /bin/bash /tmp/sequoia-builder.sh
