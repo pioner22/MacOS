@@ -36,6 +36,7 @@ restore_apfs(){
       echo "Version: $VERSION"
       echo "Model: $MODEL"
       echo "Bytes: $BYTES"
+      echo 'RAM preflight: userspace stress/verification PASS on each Recovery test boot'
       echo 'Pattern A: full write + immediate full SHA-256 verify + post-reboot full verify PASS'
       echo 'Pattern B: full write + immediate full SHA-256 verify + post-reboot full verify PASS'
       echo 'Targeted anomaly region chunk 8233 was repeatedly re-read after cold verifies.'
@@ -65,6 +66,11 @@ if marker_valid "$SIG"; then
   STATE=$(marker_field "$SIG" STATE); PAT=$(marker_field "$SIG" PATTERN); OLD_BOOT=$(marker_field "$SIG" BOOT)
   say "FOUND_STATE_MARKER state=$STATE pattern=$PAT boot=$OLD_BOOT"
 fi
+
+# RAM matters to the interpretation of every SHA-256 comparison. The earlier
+# Recovery malloc/Abort-trap symptom makes a userspace RAM stress pass useful even
+# though Apple Diagnostics previously returned ADP000.
+ram_diagnostic 'RAM_PREFLIGHT'
 
 case "$STATE" in
   COMPLETE_A)
