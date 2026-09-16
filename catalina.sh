@@ -37,7 +37,6 @@ else
   trap '/usr/bin/hdiutil detach "$MNT" >/dev/null 2>&1 || true' EXIT INT TERM
 fi
 
-# Safety: work only on the large internal APFS volume named Apple.
 AINFO=$(diskutil info /Volumes/Apple) || fail 'cannot inspect /Volumes/Apple'
 printf '%s\n' "$AINFO" | grep -q 'Device Location:.*Internal' || fail '/Volumes/Apple is not internal'
 printf '%s\n' "$AINFO" | grep -q 'File System Personality:.*APFS' || fail '/Volumes/Apple is not APFS'
@@ -45,11 +44,10 @@ FREE=$(df -k /Volumes/Apple | awk 'NR==2 {print $4}')
 [ -n "$FREE" ] || fail 'cannot determine free space on Apple'
 [ "$FREE" -gt 31457280 ] || fail 'need at least 30 GiB free on /Volumes/Apple'
 
-# Safety: the only destructive target is the dedicated ~70 GB internal HFS+ disk0s3.
 TINFO=$(diskutil info "$TARGET") || fail "$TARGET not found"
 printf '%s\n' "$TINFO" | grep -q 'Device Location:.*Internal' || fail "$TARGET is not internal"
 printf '%s\n' "$TINFO" | grep -q 'Part of Whole:.*disk0' || fail "$TARGET is not part of disk0"
-printf '%s\n' "$TINFO" | grep -Eq 'File System Personality:.*(Journaled HFS\+|Mac OS Extended)' || fail "$TARGET is not HFS+'
+printf '%s\n' "$TINFO" | grep -Eq 'File System Personality:.*(Journaled HFS\+|Mac OS Extended)' || fail "$TARGET is not HFS+"
 TBYTES=$(printf '%s\n' "$TINFO" | awk -F'[()]' '/Disk Size:/ {x=$2; gsub(/[^0-9]/,"",x); print x; exit}')
 [ -n "$TBYTES" ] || fail 'cannot read target size'
 [ "$TBYTES" -gt 60000000000 ] && [ "$TBYTES" -lt 80000000000 ] || fail "unexpected target size: $TBYTES bytes"
@@ -57,11 +55,10 @@ ROOTDEV=$(df / | awk 'NR==2 {print $1}')
 case "$ROOTDEV" in /dev/disk0s3|/dev/rdisk0s3) fail 'current Recovery is running from disk0s3; boot Internet Recovery first';; esac
 say "TARGET_OK=$TARGET bytes=$TBYTES root=$ROOTDEV"
 
-# Make sure the Sequoia source survives this overwrite of disk0s3.
 if [ -d '/Volumes/Apple/Applications/Install macOS Sequoia.app' ] || [ -f '/Volumes/Apple/Sequoia-15.8-24H23/InstallAssistant.pkg' ]; then
   say 'SEQUOIA_SOURCE_PRESERVED_ON_APPLE=YES'
 else
-  say 'WARNING: no saved Sequoia app/pkg found on /Volumes/Apple. Catalina build can continue, but rebuilding Sequoia later may require downloading it again.'
+  say 'WARNING: no saved Sequoia app/pkg found on /Volumes/Apple. Rebuilding Sequoia later may require downloading it again.'
 fi
 
 mkdir -p "$BASE" || fail 'cannot create Catalina work directory'
@@ -148,17 +145,15 @@ download_asset(){
   say "ASSET_OK=$N bytes=$(size "$OUT")"
 }
 
-# These six files are the legacy full-installer payload required to build the app.
 for N in BaseSystem.dmg BaseSystem.chunklist InstallESDDmg.pkg InstallInfo.plist AppleDiagnostics.dmg AppleDiagnostics.chunklist; do
   download_asset "$N"
 done
 say 'ALL_CATALINA_ASSETS_VERIFIED'
 
-# Build the full Install macOS Catalina.app from the Apple BaseSystem app skeleton.
 rm -rf "$MNT"
 mkdir -p "$MNT" || fail 'cannot create BaseSystem mount point'
 /usr/bin/hdiutil attach "$BASE/BaseSystem.dmg" -nobrowse -readonly -mountpoint "$MNT" >/tmp/catalina-builder-attach.log 2>&1 || {
-  cat /tmp/catalina-builder-attach.log
+  tail -n 20 /tmp/catalina-builder-attach.log 2>/dev/null || true
   fail 'cannot mount BaseSystem.dmg'
 }
 
@@ -192,8 +187,6 @@ clone_or_copy "$BASE/AppleDiagnostics.chunklist" "$SS/AppleDiagnostics.chunklist
 clone_or_copy "$BASE/InstallESDDmg.pkg" "$SS/InstallESD.dmg" || fail 'cannot create InstallESD.dmg from InstallESDDmg.pkg'
 clone_or_copy "$BASE/InstallInfo.plist" "$SS/InstallInfo.plist" || fail 'cannot copy InstallInfo.plist'
 
-# Match Apple's legacy full-installer layout: InstallESDDmg.pkg is exposed as
-# InstallESD.dmg and InstallInfo.plist is adjusted to reference the renamed file.
 /usr/bin/python - "$SS/InstallInfo.plist" <<'PY'
 from __future__ import print_function
 import sys, plistlib
@@ -228,7 +221,6 @@ if [ -x /usr/bin/codesign ]; then
   say 'CREATEINSTALLMEDIA_CODESIGN_OK'
 fi
 
-# Re-check target identity immediately before the destructive step.
 TINFO=$(diskutil info "$TARGET") || fail "$TARGET disappeared before build"
 printf '%s\n' "$TINFO" | grep -q 'Device Location:.*Internal' || fail 'target identity changed'
 printf '%s\n' "$TINFO" | grep -q 'Part of Whole:.*disk0' || fail 'target parent changed'
