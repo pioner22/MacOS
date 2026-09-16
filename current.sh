@@ -15,7 +15,7 @@ printf '    Full-LBA MHDD-like test. WARNING: destructive writes may occur.\n'
 printf '    Полный LBA-тест. ВНИМАНИЕ: возможна полная перезапись SSD/HDD.\n'
 printf '\n'
 printf ' 2) RAM QUICK / БЫСТРАЯ RAM\n'
-printf '    Fast 4 GiB pattern screening / Быстрый скрининг памяти.\n'
+printf '    Fast 8 GiB pattern screening / Быстрый скрининг 8 GiB памяти.\n'
 printf '\n'
 printf ' 3) RAM FULL HARDCORE / ПОЛНАЯ RAM\n'
 printf '    Large allocations, retention, walking/address patterns, 40 GiB bridge.\n'
@@ -37,10 +37,13 @@ printf '    No destructive SSD write / Без разрушительной за�
 printf '13) FULL COMPLEX / ПОЛНЫЙ КОМПЛЕКС\n'
 printf '    All tests; destructive SSD is last and RAM-gated.\n'
 printf '    Все тесты; destructive SSD последним и только после RAM gate.\n'
+printf '14) TOOLKIT SELFTEST / ПРОВЕРКА САМИХ СКРИПТОВ\n'
+printf '    Syntax, file wiring, SSD assembly, known hashes. No hardware test.\n'
+printf '    Синтаксис, связи файлов, сборка SSD, эталонные hash. Железо не тестирует.\n'
 printf '\n'
 printf ' 0) EXIT / ВЫХОД\n'
 printf '=======================================================================\n'
-printf 'Select / Выбор [0-13]: '
+printf 'Select / Выбор [0-14]: '
 
 CHOICE=''
 if [ -r /dev/tty ]; then IFS= read CHOICE </dev/tty; else IFS= read CHOICE; fi
@@ -58,7 +61,8 @@ case "$CHOICE" in
   10|power|POWER|thermal|THERMAL) SCRIPT='power_thermal_test.sh'; LABEL='POWER/THERMAL'; NEXT_RU='Сопоставляйте ошибки RAM/GPU/SSD со временем, питанием и нагревом.'; NEXT_EN='Correlate RAM/GPU/SSD faults with time, power state and temperature.';;
   11|hw|HW|hardware|HARDWARE) SCRIPT='hardware_probe.sh'; LABEL='HARDWARE SNAPSHOT'; NEXT_RU='Сохраните лог как исходную конфигурацию для ремонта.'; NEXT_EN='Keep the log as the repair baseline.';;
   12|safe|SAFE) SCRIPT='full_safe_suite.sh'; LABEL='SAFE FULL SUITE'; NEXT_RU='После безопасного комплекса отдельно запускайте RAM FULL и при необходимости SSD/HDD.'; NEXT_EN='After the safe suite, run RAM FULL and SSD/HDD separately if needed.';;
-  13|suite|SUITE|full|FULL|all|ALL) SCRIPT='full_all_suite.sh'; LABEL='FULL COMPLEX'; NEXT_RU='Комплекс сам блокирует destructive SSD, если RAM не прошла.'; NEXT_EN='The suite automatically blocks destructive SSD testing if RAM does not pass.';;
+  13|suite|SUITE|full|FULL|all|ALL) SCRIPT='full_all_suite.sh'; LABEL='FULL COMPLEX'; NEXT_RU='Комплекс сам блокирует dependent/destructive тесты, если RAM не прошла.'; NEXT_EN='The suite automatically blocks dependent/destructive tests if RAM does not pass.';;
+  14|selftest|SELFTEST) SCRIPT='toolkit_selftest.sh'; LABEL='TOOLKIT SELFTEST'; NEXT_RU='При FAIL сначала исправьте диагностический комплект; это не аппаратный FAIL Mac.'; NEXT_EN='On FAIL, fix the diagnostic toolkit first; this is not a Mac hardware FAIL.';;
   0|q|Q|quit|exit|'') echo 'EXIT=USER_REQUEST'; exit 0;;
   *) echo "STOP: unknown selection / неизвестный пункт: $CHOICE" >&2; exit 1;;
 esac
