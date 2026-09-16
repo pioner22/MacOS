@@ -1,18 +1,20 @@
 #!/bin/bash
 # MHDD-like destructive diagnostic for the internal Apple SSD in macOS Internet Recovery.
-# Full logical-LBA coverage with deterministic AES-CTR data, whole-device write/verify,
-# 4KiB error localization, latency/throughput anomaly collection, and cold reboot persistence.
+# Recovery-minimal build: no openssl, no cmp, no Digest::SHA dependency.
+# Full logical-LBA coverage with deterministic 4KiB LBA-addressed patterns,
+# whole-device write/verify, error localization, latency/throughput anomaly collection,
+# and cold reboot persistence.
 # WARNING: THIS ERASES 100% OF THE INTERNAL SSD.
 set +u
 export LC_ALL=C
 
-VERSION='SSD_MHDD_V2'
+VERSION='SSD_MHDD_V2R1_RECOVERY'
 SECTOR_BYTES=4096
 CHUNK_MIB=64
 CHUNK_BYTES=$((CHUNK_MIB*1024*1024))
 CHUNK_SECTORS=$((CHUNK_BYTES/SECTOR_BYTES))
-SYNC_EVERY=16                 # flush roughly every 1 GiB
-RANDOM_SAMPLES=4096           # MHDD-like 4KiB seek sample
+SYNC_EVERY=16
+RANDOM_SAMPLES=4096
 MAX_LOCALIZE_PRINT=512
 LOG='/tmp/ssd-mhdd.log'
 ERRLOG='/tmp/ssd-mhdd-errors.log'
@@ -22,12 +24,6 @@ ACTUAL='/tmp/ssd-mhdd-actual.bin'
 HASHOUT='/tmp/ssd-mhdd-hash.out'
 TEXTTMP='/tmp/ssd-mhdd-text.tmp'
 
-# Fixed deterministic 256-bit keys. These are test patterns, not secrets.
-KEY_A='00112233445566778899aabbccddeeff0123456789abcdeffedcba9876543210'
-KEY_B='fedcba98765432100123456789abcdef00112233445566778899aabbccddeeff'
-IV_PREFIX_A='a1a2a3a4a5a6a7a8'
-IV_PREFIX_B='b1b2b3b4b5b6b7b8'
-
 : > "$LOG"
 : > "$ERRLOG"
 
@@ -36,20 +32,20 @@ err(){ printf '%s\n' "$*" | tee -a "$LOG" "$ERRLOG" >&2; }
 fail(){ err "STOP: $*"; exit 1; }
 need(){ command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"; }
 
-for c in diskutil awk sed grep dd stat rm sync sleep date sysctl tr cat tee wc basename df openssl perl; do need "$c"; done
+# Keep this dependency set deliberately small: Internet Recovery is restricted.
+for c in diskutil awk sed grep dd stat rm sync sleep date sysctl tr cat tee wc basename df perl; do need "$c"; done
 
+# We already observed sha256sum in this Recovery. shasum remains a fallback.
 SHA_TOOL=''
 if command -v sha256sum >/dev/null 2>&1; then SHA_TOOL='sha256sum'
 elif command -v shasum >/dev/null 2>&1; then SHA_TOOL='shasum'
-elif command -v openssl >/dev/null 2>&1; then SHA_TOOL='openssl'
-else fail 'no SHA-256 tool found'; fi
+else fail 'no SHA-256 tool found (sha256sum/shasum)'; fi
 
 sha_file(){
   F=$1
   case "$SHA_TOOL" in
     sha256sum) sha256sum "$F" 2>/dev/null | awk '{print $1}';;
     shasum) shasum -a 256 "$F" 2>/dev/null | awk '{print $1}';;
-    openssl) openssl dgst -sha256 "$F" 2>/dev/null | awk '{print $NF}';;
   esac
 }
 
@@ -58,16 +54,13 @@ sha_text(){
   case "$SHA_TOOL" in
     sha256sum) printf '%s' "$T" | sha256sum | awk '{print $1}';;
     shasum) printf '%s' "$T" | shasum -a 256 | awk '{print $1}';;
-    openssl) printf '%s' "$T" | openssl dgst -sha256 | awk '{print $NF}';;
   esac
 }
 
-hashout_value(){
-  case "$SHA_TOOL" in
-    openssl) awk '{print $NF}' "$HASHOUT";;
-    *) awk '{print $1}' "$HASHOUT";;
-  esac
-}
+hashout_value(){ awk '{print $1}' "$HASHOUT"; }
+
+# Probe only Perl language primitives we actually need; no non-core crypto modules.
+perl -e 'binmode STDOUT; print pack("V",1)' >/dev/null 2>&1 || fail 'Perl binary pack support unavailable'
 
 if perl -MTime::HiRes=time -e 'exit 0' >/dev/null 2>&1; then
   TIMER_HIRES=1
