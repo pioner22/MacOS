@@ -1,0 +1,110 @@
+
+commit_complete_marker(){
+  PAT=$1
+  make_marker "COMPLETE_$PAT" "$PAT" "$BOOT_NOW" || return 1
+  dd if="$MARKER" of="$RAW" bs=4096 seek=0 count=1 conv=notrunc 2>>"$LOG" || return 1
+  sync; sleep 2
+  EXP=$(sha_file "$MARKER")
+  : > "$HASHOUT"
+  case "$SHA_TOOL" in
+    sha256sum) dd if="$RAW" bs=4096 count=1 2>>"$LOG" | sha256sum > "$HASHOUT";;
+    shasum) dd if="$RAW" bs=4096 count=1 2>>"$LOG" | shasum -a 256 > "$HASHOUT";;
+    openssl) dd if="$RAW" bs=4096 count=1 2>>"$LOG" | openssl dgst -sha256 > "$HASHOUT";;
+  esac
+  P=("${PIPESTATUS[@]}"); GOT=$(hashout_value)
+  [ "${P[0]:-99}" -eq 0 ] && [ "${P[1]:-99}" -eq 0 ] && [ "$GOT" = "$EXP" ]
+}
+
+require_reboot_since(){
+  OLD=$1
+  if [ "$OLD" = "$BOOT_NOW" ] && [ "$OLD" != 0 ]; then
+    say "REBOOT_REQUIRED: completion marker belongs to this same Recovery boot ($BOOT_NOW)."
+    say 'Restart into Internet Recovery, then run the SAME st.sh command again.'
+    exit 0
+  fi
+}
+
+restore_apfs(){
+  say '--- RESTORE GPT + APFS AFTER ALL RAW TESTS PASSED ---'
+  diskutil eraseDisk APFS Apple GPT "$TARGET" 2>&1 | tee -a "$LOG"; ERC=${PIPESTATUS[0]:-1}
+  [ "$ERC" -eq 0 ] || fail "eraseDisk failed rc=$ERC"
+  diskutil verifyDisk "$TARGET" 2>&1 | tee -a "$LOG"; VDRC=${PIPESTATUS[0]:-1}
+  diskutil verifyVolume /Volumes/Apple 2>&1 | tee -a "$LOG"; VVRC=${PIPESTATUS[0]:-1}
+  say "FINAL_VERIFY_DISK_RC=$VDRC FINAL_VERIFY_VOLUME_RC=$VVRC"
+  if [ "$VDRC" -eq 0 ] && [ "$VVRC" -eq 0 ]; then
+    {
+      echo 'SSD MHDD-like diagnostic PASS'
+      echo "Version: $VERSION"
+      echo "Model: $MODEL"
+      echo "Bytes: $BYTES"
+      echo 'Pattern A: full write + immediate full SHA-256 verify + post-reboot full verify PASS'
+      echo 'Pattern B: full write + immediate full SHA-256 verify + post-reboot full verify PASS'
+      echo 'Final GPT/APFS verification: PASS'
+      echo 'Scope: complete logical LBA space exposed by T2/FTL; hidden NAND reserve cannot be directly addressed.'
+    } > /Volumes/Apple/SSD-MHDD-FINAL.txt
+    cp "$LOG" /Volumes/Apple/SSD-MHDD-LAST-STAGE.log 2>/dev/null || true
+    say 'FINAL=PASS_FULL_DEVICE_LBA_WRITE_READ_PERSISTENCE'
+    say 'Result: /Volumes/Apple/SSD-MHDD-FINAL.txt'
+  else
+    fail 'raw media tests passed but final GPT/APFS verification failed'
+  fi
+}
+
+
+persist_log_if_possible(){
+  TAG=$1
+  if [ -d /Volumes/RESCUE ] && [ -w /Volumes/RESCUE ]; then
+    cp "$LOG" "/Volumes/RESCUE/SSD-MHDD-${TAG}.log" 2>/dev/null || true
+    cp "$ERRLOG" "/Volumes/RESCUE/SSD-MHDD-${TAG}-errors.log" 2>/dev/null || true
+    say "LOG_SAVED=/Volumes/RESCUE/SSD-MHDD-${TAG}.log"
+  fi
+}
+
+# Read and validate an existing raw state marker before any partition operations.
+SIG=$(read_marker0); STATE=''; PAT=''; OLD_BOOT=''
+if marker_valid "$SIG"; then
+  STATE=$(marker_field "$SIG" STATE); PAT=$(marker_field "$SIG" PATTERN); OLD_BOOT=$(marker_field "$SIG" BOOT)
+  say "FOUND_STATE_MARKER state=$STATE pattern=$PAT boot=$OLD_BOOT"
+fi
+
+case "$STATE" in
+  COMPLETE_A)
+    require_reboot_since "$OLD_BOOT"
+    diskutil unmountDisk force "$TARGET" >/dev/null 2>&1 || true
+    verify_pattern_pass A COMPLETE_A "$OLD_BOOT"
+    [ "$VERIFY_IOERR" -eq 0 ] && [ "$VERIFY_HASHERR" -eq 0 ] || fail "PATTERN_A_COLD_VERIFY_FAILED io=$VERIFY_IOERR hash=$VERIFY_HASHERR"
+    say 'PATTERN_A_POST_REBOOT_VERIFY=PASS'
+    random_4k_scan 'AFTER_A_COLD_VERIFY'
+    [ "$RND_IOERR" -eq 0 ] || fail "random 4K read found $RND_IOERR I/O errors"
+    write_pattern_pass B
+    B_WRITE_IOERR=$WRITE_IOERR
+    verify_pattern_pass B INPROGRESS_B "$BOOT_NOW"
+    if [ "$B_WRITE_IOERR" -ne 0 ] || [ "$VERIFY_IOERR" -ne 0 ] || [ "$VERIFY_HASHERR" -ne 0 ]; then
+      fail "PATTERN_B_FAILED write_io=$B_WRITE_IOERR verify_io=$VERIFY_IOERR hash=$VERIFY_HASHERR"
+    fi
+    commit_complete_marker B || fail 'cannot commit/verify COMPLETE_B marker'
+    say 'PATTERN_B_WRITE_VERIFY=PASS'
+    say 'STAGE=COMPLETE_B'
+    persist_log_if_possible COMPLETE_B
+    say 'REBOOT_REQUIRED: restart into Internet Recovery and run the SAME st.sh command again.'
+    exit 0
+    ;;
+  COMPLETE_B)
+    require_reboot_since "$OLD_BOOT"
+    diskutil unmountDisk force "$TARGET" >/dev/null 2>&1 || true
+    verify_pattern_pass B COMPLETE_B "$OLD_BOOT"
+    [ "$VERIFY_IOERR" -eq 0 ] && [ "$VERIFY_HASHERR" -eq 0 ] || fail "PATTERN_B_COLD_VERIFY_FAILED io=$VERIFY_IOERR hash=$VERIFY_HASHERR"
+    say 'PATTERN_B_POST_REBOOT_VERIFY=PASS'
+    raw_sequential_scan 'FINAL_RAW_SCAN'
+    [ "$SCAN_IOERR" -eq 0 ] || fail "final raw scan found $SCAN_IOERR I/O errors"
+    random_4k_scan 'FINAL_RANDOM_SCAN'
+    [ "$RND_IOERR" -eq 0 ] || fail "final random scan found $RND_IOERR I/O errors"
+    restore_apfs
+    exit 0
+    ;;
+  INPROGRESS_A|INPROGRESS_B)
+    say "PREVIOUS_PASS_INTERRUPTED state=$STATE"
+    say 'No partially tested region will be trusted; destructive sequence restarts from Pattern A.'
+    ;;
+  '') ;;
+  *) fail "unknown validated MHDD state marker: $STATE";;
