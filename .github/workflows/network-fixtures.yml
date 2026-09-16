@@ -1,0 +1,40 @@
+name: Publish network diagnostic fixtures
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/network-fixtures.yml'
+      - 'tools/generate_network_fixtures.py'
+      - 'network-fixtures.sha256'
+      - 'network-fixtures.tsv'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate deterministic fixtures
+        run: |
+          python3 tools/generate_network_fixtures.py
+          cd dist/network-fixtures
+          sha256sum -c ../../network-fixtures.sha256
+          cp ../../network-fixtures.sha256 .
+          cp ../../network-fixtures.tsv .
+
+      - name: Create or update diagnostic release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG='diagnostic-fixtures-v1'
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$GITHUB_SHA" \
+              --title 'MacBook Diagnostic Network Fixtures v1' \
+              --notes 'Deterministic binary assets for the MacBook hardware/network diagnostic toolkit. Assets are generated reproducibly; expected SHA-256 values are stored in network-fixtures.sha256.'
+          fi
+          gh release upload "$TAG" dist/network-fixtures/* --clobber
