@@ -94,10 +94,17 @@ case "$RC" in
     echo 'RU: В рамках выполненного этапа подтверждённая ошибка не зарегистрирована.'
     echo 'EN: No confirmed failure was recorded within the completed stage.';;
   2)
-    echo 'STATE_RU=FAIL/ПОДТВЕРЖДЁННАЯ_ОШИБКА'
-    echo 'STATE_EN=FAIL/CONFIRMED_FAILURE'
-    echo 'RU: Тест обнаружил фактическую ошибку данных, вычисления или I/O.'
-    echo 'EN: The test detected an actual data, computation, or I/O failure.';;
+    if [ "$LABEL" = 'TOOLKIT SELFTEST' ]; then
+      echo 'STATE_RU=TOOLKIT_FAIL/ОШИБКА_ДИАГНОСТИЧЕСКОГО_КОМПЛЕКТА'
+      echo 'STATE_EN=TOOLKIT_FAIL'
+      echo 'RU: Ошибка относится к файлам/логике диагностического комплекта, а не является доказательством поломки Mac.'
+      echo 'EN: The failure is in the diagnostic toolkit/files and is not evidence of Mac hardware failure.'
+    else
+      echo 'STATE_RU=FAIL/ПОДТВЕРЖДЁННАЯ_ОШИБКА'
+      echo 'STATE_EN=FAIL/CONFIRMED_FAILURE'
+      echo 'RU: Тест обнаружил фактическую ошибку данных, вычисления или I/O.'
+      echo 'EN: The test detected an actual data, computation, or I/O failure.'
+    fi;;
   3)
     echo 'STATE_RU=INCONCLUSIVE/НЕДОСТАТОЧНО_ДАННЫХ'
     echo 'STATE_EN=INCONCLUSIVE'
