@@ -10,26 +10,28 @@
 
 random_4k_scan(){
   LABEL=$1
-  say "--- $LABEL: RANDOM 4KiB LBA LATENCY SAMPLE ($RANDOM_SAMPLES reads) ---"
+  say "--- $LABEL: RANDOM 4KiB LBA SAMPLE ($RANDOM_SAMPLES reads) ---"
   RND_SUM='/tmp/ssd-mhdd-random-summary.txt'
   rm -f "$RND_SUM"
-  perl -MTime::HiRes=time -MFcntl=SEEK_SET - "$RAW" "$TOTAL_SECTORS" "$RANDOM_SAMPLES" "$LABEL" <<'PERL' | tee -a "$LOG" "$RND_SUM"
+  # No mandatory Perl modules. Time::HiRes is loaded dynamically only when available.
+  perl - "$RAW" "$TOTAL_SECTORS" "$RANDOM_SAMPLES" "$LABEL" <<'PERL' | tee -a "$LOG" "$RND_SUM"
 use strict;
 use warnings;
-use Time::HiRes qw(time);
-use Fcntl qw(SEEK_SET);
+binmode STDERR;
 my ($dev,$total,$samples,$label)=@ARGV;
+my $have_hires = eval { require Time::HiRes; 1 } ? 1 : 0;
+sub nowtime { return $have_hires ? Time::HiRes::time() : CORE::time(); }
 open my $F,'<:raw',$dev or die "RANDOM_OPEN_ERROR dev=$dev error=$!\n";
 my ($lt5,$b5_20,$b20_100,$b100_500,$ge500,$io)=(0,0,0,0,0,0);
 my $x=305419896;
 for (my $i=0;$i<$samples;$i++) {
   $x=(1103515245*$x+12345) & 2147483647;
   my $lba=$x % $total;
-  my $t0=time();
-  my $pos=sysseek($F,$lba*4096,SEEK_SET);
+  my $t0=nowtime();
+  my $pos=sysseek($F,$lba*4096,0);
   my $buf='';
   my $n=defined($pos) ? sysread($F,$buf,4096) : undef;
-  my $ms=(time()-$t0)*1000.0;
+  my $ms=(nowtime()-$t0)*1000.0;
   if (!defined($pos) || !defined($n) || $n != 4096) {
     $io++;
     my $nv=defined($n)?$n:'undef';
@@ -40,13 +42,14 @@ for (my $i=0;$i<$samples;$i++) {
   elsif ($ms < 100) {$b20_100++}
   elsif ($ms < 500) {$b100_500++}
   else {$ge500++}
-  if ($ms >= 100) {
+  if ($have_hires && $ms >= 100) {
     print "$label RANDOM_LATENCY_DEVIATION sample=$i lba4k=$lba ms=".sprintf('%.3f',$ms)."\n";
   }
   if (($i % 512)==0) {
-    print "$label RANDOM_PROGRESS sample=$i/$samples lba4k=$lba ms=".sprintf('%.3f',$ms)."\n";
+    print "$label RANDOM_PROGRESS sample=$i/$samples lba4k=$lba ms=".sprintf('%.3f',$ms)." hires=$have_hires\n";
   }
 }
+print "LATENCY_4K_HIRES=$have_hires\n";
 print "LATENCY_4K_BINS_ms <5:$lt5 5-19:$b5_20 20-99:$b20_100 100-499:$b100_500 >=500:$ge500\n";
 print "RANDOM_SUMMARY ioerr=$io lt5=$lt5 b5_20=$b5_20 b20_100=$b20_100 b100_500=$b100_500 ge500=$ge500\n";
 PERL
