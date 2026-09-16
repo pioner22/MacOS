@@ -1,27 +1,65 @@
 #!/bin/bash
-# Temporary RAM-only triage after an observed one-byte mismatch.
-# The internal SSD is not written by this stage; COMPLETE_A remains on raw disk.
+# Interactive diagnostic menu for macOS Internet Recovery.
+# Permanent entry remains: curl -L https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh|bash
 set +u
 BASE='https://raw.githubusercontent.com/pioner22/MacOS/main'
-TMP="/tmp/ram-triage-$$.sh"
-URL="$BASE/ram_triage.sh?t=$(date +%s 2>/dev/null || echo 0)"
+TMP="/tmp/diag-menu-run-$$.sh"
 rm -f "$TMP"
 
-echo 'CURRENT_DIAGNOSTIC=RAM_ONLY_TRIAGE_V2'
-echo 'SSD_WRITE_MODE=NONE'
-echo 'Fetching Recovery-compatible RAM triage...'
+printf '\n'
+printf '============================================================\n'
+printf ' MacBook Diagnostic Menu\n'
+printf '============================================================\n'
+printf ' 1) SSD/HDD TEST  - MHDD-like full-LBA storage diagnostic\n'
+printf '                    NOTE: destructive writes may occur\n'
+printf '                    depending on saved diagnostic stage.\n'
+printf '\n'
+printf ' 2) RAM TEST      - maximum RAM torture / corruption test\n'
+printf '                    Internal SSD is not intentionally written.\n'
+printf '                    Optional 40GiB RAM->RESCUE bridge may run.\n'
+printf '\n'
+printf ' 0) EXIT\n'
+printf '============================================================\n'
+printf 'Select [1/2/0]: '
 
+CHOICE=''
+if [ -r /dev/tty ]; then
+  IFS= read CHOICE </dev/tty
+else
+  IFS= read CHOICE
+fi
+
+case "$CHOICE" in
+  1|ssd|SSD|hdd|HDD)
+    SCRIPT='ssd_test.sh'
+    LABEL='SSD/HDD TEST'
+    ;;
+  2|ram|RAM)
+    SCRIPT='ram_test.sh'
+    LABEL='RAM TEST'
+    ;;
+  0|q|Q|quit|exit|'')
+    echo 'EXIT=USER_REQUEST'
+    exit 0
+    ;;
+  *)
+    echo "STOP: unknown selection: $CHOICE" >&2
+    exit 1
+    ;;
+esac
+
+echo "SELECTED=$LABEL"
+URL="$BASE/$SCRIPT?t=$(date +%s 2>/dev/null || echo 0)"
 curl -fL --retry 2 --connect-timeout 20 -H 'Cache-Control: no-cache' "$URL" -o "$TMP" || {
-  echo 'STOP: failed to fetch ram_triage.sh' >&2
+  echo "STOP: failed to fetch $SCRIPT" >&2
   rm -f "$TMP"
   exit 1
 }
 /bin/bash -n "$TMP" || {
-  echo 'STOP: RAM triage failed syntax validation' >&2
+  echo "STOP: $SCRIPT failed syntax validation" >&2
   rm -f "$TMP"
   exit 1
 }
-echo 'ASSEMBLY=PASS'
 /bin/bash "$TMP"
 RC=$?
 rm -f "$TMP"
