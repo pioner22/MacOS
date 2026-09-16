@@ -4,28 +4,37 @@
 set +u
 export LC_ALL=C
 LOG='/tmp/ram-map.log'
+PERSIST_LOG=''
 : > "$LOG"
-say(){ printf '%s\n' "$*" | tee -a "$LOG"; }
-fail(){ say "STOP: $*"; exit 1; }
-for c in perl sysctl tee awk date; do command -v "$c" >/dev/null 2>&1 || fail "missing command: $c"; done
+say(){
+  if [ -n "$PERSIST_LOG" ]; then printf '%s\n' "$*" | tee -a "$LOG" "$PERSIST_LOG"; else printf '%s\n' "$*" | tee -a "$LOG"; fi
+}
+env_fail(){ say "FINAL=INCONCLUSIVE $*"; exit 3; }
+for c in perl sysctl tee awk date; do command -v "$c" >/dev/null 2>&1 || env_fail "missing_command=$c"; done
 
 TOTAL_BYTES=$(sysctl -n hw.memsize 2>/dev/null)
-case "$TOTAL_BYTES" in ''|*[!0-9]*) fail 'hw.memsize unavailable';; esac
+case "$TOTAL_BYTES" in ''|*[!0-9]*) env_fail 'hw_memsize_unavailable';; esac
 TOTAL_MIB=$((TOTAL_BYTES/1048576))
 TEST_MIB=8192
 [ "$TOTAL_MIB" -lt 16384 ] && TEST_MIB=$((TOTAL_MIB/3))
 TEST_MIB=$((TEST_MIB/32*32))
 BOOT=$(sysctl -n kern.boottime 2>/dev/null | sed -n 's/.*sec = \([0-9][0-9]*\).*/\1/p' | sed -n '1p')
 [ -n "$BOOT" ] || BOOT=0
+TS=$(date +%Y%m%d-%H%M%S 2>/dev/null || echo unknown)
+if [ -d /Volumes/RESCUE ] && [ -w /Volumes/RESCUE ]; then
+  PERSIST_LOG="/Volumes/RESCUE/RAM-MAP-LIVE-${TS}-boot-${BOOT}.log"
+  : > "$PERSIST_LOG" 2>/dev/null || PERSIST_LOG=''
+fi
 
 say '============================================================'
-say 'MODE=RAM_ERROR_MAPPING_V1'
+say 'MODE=RAM_ERROR_MAPPING_V2'
 say "BOOT_EPOCH=$BOOT TOTAL_RAM_MIB=$TOTAL_MIB TEST_MIB=$TEST_MIB"
 say 'INTERNAL_SSD_WRITE=NONE'
 say 'NOTE=reported test pages are virtual/allocation-relative, not physical DRAM addresses.'
+[ -n "$PERSIST_LOG" ] && say "LIVE_LOG=$PERSIST_LOG"
 say '============================================================'
 
-perl - "$TEST_MIB" <<'PERL' 2>&1 | tee -a "$LOG"
+perl - "$TEST_MIB" <<'PERL' 2>&1 | tee -a "$LOG" ${PERSIST_LOG:+"$PERSIST_LOG"}
 use strict;
 use warnings;
 $|=1;
@@ -40,6 +49,7 @@ my $events=0;
 my %by_bit;
 my %by_actual;
 my %by_chunk;
+my %signature;
 
 sub page_for {
   my ($mode,$pageid)=@_;
@@ -82,6 +92,7 @@ sub inspect_chunk {
       $events++;
       $by_actual{sprintf('%02X',$a)}++;
       $by_chunk{$ci}++;
+      $signature{join(':',$mode,$pageid,$j,sprintf('%02X',$xor))}++;
       for my $b (0..7) { $by_bit{$b}++ if $xor & (1<<$b); }
       if ($events <= 512) {
         printf "RAM_MAP_EVENT cycle=%d pattern=%s chunk=%d page=%d logical_test_page=%d byte=%d expected=%02X actual=%02X xor=%02X bit_errors=%d\n",
@@ -117,15 +128,19 @@ print "RAM_MAP_SUMMARY total_byte_events=$events\n";
 print "RAM_MAP_BIT_COUNTS"; for my $b (0..7) { print " bit$b=".($by_bit{$b}||0); } print "\n";
 my @chunks=sort {$by_chunk{$b}<=>$by_chunk{$a}} keys %by_chunk;
 for my $i (0..$#chunks) { last if $i>=20; my $c=$chunks[$i]; print "RAM_MAP_HOT_CHUNK rank=".($i+1)." chunk=$c byte_events=$by_chunk{$c}\n"; }
+my @sig=sort {$signature{$b}<=>$signature{$a}} keys %signature;
+for my $i (0..$#sig) { last if $i>=20; print "RAM_MAP_RECURRENT rank=".($i+1)." count=$signature{$sig[$i]} signature=$sig[$i]\n"; }
 print "RAM_MAP_FINAL=".($events?'FAIL':'PASS')."\n";
 exit($events?2:0);
 PERL
 RC=${PIPESTATUS[0]:-99}
 
-if [ -d /Volumes/RESCUE ] && [ -w /Volumes/RESCUE ]; then
-  TS=$(date +%Y%m%d-%H%M%S 2>/dev/null || echo unknown)
-  cp "$LOG" "/Volumes/RESCUE/RAM-MAP-$TS.log" 2>/dev/null || true
-  say "LOG_SAVED=/Volumes/RESCUE/RAM-MAP-$TS.log"
+if [ -n "$PERSIST_LOG" ]; then
+  say "LOG_SAVED_LIVE=$PERSIST_LOG"
+elif [ -d /Volumes/RESCUE ] && [ -w /Volumes/RESCUE ]; then
+  OUT="/Volumes/RESCUE/RAM-MAP-$TS.log"
+  cp "$LOG" "$OUT" 2>/dev/null || true
+  say "LOG_SAVED=$OUT"
 fi
 
 case "$RC" in
