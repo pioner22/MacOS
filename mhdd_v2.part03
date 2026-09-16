@@ -1,0 +1,110 @@
+
+hash_expected_stream(){
+  PAT=$1; IDX=$2; NSECS=$3
+  : > "$HASHOUT"
+  case "$SHA_TOOL" in
+    sha256sum) gen_pattern "$PAT" "$IDX" "$NSECS" | sha256sum > "$HASHOUT";;
+    shasum) gen_pattern "$PAT" "$IDX" "$NSECS" | shasum -a 256 > "$HASHOUT";;
+    openssl) gen_pattern "$PAT" "$IDX" "$NSECS" | openssl dgst -sha256 > "$HASHOUT";;
+  esac
+  P=("${PIPESTATUS[@]}")
+  EXP_GEN_RC=${P[0]:-99}; EXP_HASH_RC=${P[1]:-99}
+  EXPECT_HASH=$(hashout_value)
+}
+
+hash_expected_chunk0(){
+  PAT=$1; NSECS=$2; STATE=$3; BOOTVAL=$4
+  rm -f "$EXPECT"
+  gen_pattern "$PAT" 0 "$NSECS" > "$EXPECT" || return 1
+  make_marker "$STATE" "$PAT" "$BOOTVAL" || return 1
+  dd if="$MARKER" of="$EXPECT" bs=4096 count=1 conv=notrunc 2>/dev/null || return 1
+  EXPECT_HASH=$(sha_file "$EXPECT")
+  EXP_GEN_RC=0; EXP_HASH_RC=0
+  return 0
+}
+
+hash_actual_chunk(){
+  IDX=$1; NSECS=$2
+  : > "$HASHOUT"
+  if [ "$NSECS" -eq "$CHUNK_SECTORS" ]; then
+    SKIPM=$((IDX*CHUNK_MIB))
+    case "$SHA_TOOL" in
+      sha256sum) dd if="$RAW" bs=1048576 skip="$SKIPM" count="$CHUNK_MIB" 2>>"$LOG" | sha256sum > "$HASHOUT";;
+      shasum) dd if="$RAW" bs=1048576 skip="$SKIPM" count="$CHUNK_MIB" 2>>"$LOG" | shasum -a 256 > "$HASHOUT";;
+      openssl) dd if="$RAW" bs=1048576 skip="$SKIPM" count="$CHUNK_MIB" 2>>"$LOG" | openssl dgst -sha256 > "$HASHOUT";;
+    esac
+  else
+    STARTSEC=$((IDX*CHUNK_SECTORS))
+    case "$SHA_TOOL" in
+      sha256sum) dd if="$RAW" bs=4096 skip="$STARTSEC" count="$NSECS" 2>>"$LOG" | sha256sum > "$HASHOUT";;
+      shasum) dd if="$RAW" bs=4096 skip="$STARTSEC" count="$NSECS" 2>>"$LOG" | shasum -a 256 > "$HASHOUT";;
+      openssl) dd if="$RAW" bs=4096 skip="$STARTSEC" count="$NSECS" 2>>"$LOG" | openssl dgst -sha256 > "$HASHOUT";;
+    esac
+  fi
+  P=("${PIPESTATUS[@]}")
+  ACT_READ_RC=${P[0]:-99}; ACT_HASH_RC=${P[1]:-99}; ACTUAL_HASH=$(hashout_value)
+}
+
+build_expected_file(){
+  PAT=$1; IDX=$2; NSECS=$3; HEADSTATE=$4; HEADBOOT=$5
+  rm -f "$EXPECT"
+  gen_pattern "$PAT" "$IDX" "$NSECS" > "$EXPECT" || return 1
+  if [ "$IDX" -eq 0 ]; then
+    make_marker "$HEADSTATE" "$PAT" "$HEADBOOT" || return 1
+    dd if="$MARKER" of="$EXPECT" bs=4096 count=1 conv=notrunc 2>/dev/null || return 1
+  fi
+  return 0
+}
+
+localize_chunk(){
+  PAT=$1; IDX=$2; NSECS=$3; HEADSTATE=$4; HEADBOOT=$5
+  say "LOCALIZE_START pattern=$PAT chunk=$IDX lba4k_start=$((IDX*CHUNK_SECTORS)) sectors=$NSECS"
+  build_expected_file "$PAT" "$IDX" "$NSECS" "$HEADSTATE" "$HEADBOOT" || { err 'LOCALIZE_EXPECTED_GENERATION_FAILED'; return; }
+  rm -f "$ACTUAL"
+  STARTSEC=$((IDX*CHUNK_SECTORS))
+  dd if="$RAW" of="$ACTUAL" bs=4096 skip="$STARTSEC" count="$NSECS" 2>>"$LOG"
+  RRC=$?
+  [ "$RRC" -eq 0 ] || err "LOCALIZE_RAW_READ_ERROR rc=$RRC"
+  perl - "$EXPECT" "$ACTUAL" "$STARTSEC" "$MAX_LOCALIZE_PRINT" <<'PERL' | tee -a "$LOG" "$ERRLOG"
+use strict;
+use warnings;
+my ($e,$a,$base,$maxprint)=@ARGV;
+open my $E,'<:raw',$e or die "expected open: $!\n";
+open my $A,'<:raw',$a or die "actual open: $!\n";
+my ($idx,$bad,$printed)=(0,0,0);
+while (1) {
+  my ($eb,$ab)=('','');
+  my $er=read($E,$eb,4096); my $ar=read($A,$ab,4096);
+  last if (!$er && !$ar);
+  if (!defined($er) || !defined($ar) || $er != $ar || $eb ne $ab) {
+    $bad++;
+    if ($printed < $maxprint) {
+      my $le=length($eb); my $la=length($ab);
+      my $min=$le<$la?$le:$la;
+      my $xor=substr($eb,0,$min) ^ substr($ab,0,$min);
+      my $diff=($xor =~ tr/\0//c) + abs($le-$la);
+      my $lba=$base+$idx;
+      my $off=$lba*4096;
+      print "BAD_LBA4K=$lba byte_offset=$off sector_in_chunk=$idx differing_bytes=$diff\n";
+      $printed++;
+    }
+  }
+  $idx++;
+}
+print "LOCALIZE_BAD_SECTORS=$bad printed=$printed\n";
+PERL
+  rm -f "$EXPECT" "$ACTUAL"
+}
+
+raw_sequential_scan(){
+  LABEL=$1
+  say "--- $LABEL: 64MiB RAW READ THROUGHPUT SCAN ---"
+  throughput_reset; SCAN_IOERR=0
+  I=0
+  while [ "$I" -lt "$TOTAL_CHUNKS" ]; do
+    OFFSET=$((I*CHUNK_BYTES)); REM=$((BYTES-OFFSET)); THIS=$CHUNK_BYTES; [ "$REM" -lt "$THIS" ] && THIS=$REM
+    T0=$(now_ms)
+    if [ "$THIS" -eq "$CHUNK_BYTES" ]; then
+      dd if="$RAW" of=/dev/null bs=1048576 skip=$((I*CHUNK_MIB)) count="$CHUNK_MIB" 2>>"$LOG"
+    else
+      NSECS=$((THIS/SECTOR_BYTES)); dd if="$RAW" of=/dev/null bs=4096 skip=$((I*CHUNK_SECTORS)) count="$NSECS" 2>>"$LOG"
