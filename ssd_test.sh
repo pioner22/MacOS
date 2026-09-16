@@ -55,7 +55,7 @@ if grep -Eq 'REBOOT_REQUIRED|STAGE=COMPLETE_A|STAGE=COMPLETE_B' "$OUT"; then
   echo 'EN: Current stage completed; a real reboot is required to continue persistence verification.'
   echo 'NEXT_RU: Перезагрузитесь в Internet Recovery и снова выберите SSD/HDD TEST.'
   echo 'NEXT_EN: Reboot into Internet Recovery and select SSD/HDD TEST again.'
-  rm -f "$TMP" "$OUT"; exit 0
+  rm -f "$TMP" "$OUT"; exit 4
 fi
 if [ "$RC" -eq 0 ]; then
   echo 'RESULT=PASS_OR_STAGE_COMPLETE'
