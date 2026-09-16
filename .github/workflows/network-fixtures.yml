@@ -15,26 +15,35 @@ permissions:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Generate deterministic fixtures
+      - name: Fetch generator and manifests from exact commit
         run: |
-          python3 tools/generate_network_fixtures.py
-          cd dist/network-fixtures
-          sha256sum -c ../../network-fixtures.sha256
-          cp ../../network-fixtures.sha256 .
-          cp ../../network-fixtures.tsv .
+          set -euo pipefail
+          BASE="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}"
+          curl -fsSL "$BASE/tools/generate_network_fixtures.py" -o /tmp/generate_network_fixtures.py
+          curl -fsSL "$BASE/network-fixtures.sha256" -o /tmp/network-fixtures.sha256
+          curl -fsSL "$BASE/network-fixtures.tsv" -o /tmp/network-fixtures.tsv
+
+      - name: Generate and verify deterministic fixtures
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/dist/network-fixtures"
+          FIXTURE_OUT="$GITHUB_WORKSPACE/dist/network-fixtures" python3 /tmp/generate_network_fixtures.py
+          cd "$GITHUB_WORKSPACE/dist/network-fixtures"
+          sha256sum -c /tmp/network-fixtures.sha256
+          cp /tmp/network-fixtures.sha256 .
+          cp /tmp/network-fixtures.tsv .
 
       - name: Create or update diagnostic release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           TAG='diagnostic-fixtures-v1'
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --target "$GITHUB_SHA" \
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
               --title 'MacBook Diagnostic Network Fixtures v1' \
-              --notes 'Deterministic binary assets for the MacBook hardware/network diagnostic toolkit. Assets are generated reproducibly; expected SHA-256 values are stored in network-fixtures.sha256.'
+              --notes 'Deterministic network integrity assets: 1, 8, 32, 128 and 512 MiB. Expected SHA-256 values are versioned in network-fixtures.sha256.'
           fi
-          gh release upload "$TAG" dist/network-fixtures/* --clobber
+          gh release upload "$TAG" "$GITHUB_WORKSPACE"/dist/network-fixtures/* --repo "$GITHUB_REPOSITORY" --clobber
