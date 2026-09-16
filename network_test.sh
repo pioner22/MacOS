@@ -15,18 +15,12 @@ say 'EN: DNS/ICMP/TCP/TLS/HTTP connectivity test without large downloads.'
 say 'INTERNAL_SSD_WRITE=NONE'
 say '============================================================'
 
-if command -v scutil >/dev/null 2>&1; then
-  say 'NETWORK_STATE_BEGIN'; scutil --nwi 2>&1 | tee -a "$LOG"; say 'NETWORK_STATE_END'
-fi
-if command -v ifconfig >/dev/null 2>&1; then
-  say 'INTERFACES_BEGIN'; ifconfig 2>&1 | tee -a "$LOG"; say 'INTERFACES_END'
-fi
-if command -v route >/dev/null 2>&1; then
-  say 'DEFAULT_ROUTE_BEGIN'; route -n get default 2>&1 | tee -a "$LOG"; say 'DEFAULT_ROUTE_END'
-fi
+if command -v scutil >/dev/null 2>&1; then say 'NETWORK_STATE_BEGIN'; scutil --nwi 2>&1 | tee -a "$LOG"; say 'NETWORK_STATE_END'; fi
+if command -v ifconfig >/dev/null 2>&1; then say 'INTERFACES_BEGIN'; ifconfig 2>&1 | tee -a "$LOG"; say 'INTERFACES_END'; fi
+if command -v route >/dev/null 2>&1; then say 'DEFAULT_ROUTE_BEGIN'; route -n get default 2>&1 | tee -a "$LOG"; say 'DEFAULT_ROUTE_END'; fi
 if command -v ping >/dev/null 2>&1; then
-  say 'PING_GITHUB_START'; ping -c 10 github.com 2>&1 | tee -a "$LOG" || ERR=$((ERR+1))
-  say 'PING_APPLE_START'; ping -c 10 swcdn.apple.com 2>&1 | tee -a "$LOG" || true
+  say 'PING_GITHUB_START'; ping -c 10 github.com 2>&1 | tee -a "$LOG" || say 'PING_GITHUB=NO_REPLY_OR_ICMP_BLOCKED'
+  say 'PING_APPLE_START'; ping -c 10 swcdn.apple.com 2>&1 | tee -a "$LOG" || say 'PING_APPLE=NO_REPLY_OR_ICMP_BLOCKED'
 fi
 
 probe(){
@@ -44,15 +38,15 @@ probe GITHUB "$GH_URL" 10
 
 if [ "$ERR" -eq 0 ]; then
   say 'RESULT=PASS'
-  say 'RU: DNS/TCP/TLS/HTTP-путь во время теста работал стабильно.'
-  say 'EN: DNS/TCP/TLS/HTTP path was stable during the test.'
+  say 'RU: DNS/TCP/TLS/HTTP-путь во время теста работал стабильно. Отсутствие ping-ответа само по себе не считается FAIL.'
+  say 'EN: DNS/TCP/TLS/HTTP path was stable. Missing ping replies alone are not treated as FAIL.'
   say 'NEXT_RU: Для проверки целостности больших загрузок отдельно запустите DOWNLOAD TEST.'
   say 'NEXT_EN: Run DOWNLOAD TEST separately to verify large-transfer byte integrity.'
   exit 0
 else
   say "RESULT=FAIL errors=$ERR"
-  say 'RU: Зафиксированы ошибки соединения/DNS/TLS/HTTP или потеря доступности.'
-  say 'EN: Connectivity/DNS/TLS/HTTP failures or loss of reachability were recorded.'
+  say 'RU: Зафиксированы ошибки TCP/TLS/HTTP или потеря доступности по HTTPS.'
+  say 'EN: TCP/TLS/HTTP failures or HTTPS reachability loss were recorded.'
   say 'NEXT_RU: Повторите через Ethernet/другую сеть. Если ошибки сохраняются на разных сетях, проверяйте Recovery/T2/firmware/RAM.'
   say 'NEXT_EN: Retry over Ethernet/another network. If failures persist across networks, investigate Recovery/T2/firmware/RAM.'
   exit 2
