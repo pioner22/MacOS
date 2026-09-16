@@ -1,32 +1,26 @@
 #!/bin/bash
-# Dynamic diagnostic dispatcher: assemble the current Recovery-safe MHDD-like SSD + RAM test.
+# Temporary RAM-only triage after an observed one-byte mismatch.
+# The internal SSD is not written by this stage; COMPLETE_A remains on raw disk.
 set +u
 BASE='https://raw.githubusercontent.com/pioner22/MacOS/main'
-TMP="/tmp/mhdd-current-$$.sh"
+TMP="/tmp/ram-triage-$$.sh"
+URL="$BASE/ram_triage.sh?t=$(date +%s 2>/dev/null || echo 0)"
 rm -f "$TMP"
 
-echo 'CURRENT_DIAGNOSTIC=SSD_MHDD_V2R1_RECOVERY'
-echo 'Assembling Recovery-compatible SSD + RAM diagnostic...'
+echo 'CURRENT_DIAGNOSTIC=RAM_ONLY_TRIAGE_V2'
+echo 'SSD_WRITE_MODE=NONE'
+echo 'Fetching Recovery-compatible RAM triage...'
 
-for P in 01 02 03 04 04b 05 06; do
-  URL="$BASE/mhdd_v2.part${P}?t=$(date +%s 2>/dev/null || echo 0)-$P"
-  PART="/tmp/mhdd-part-${P}-$$"
-  rm -f "$PART"
-  curl -fL --retry 2 --connect-timeout 20 -H 'Cache-Control: no-cache' "$URL" -o "$PART" || {
-    echo "STOP: failed to fetch mhdd_v2.part${P}" >&2
-    rm -f "$PART" "$TMP"
-    exit 1
-  }
-  cat "$PART" >> "$TMP"
-  rm -f "$PART"
-done
-
-/bin/bash -n "$TMP" || {
-  echo 'STOP: assembled diagnostic failed syntax validation' >&2
+curl -fL --retry 2 --connect-timeout 20 -H 'Cache-Control: no-cache' "$URL" -o "$TMP" || {
+  echo 'STOP: failed to fetch ram_triage.sh' >&2
   rm -f "$TMP"
   exit 1
 }
-
+/bin/bash -n "$TMP" || {
+  echo 'STOP: RAM triage failed syntax validation' >&2
+  rm -f "$TMP"
+  exit 1
+}
 echo 'ASSEMBLY=PASS'
 /bin/bash "$TMP"
 RC=$?
