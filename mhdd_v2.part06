@@ -4,7 +4,12 @@ say 'WARNING: THE NEXT STAGE DESTROYS ALL DATA ON THE INTERNAL APPLE SSD.'
 say "TARGET CONFIRMED: $TARGET  $MODEL  $BYTES bytes"
 say 'The script refuses non-internal/non-Apple/non-SSD targets and will not select external disks.'
 printf 'Type ERASE to begin full destructive LBA diagnostics: '
-read ANSWER
+ANSWER=''
+if [ -r /dev/tty ]; then
+  IFS= read ANSWER </dev/tty
+else
+  IFS= read ANSWER
+fi
 [ "$ANSWER" = ERASE ] || fail 'destructive test cancelled'
 
 # Identity and root-device checks repeated immediately before destructive I/O.
