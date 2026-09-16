@@ -2,24 +2,39 @@ esac
 
 say 'WARNING: THE NEXT STAGE DESTROYS ALL DATA ON THE INTERNAL APPLE SSD.'
 say "TARGET CONFIRMED: $TARGET  $MODEL  $BYTES bytes"
-say 'The script refuses non-internal/non-Apple/non-SSD targets and will not select external disks.'
-printf 'Type ERASE to begin full destructive LBA diagnostics: '
-ANSWER=''
-if [ -r /dev/tty ]; then
-  IFS= read ANSWER </dev/tty
-else
-  IFS= read ANSWER
-fi
-[ "$ANSWER" = ERASE ] || fail 'destructive test cancelled'
+say 'Recovery stdin/TTY is restricted, so this explicitly authorized diagnostic uses a guarded countdown instead of read(1).'
+say 'Safety gates remain active: target must be internal + physical + APPLE SSD + 0.8-1.3TB + not Recovery root.'
+say 'Press Ctrl-C NOW to cancel. Destructive I/O begins automatically after 15 seconds.'
 
 # Identity and root-device checks repeated immediately before destructive I/O.
 ORIG_TARGET=$TARGET; ORIG_BYTES=$BYTES; ORIG_MODEL=$MODEL
 find_target
-[ "$TARGET" = "$ORIG_TARGET" ] || fail 'target changed after confirmation'
-[ "$BYTES" = "$ORIG_BYTES" ] || fail 'target size changed after confirmation'
-[ "$MODEL" = "$ORIG_MODEL" ] || fail 'target model changed after confirmation'
+[ "$TARGET" = "$ORIG_TARGET" ] || fail 'target changed before destructive stage'
+[ "$BYTES" = "$ORIG_BYTES" ] || fail 'target size changed before destructive stage'
+[ "$MODEL" = "$ORIG_MODEL" ] || fail 'target model changed before destructive stage'
+DISK=$(basename "$TARGET")
+RAW="/dev/r$DISK"; [ -e "$RAW" ] || RAW="$TARGET"
 ROOTDEV=$(df / 2>/dev/null | awk 'NR==2{print $1}')
 case "$ROOTDEV" in *"$DISK"*) fail "refusing: Recovery root appears on target ($ROOTDEV)";; esac
+
+N=15
+while [ "$N" -gt 0 ]; do
+  printf '\rDESTRUCTIVE_START_IN=%02d_seconds  Ctrl-C=cancel ' "$N"
+  sleep 1
+  N=$((N-1))
+done
+printf '\n'
+
+# One final identity check after countdown, immediately before unmount/write.
+find_target
+[ "$TARGET" = "$ORIG_TARGET" ] || fail 'target changed after countdown'
+[ "$BYTES" = "$ORIG_BYTES" ] || fail 'target size changed after countdown'
+[ "$MODEL" = "$ORIG_MODEL" ] || fail 'target model changed after countdown'
+DISK=$(basename "$TARGET")
+RAW="/dev/r$DISK"; [ -e "$RAW" ] || RAW="$TARGET"
+ROOTDEV=$(df / 2>/dev/null | awk 'NR==2{print $1}')
+case "$ROOTDEV" in *"$DISK"*) fail "refusing: Recovery root appears on target ($ROOTDEV)";; esac
+say "DESTRUCTIVE_GATE=PASS target=$TARGET model=$MODEL bytes=$BYTES raw=$RAW"
 
 if command -v pmset >/dev/null 2>&1; then pmset -g batt 2>/dev/null | tee -a "$LOG" || true; fi
 say 'Keep AC power connected. Do not interrupt unless the Mac hangs or persistent I/O errors appear.'
