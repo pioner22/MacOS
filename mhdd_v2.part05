@@ -9,7 +9,6 @@ commit_complete_marker(){
   case "$SHA_TOOL" in
     sha256sum) dd if="$RAW" bs=4096 count=1 2>>"$LOG" | sha256sum > "$HASHOUT";;
     shasum) dd if="$RAW" bs=4096 count=1 2>>"$LOG" | shasum -a 256 > "$HASHOUT";;
-    openssl) dd if="$RAW" bs=4096 count=1 2>>"$LOG" | openssl dgst -sha256 > "$HASHOUT";;
   esac
   P=("${PIPESTATUS[@]}"); GOT=$(hashout_value)
   [ "${P[0]:-99}" -eq 0 ] && [ "${P[1]:-99}" -eq 0 ] && [ "$GOT" = "$EXP" ]
@@ -39,6 +38,7 @@ restore_apfs(){
       echo "Bytes: $BYTES"
       echo 'Pattern A: full write + immediate full SHA-256 verify + post-reboot full verify PASS'
       echo 'Pattern B: full write + immediate full SHA-256 verify + post-reboot full verify PASS'
+      echo 'Targeted anomaly region chunk 8233 was repeatedly re-read after cold verifies.'
       echo 'Final GPT/APFS verification: PASS'
       echo 'Scope: complete logical LBA space exposed by T2/FTL; hidden NAND reserve cannot be directly addressed.'
     } > /Volumes/Apple/SSD-MHDD-FINAL.txt
@@ -49,7 +49,6 @@ restore_apfs(){
     fail 'raw media tests passed but final GPT/APFS verification failed'
   fi
 }
-
 
 persist_log_if_possible(){
   TAG=$1
@@ -74,6 +73,7 @@ case "$STATE" in
     verify_pattern_pass A COMPLETE_A "$OLD_BOOT"
     [ "$VERIFY_IOERR" -eq 0 ] && [ "$VERIFY_HASHERR" -eq 0 ] || fail "PATTERN_A_COLD_VERIFY_FAILED io=$VERIFY_IOERR hash=$VERIFY_HASHERR"
     say 'PATTERN_A_POST_REBOOT_VERIFY=PASS'
+    targeted_anomaly_probe A 'AFTER_A_COLD_VERIFY'
     random_4k_scan 'AFTER_A_COLD_VERIFY'
     [ "$RND_IOERR" -eq 0 ] || fail "random 4K read found $RND_IOERR I/O errors"
     write_pattern_pass B
@@ -95,6 +95,7 @@ case "$STATE" in
     verify_pattern_pass B COMPLETE_B "$OLD_BOOT"
     [ "$VERIFY_IOERR" -eq 0 ] && [ "$VERIFY_HASHERR" -eq 0 ] || fail "PATTERN_B_COLD_VERIFY_FAILED io=$VERIFY_IOERR hash=$VERIFY_HASHERR"
     say 'PATTERN_B_POST_REBOOT_VERIFY=PASS'
+    targeted_anomaly_probe B 'AFTER_B_COLD_VERIFY'
     raw_sequential_scan 'FINAL_RAW_SCAN'
     [ "$SCAN_IOERR" -eq 0 ] || fail "final raw scan found $SCAN_IOERR I/O errors"
     random_4k_scan 'FINAL_RANDOM_SCAN'
