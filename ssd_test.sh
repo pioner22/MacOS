@@ -20,7 +20,7 @@ for P in 01 02 03 04; do
   }
   cat "$PART" >> "$TMP"; rm -f "$PART"
 done
-for FILE in mhdd_v2.part05_storage mhdd_v2.part06; do
+for FILE in mhdd_v2.part05_storage mhdd_v2.part06_storage; do
   PART="/tmp/ssd-test-part-$$-${FILE##*.}"; rm -f "$PART"
   curl -fL --retry 2 --connect-timeout 20 -H 'Cache-Control: no-cache' "$BASE/$FILE?t=$(date +%s 2>/dev/null || echo 0)" -o "$PART" || {
     echo "RESULT=INCONCLUSIVE fetch_failed=$FILE"; rm -f "$PART" "$TMP"; exit 3;
