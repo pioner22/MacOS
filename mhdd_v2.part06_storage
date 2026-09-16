@@ -1,0 +1,64 @@
+
+say 'WARNING: THE NEXT STAGE DESTROYS ALL DATA ON THE INTERNAL APPLE SSD.'
+say "TARGET CONFIRMED: $TARGET  $MODEL  $BYTES bytes"
+say 'Recovery stdin/TTY is restricted, so this explicitly authorized diagnostic uses a guarded countdown instead of read(1).'
+say 'Safety gates remain active: target must be internal + physical + APPLE SSD + 0.8-1.3TB + not Recovery root.'
+say 'Press Ctrl-C NOW to cancel. Destructive I/O begins automatically after 15 seconds.'
+
+# Identity and root-device checks repeated immediately before destructive I/O.
+ORIG_TARGET=$TARGET; ORIG_BYTES=$BYTES; ORIG_MODEL=$MODEL
+find_target
+[ "$TARGET" = "$ORIG_TARGET" ] || fail 'target changed before destructive stage'
+[ "$BYTES" = "$ORIG_BYTES" ] || fail 'target size changed before destructive stage'
+[ "$MODEL" = "$ORIG_MODEL" ] || fail 'target model changed before destructive stage'
+DISK=$(basename "$TARGET")
+RAW="/dev/r$DISK"; [ -e "$RAW" ] || RAW="$TARGET"
+ROOTDEV=$(df / 2>/dev/null | awk 'NR==2{print $1}')
+case "$ROOTDEV" in *"$DISK"*) fail "refusing: Recovery root appears on target ($ROOTDEV)";; esac
+
+N=15
+while [ "$N" -gt 0 ]; do
+  printf '\rDESTRUCTIVE_START_IN=%02d_seconds  Ctrl-C=cancel ' "$N"
+  sleep 1
+  N=$((N-1))
+done
+printf '\n'
+
+# One final identity check after countdown, immediately before unmount/write.
+find_target
+[ "$TARGET" = "$ORIG_TARGET" ] || fail 'target changed after countdown'
+[ "$BYTES" = "$ORIG_BYTES" ] || fail 'target size changed after countdown'
+[ "$MODEL" = "$ORIG_MODEL" ] || fail 'target model changed after countdown'
+DISK=$(basename "$TARGET")
+RAW="/dev/r$DISK"; [ -e "$RAW" ] || RAW="$TARGET"
+ROOTDEV=$(df / 2>/dev/null | awk 'NR==2{print $1}')
+case "$ROOTDEV" in *"$DISK"*) fail "refusing: Recovery root appears on target ($ROOTDEV)";; esac
+say "DESTRUCTIVE_GATE=PASS target=$TARGET model=$MODEL bytes=$BYTES raw=$RAW"
+
+if command -v pmset >/dev/null 2>&1; then pmset -g batt 2>/dev/null | tee -a "$LOG" || true; fi
+say 'Keep AC power connected. Do not interrupt unless the Mac hangs or persistent I/O errors appear.'
+
+diskutil unmountDisk force "$TARGET" 2>&1 | tee -a "$LOG"; URC=${PIPESTATUS[0]:-1}
+[ "$URC" -eq 0 ] || fail "cannot unmount internal disk rc=$URC"
+
+raw_sequential_scan 'PREWRITE_RAW_SCAN'
+PRE_SCAN_IOERR=$SCAN_IOERR
+random_4k_scan 'PREWRITE_RANDOM_SCAN'
+PRE_RND_IOERR=$RND_IOERR
+if [ "$PRE_SCAN_IOERR" -ne 0 ] || [ "$PRE_RND_IOERR" -ne 0 ]; then
+  err "PREWRITE_ERRORS sequential=$PRE_SCAN_IOERR random=$PRE_RND_IOERR"
+  err 'Continuing because a destructive diagnostic was explicitly requested; errors remain evidence of storage-path instability.'
+fi
+
+write_pattern_pass A
+A_WRITE_IOERR=$WRITE_IOERR
+verify_pattern_pass A INPROGRESS_A "$BOOT_NOW"
+if [ "$A_WRITE_IOERR" -ne 0 ] || [ "$VERIFY_IOERR" -ne 0 ] || [ "$VERIFY_HASHERR" -ne 0 ]; then
+  fail "PATTERN_A_FAILED write_io=$A_WRITE_IOERR verify_io=$VERIFY_IOERR hash=$VERIFY_HASHERR"
+fi
+commit_complete_marker A || fail 'cannot commit/verify COMPLETE_A marker'
+say 'PATTERN_A_WRITE_VERIFY=PASS'
+say 'STAGE=COMPLETE_A'
+persist_log_if_possible COMPLETE_A
+say 'REBOOT_REQUIRED: restart into Internet Recovery, then run the SAME st.sh command again.'
+exit 0
