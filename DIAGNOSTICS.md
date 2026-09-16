@@ -1,38 +1,27 @@
 # MacBook Hardware Diagnostics Toolkit
 
-Набор диагностических скриптов для Intel Mac / macOS Internet Recovery и полноценной macOS.
+Автономный набор аппаратной диагностики для Intel Mac, macOS Internet Recovery и полноценной macOS.  
+Standalone hardware-diagnostic toolkit for Intel Macs, macOS Internet Recovery and full macOS.
 
-> **Важно:** тест `SSD/HDD TEST` может выполнять разрушительную запись по всему внутреннему накопителю. Перед его использованием данные должны быть сохранены. Остальные тесты по умолчанию не выполняют разрушительную запись на внутренний SSD.
-
-## Быстрый запуск
-
-В Terminal:
+## Быстрый запуск / Quick start
 
 ```bash
 curl -L https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh|bash
 ```
 
-`st.sh` включает `caffeinate` на время длительной диагностики и открывает меню.
+`st.sh` включает `caffeinate` на время теста и открывает двуязычное меню.  
+`st.sh` keeps the Mac awake with `caffeinate` and opens the bilingual menu.
 
-## Меню
+> **ВНИМАНИЕ / WARNING:** `SSD/HDD TEST` может полностью перезаписать внутренний накопитель. / `SSD/HDD TEST` may overwrite the entire internal drive.
 
-### 1. SSD/HDD TEST
+## Меню / Menu
 
-MHDD-подобный тест полного логического пространства внутреннего Apple SSD.
+### 1. SSD/HDD TEST / Накопитель
 
-Проверяет:
+Чистый MHDD-подобный full-LBA тест внутреннего Apple SSD без встроенного RAM-preflight. Проверяет RAW read, случайные 4 KiB чтения, LBA-зависимые шаблоны A/B, SHA-256 каждого 64 MiB диапазона, локализацию до 4 KiB LBA и cold verification после reboot.  
+Pure MHDD-like full-LBA storage test with RAW reads, deterministic A/B writes, per-chunk SHA-256, 4 KiB localization and post-reboot persistence verification.
 
-- идентификацию physical/internal Apple SSD;
-- полный sequential RAW read;
-- случайные 4 KiB чтения;
-- два различных LBA-зависимых шаблона записи A/B;
-- SHA-256 каждого 64 MiB диапазона после записи;
-- локализацию ошибки до 4 KiB LBA;
-- сохранность данных после reboot (cold verification);
-- повторное исследование обнаруженных latency-outlier областей;
-- восстановление GPT/APFS после полного успешного цикла.
-
-Критические признаки:
+Критические признаки / Critical markers:
 
 ```text
 READ_IO_ERROR
@@ -42,25 +31,17 @@ VERIFY_HASH_MISMATCH
 BAD_LBA4K
 ```
 
-`HASH_MISMATCH` после детерминированной RAW-записи — серьёзный признак неисправности storage path (SSD / T2 / RAM / I/O path). Поэтому RAM желательно проверять отдельно.
+### 2. RAM QUICK / Быстрая RAM
 
-### 2. RAM TEST
+Короткий скрининг ~4 GiB простыми и адресозависимыми шаблонами. При первом подтверждённом `expected != actual` возвращает FAIL.  
+Fast ~4 GiB screening with simple and address-dependent patterns. A confirmed data mismatch returns FAIL.
 
-Максимальный userspace RAM torture test.
+### 3. RAM FULL HARDCORE / Полная RAM
 
-Проверяет большие объёмы памяти шаблонами:
+Тяжёлый userspace torture: большие аллокации до ~75% RAM, `00/FF`, `AA55/55AA`, walking 1/0, `ADDRA/ADDRB`, retention и повторные reread. При наличии `/Volumes/RESCUE` может выполнить 40 GiB RAM → disk → readback SHA-256 round-trip.  
+Heavy userspace torture with large allocations, stuck-bit/checkerboard/walking/address patterns, retention and repeated rereads; optionally a 40 GiB RAM→RESCUE→readback SHA-256 bridge.
 
-- `ONES` (`FF`);
-- `ZERO` (`00`);
-- `AA55` / `55AA`;
-- walking ones / walking zeros;
-- адресозависимые `ADDRA` / `ADDRB`;
-- повторные reread повреждённых страниц;
-- удержание данных в RAM;
-- большие аллокации вплоть до ~75% установленной RAM (с резервом для Recovery);
-- опциональный 40 GiB RAM -> внешний `RESCUE` -> readback SHA-256 round-trip.
-
-Критические признаки:
+Критические признаки / Critical markers:
 
 ```text
 RAM_CHUNK_MISMATCH
@@ -68,50 +49,23 @@ RAM_BAD_PAGE
 RAM_HARD_FAIL
 ```
 
-Повторяемый `expected != actual` после холодной загрузки значительно сильнее обычного зависания или reboot и указывает на неисправность memory subsystem. Причиной может быть DRAM, BGA, питание памяти, линии данных/адреса или IMC CPU.
+### 4. RAM MAP / Карта RAM
 
-### 3. RAM MAP
+Не останавливается на первой ошибке. Сохраняет pattern/cycle, chunk/page, offset, expected/actual, XOR mask, bit count и hot chunks.  
+Continues after mismatches and records pattern/cycle, chunk/page, offsets, expected/actual values, XOR masks, changed-bit counts and hot chunks.
 
-Картирующий тест RAM. В отличие от RAM TEST не прекращает работу после первой ошибки.
+`logical_test_page` — виртуальная/аллокаторная позиция теста, а не гарантированный физический адрес конкретного DRAM-чипа.  
+`logical_test_page` is an allocation-relative test position, not a guaranteed physical DRAM address.
 
-Собирает:
+### 5. CPU/CACHE
 
-- pattern/cycle;
-- chunk/page;
-- allocation-relative test page;
-- byte offset внутри страницы;
-- expected/actual byte;
-- XOR mask;
-- число изменённых битов;
-- hot chunks;
-- статистику по битам.
+Параллельные детерминированные вычисления и hash-stress. Ошибка означает сбой CPU/cache/RAM execution path, но сама по себе не локализует компонент.  
+Parallel deterministic compute/hash stress. Failure implicates the CPU/cache/RAM execution path but does not localize the component by itself.
 
-Важно: macOS не предоставляет этим userspace-скриптам физический адрес DRAM, поэтому `logical_test_page` нельзя напрямую считать номером конкретного чипа памяти.
+### 6. GPU/VRAM
 
-### 4. CPU/CACHE TEST
-
-Параллельный deterministic CPU/hash stress.
-
-Несколько workers одновременно вычисляют SHA-256 известного 256 MiB zero-stream с заранее известной контрольной суммой. Расхождение означает ошибку CPU/cache/RAM execution path, но само по себе не локализует компонент.
-
-### 5. GPU/VRAM TEST
-
-Два режима:
-
-- в Internet Recovery: инвентаризация GPU/framebuffer/display path;
-- в полной macOS при наличии `clang` / Command Line Tools: нативный Metal-тестер.
-
-Metal-тестер:
-
-- перечисляет все Metal GPU;
-- выделяет private Metal buffers;
-- GPU compute kernel записывает детерминированный pattern;
-- выполняется retention pause;
-- private VRAM копируется обратно в shared readback buffer;
-- CPU проверяет каждое 32-bit слово;
-- выполняется несколько проходов.
-
-Критические признаки:
+В Recovery выполняется GPU/framebuffer probe. В полноценной macOS при наличии compiler/Metal toolchain запускается Metal readback verifier: GPU записывает deterministic pattern в Metal buffers, выдерживает retention и копирует данные назад для CPU compare.  
+Recovery provides a GPU/framebuffer probe; full macOS can run a Metal data-integrity verifier with GPU-written patterns and CPU readback comparison.
 
 ```text
 GPU_VRAM_MISMATCH
@@ -119,75 +73,91 @@ GPU_COMMAND_ERROR
 GPU_READBACK_ERROR
 ```
 
-Для дискретной AMD private buffers преимущественно тестируют её VRAM. Для Intel iGPU память разделяется с системной RAM, поэтому mismatch может происходить из общей memory subsystem.
+Для Intel iGPU память общая с системной RAM; для дискретной AMD private Metal buffers преимущественно нагружают её VRAM.  
+Intel iGPU shares system RAM; discrete AMD private Metal buffers primarily exercise dedicated VRAM.
 
-### 6. NETWORK TEST
+### 7. VIDEO/DISPLAY / Видео и экран
 
-Тестирует сетевой путь без записи на внутренний SSD:
+Проверяет доступный display/framebuffer path и объясняет диагностическое разделение: если артефакт присутствует и на screenshot — подозрение на GPU/framebuffer/VRAM; если глазами виден, а screenshot чистый — panel/eDP/TCON становится вероятнее.  
+Checks the available display/framebuffer path and documents the key split: artifact also present in screenshots points toward GPU/framebuffer/VRAM; visually present but absent from screenshots points toward panel/eDP/TCON.
 
-- repeated HTTPS/TLS probes к Apple `swcdn.apple.com`;
-- TCP/connect/start-transfer timing;
-- несколько полных GitHub streams с опубликованным SHA-256;
-- проверку целостности полученных байтов.
+### 8. NETWORK / Сеть
 
-Используется для разделения проблем Internet Recovery/CDN/Wi-Fi и повреждения данных в локальной памяти.
+Отдельный тест connectivity: интерфейсы, маршрут, ICMP (если разрешён), DNS/TCP/TLS/HTTP и repeated probes к GitHub и Apple CDN. Большие файлы здесь не скачиваются.  
+Connectivity-only test: interfaces, route, optional ICMP, DNS/TCP/TLS/HTTP and repeated GitHub/Apple CDN probes. No large transfer matrix here.
 
-### 7. POWER/THERMAL
+### 9. DOWNLOAD / Скачивание и целостность
 
-Собирает доступные сведения:
+Потоки идут напрямую в SHA-256 без записи на внутренний SSD. Основной режим использует собственный GitHub Release `diagnostic-fixtures-v1` с файлами:
 
-- battery/AC state;
-- `pmset`;
-- `AppleSmartBattery`;
-- `SPPowerDataType`;
-- `powermetrics`, если доступен.
+| File | Size | SHA-256 |
+|---|---:|---|
+| `nettest-001MiB.bin` | 1 MiB | `85c3ea1f26f1a18ba9c7b1adb12ca91a157ad1330c5d1fe3d542cfee13b4e7a8` |
+| `nettest-008MiB.bin` | 8 MiB | `9bedc7cb90624f439e2baffd0ce25d69682da41aa2b521e26c879059cfc85949` |
+| `nettest-032MiB.bin` | 32 MiB | `5aa0f6b39ed47a7a648b17d92daa61bc7ec25a1c46ecabd2f2c757f820cd7a38` |
+| `nettest-128MiB.bin` | 128 MiB | `a18494ea78d4e7a610cc165ff66b4d7caf8db32aebb6b7b289e89d9207409e7c` |
+| `nettest-512MiB.bin` | 512 MiB | `924d46bc2b284f264d08ac11ed2385723c1b094df2ea8652583b807711083110` |
 
-Это observation test, а не абсолютный PASS/FAIL аппаратуры питания.
+Файлы детерминированно генерируются `tools/generate_network_fixtures.py`; эталоны лежат в `network-fixtures.sha256` и `network-fixtures.tsv`. Workflow `.github/workflows/network-fixtures.yml` публикует их в Release. Если собственный Release недоступен, тест автоматически использует публичные GitHub release assets PowerShell/LLVM с опубликованными SHA-256.  
+Fixtures are generated deterministically, versioned by manifest, and published as release assets. If the dedicated release is unavailable, the test falls back to public PowerShell/LLVM release assets with published SHA-256.
 
-### 8. HARDWARE SNAPSHOT
+### 10. POWER/THERMAL / Питание и температуры
 
-Сохраняет инвентаризацию CPU/RAM/T2/GPU/storage/power и основные `ioreg` сведения. При наличии `/Volumes/RESCUE` лог копируется на внешний диск.
+Собирает battery/AC state, `pmset`, `AppleSmartBattery`, `SPPowerDataType`, `powermetrics` (если доступен). Это observation test: сам по себе отсутствие ошибки не гарантирует исправность VRM.  
+Collects battery/AC, pmset, SmartBattery and available thermal/power metrics. This is observational rather than an absolute VRM pass/fail.
 
-### 9. SAFE FULL SUITE
+### 11. HARDWARE SNAPSHOT / Снимок железа
 
-Последовательно запускает:
+Инвентаризация CPU/RAM/T2/GPU/storage/power и доступных `ioreg` данных. Полезно сохранять до ремонта и после ремонта.  
+Inventory snapshot of CPU/RAM/T2/GPU/storage/power and available ioreg data; useful before and after board repair.
 
-- Hardware Snapshot;
-- CPU/Cache;
-- Network;
-- GPU/VRAM;
-- Power/Thermal.
+### 12. SAFE FULL SUITE / Безопасный комплекс
 
-Не включает разрушительную RAW-запись SSD. Тяжёлый RAM TEST запускается отдельно, чтобы его ошибки или OOM не мешали сбору остальных данных.
+Последовательно запускает Hardware Snapshot, RAM Quick, CPU/Cache, GPU/VRAM, Video/Display, Network, Download и Power/Thermal. Не запускает разрушительную full-LBA запись SSD.  
+Runs the non-destructive suite and excludes destructive full-LBA storage writes.
 
-## Результаты
+### 13. FULL COMPLEX / Полный комплекс
 
-Скрипты используют три класса результата:
+Сначала выполняет безопасные тесты, RAM Quick/Full/Map, CPU/GPU/video/network/download/power. Разрушительный SSD/HDD тест запускается последним **только если RAM gate прошёл**. При RAM FAIL/INCONCLUSIVE destructive storage stage блокируется, потому что нестабильная память делает storage-hash результаты недостоверными.  
+Runs the complete suite and gates destructive storage testing behind stable RAM results.
 
-- `PASS` — проверенные условия выполнены без обнаруженной ошибки;
-- `FAIL` — обнаружено фактическое расхождение данных / I/O error / вычислительная ошибка;
-- `INCONCLUSIVE` — среда не позволяет выполнить тест полностью (например, Metal test в Internet Recovery без compiler toolchain).
+## Результаты / Result states
 
-`PASS` не является математической гарантией отсутствия скрытого аппаратного дефекта. Особенно для SSD за T2/FTL недоступны напрямую spare NAND cells, а userspace RAM test не может закрепить каждую виртуальную страницу за конкретной физической DRAM-ячейкой.
+### PASS
+
+**RU:** В проверенной области фактическая ошибка не обнаружена. PASS не является математической гарантией абсолютной исправности.  
+**EN:** No actual failure was detected within the tested scope. PASS is not an absolute mathematical guarantee.
+
+### FAIL
+
+**RU:** Обнаружено фактическое расхождение данных, вычисления или I/O. Сохраняйте лог и сначала устраняйте этот домен.  
+**EN:** An actual data/computation/I/O mismatch was detected. Preserve logs and isolate/repair the failing domain first.
+
+### INCONCLUSIVE
+
+**RU:** Текущая среда не позволяет получить достоверный PASS/FAIL: отсутствует toolchain, произошёл OOM/kill, stage требует reboot и т.п. Это не аппаратный FAIL само по себе.  
+**EN:** The environment could not produce a reliable PASS/FAIL (missing toolchain, OOM/kill, reboot-required stage, etc.). This is not automatically a hardware failure.
+
+### STATE_REBOOT_REQUIRED
+
+**RU:** Этап успешно завершён и специально требует настоящую перезагрузку для cold/persistence verification.  
+**EN:** A stage completed successfully and requires a real reboot for cold/persistence verification.
+
+## Правила интерпретации / Interpretation rules
+
+- `expected != actual` в RAM после холодной загрузки значительно сильнее обычного hang/reboot. / A reproducible RAM data mismatch after cold boot is much stronger evidence than a hang/reboot alone.
+- OOM/kill при экстремальной аллокации RAM = `INCONCLUSIVE`, если не было data mismatch. / OOM/kill during extreme allocation is inconclusive without a data mismatch.
+- Один slow SSD block без hash mismatch не равен bad NAND. / A single slow storage block without hash mismatch is not proof of bad NAND.
+- SSD за T2/FTL скрывает spare NAND, поэтому тест охватывает логические LBA, а не каждую физическую NAND-cell. / T2/FTL hides spare NAND; testing covers exposed logical LBA space, not every physical cell.
+- Для VRAM настоящий data-integrity тест предпочтительно выполнять из полной macOS с Metal. / True VRAM data-integrity testing is best performed from full macOS with Metal.
+- Hash mismatch в DOWNLOAD при уже неисправной RAM нельзя автоматически считать сетевой ошибкой. / A download hash mismatch while RAM is known-bad cannot automatically be blamed on the network.
 
 ## Internet Recovery
 
-Recovery сильно урезана. В конкретных версиях могут отсутствовать:
+Recovery урезана и может не иметь `openssl`, `cmp`, `Digest::SHA`, `Time::HiRes`, compiler/Metal toolchain. Скрипты стараются использовать минимальный встроенный набор и возвращать `INCONCLUSIVE`, когда проверка технически невозможна.  
+Recovery is restricted; scripts avoid optional dependencies and report INCONCLUSIVE when a stage cannot be performed reliably.
 
-- `openssl`;
-- `cmp`;
-- Perl modules вроде `Digest::SHA` / `Time::HiRes`;
-- compiler/Metal toolchain.
+## Логи / Logs
 
-Скрипты специально используют минимальный набор встроенных утилит и явно отмечают недоступные стадии как `INCONCLUSIVE`, а не как аппаратный `FAIL`.
-
-## Логи
-
-Если подключён writable том `/Volumes/RESCUE`, ряд тестов автоматически сохраняет туда логи. Для ремонта платы полезно хранить логи нескольких **холодных загрузок**, особенно RAM MAP: повторяемость XOR/bit pattern даёт больше информации, чем одиночный crash.
-
-## Безопасность
-
-- Не запускать SSD/HDD TEST на машине с несохранёнными данными.
-- Не трактовать OOM/kill при экстремальной аллокации RAM как доказательство дефекта DRAM без `expected != actual`.
-- Не трактовать единичный slow I/O block как bad NAND без повторной проверки и hash mismatch.
-- Для GPU/VRAM настоящий data-integrity тест выполнять из полноценной macOS; Recovery-проверка GPU является только probe.
+Если подключён writable `/Volumes/RESCUE`, тесты по возможности сохраняют логи туда. Для ремонта платы особенно полезны несколько логов **разных холодных загрузок** — сравнивайте повторяемость RAM XOR/bit patterns, GPU errors и временную корреляцию с power/thermal events.  
+When writable `/Volumes/RESCUE` is present, diagnostics preserve logs there when possible. Multiple cold-boot logs are especially useful for board-level repair.
