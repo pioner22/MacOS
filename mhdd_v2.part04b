@@ -1,0 +1,125 @@
+
+# Recovery-safe userspace RAM stress/verification.
+# Uses only core Perl + sysctl. It cannot address firmware-reserved/T2 memory or
+# guarantee every physical DRAM cell is allocated, but it deliberately occupies
+# a large fraction of RAM and performs multiple moving-pattern verification passes.
+ram_diagnostic(){
+  LABEL=$1
+  TOTAL_RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null)
+  case "$TOTAL_RAM_BYTES" in ''|*[!0-9]*) say "$LABEL RAM_TEST=SKIPPED hw.memsize unavailable"; return 0;; esac
+  TOTAL_RAM_MIB=$((TOTAL_RAM_BYTES/1048576))
+  TARGET_RAM_MIB=$((TOTAL_RAM_MIB*30/100))
+  [ "$TARGET_RAM_MIB" -gt 6144 ] && TARGET_RAM_MIB=6144
+  [ "$TARGET_RAM_MIB" -lt 1024 ] && TARGET_RAM_MIB=1024
+  CHUNK_RAM_MIB=32
+  TARGET_RAM_MIB=$((TARGET_RAM_MIB/CHUNK_RAM_MIB*CHUNK_RAM_MIB))
+
+  say '============================================================'
+  say "$LABEL RAM_DIAGNOSTIC=START total_mib=$TOTAL_RAM_MIB target_mib=$TARGET_RAM_MIB chunk_mib=$CHUNK_RAM_MIB"
+  say "$LABEL RAM_TEST_SCOPE=userspace_allocatable_memory; reserved/firmware memory is not directly testable"
+
+  perl - "$LABEL" "$TARGET_RAM_MIB" "$CHUNK_RAM_MIB" <<'PERL' | tee -a "$LOG" "$ERRLOG"
+use strict;
+use warnings;
+$|=1;
+my ($label,$target_mib,$chunk_mib)=@ARGV;
+my $chunk_bytes=$chunk_mib*1024*1024;
+my $pages_per_chunk=int($chunk_bytes/4096);
+my $chunks=int($target_mib/$chunk_mib);
+my @mem;
+my $errors=0;
+my $printed=0;
+
+sub page_token {
+    my ($mode,$pageid)=@_;
+    my $lo=$pageid & 0xffffffff;
+    my $inv=4294967295-$lo;
+    return $mode eq 'ADDRA'
+      ? pack('V4',$lo,$inv,0xA5A5A5A5,0x5A5A5A5A)
+      : pack('V4',$inv,$lo,0x3C3C3C3C,0xC3C3C3C3);
+}
+sub make_chunk {
+    my ($mode,$ci)=@_;
+    return "\x00" x $chunk_bytes if $mode eq 'ZERO';
+    return "\xff" x $chunk_bytes if $mode eq 'ONES';
+    return ("\xaa\x55" x int($chunk_bytes/2)) if $mode eq 'AA55';
+    return ("\x55\xaa" x int($chunk_bytes/2)) if $mode eq '55AA';
+    my $b='';
+    for (my $p=0;$p<$pages_per_chunk;$p++) {
+        my $pageid=$ci*$pages_per_chunk+$p;
+        my $t=page_token($mode,$pageid);
+        $b .= $t x 256;
+    }
+    return $b;
+}
+sub localize {
+    my ($mode,$ci,$actual)=@_;
+    for (my $p=0;$p<$pages_per_chunk;$p++) {
+        my $off=$p*4096;
+        my $exp;
+        if ($mode eq 'ZERO') {$exp="\x00" x 4096}
+        elsif ($mode eq 'ONES') {$exp="\xff" x 4096}
+        elsif ($mode eq 'AA55') {$exp="\xaa\x55" x 2048}
+        elsif ($mode eq '55AA') {$exp="\x55\xaa" x 2048}
+        else { my $t=page_token($mode,$ci*$pages_per_chunk+$p); $exp=$t x 256; }
+        my $got=substr($actual,$off,4096);
+        next if $got eq $exp;
+        my $xor=$got ^ $exp;
+        my $diff=($xor =~ tr/\0//c);
+        print "$label RAM_BAD_PAGE pattern=$mode chunk=$ci page=$p logical_test_page=".($ci*$pages_per_chunk+$p)." differing_bytes=$diff\n" if $printed++ < 64;
+        $errors++;
+    }
+}
+sub fill_verify {
+    my ($mode,$hold)=@_;
+    print "$label RAM_PASS_FILL pattern=$mode chunks=$chunks mib=$target_mib\n";
+    for (my $i=0;$i<$chunks;$i++) {
+        $mem[$i]=make_chunk($mode,$i);
+        print "$label RAM_FILL_PROGRESS pattern=$mode chunk=$i/$chunks\n" if (($i % 16)==0);
+    }
+    sleep($hold) if $hold;
+    print "$label RAM_PASS_VERIFY pattern=$mode hold_seconds=$hold\n";
+    for (my $i=0;$i<$chunks;$i++) {
+        my $exp=make_chunk($mode,$i);
+        if ($mem[$i] ne $exp) {
+            print "$label RAM_CHUNK_MISMATCH pattern=$mode chunk=$i\n";
+            localize($mode,$i,$mem[$i]);
+        }
+        print "$label RAM_VERIFY_PROGRESS pattern=$mode chunk=$i/$chunks errors=$errors\n" if (($i % 16)==0);
+    }
+    print "$label RAM_PASS_RESULT pattern=$mode errors=$errors\n";
+    exit 2 if $errors;
+}
+
+print "$label RAM_ENGINE=PERL_CORE chunks=$chunks chunk_bytes=$chunk_bytes target_mib=$target_mib\n";
+# Round 1: stuck-bit / coupling / checkerboard / address-dependent coverage.
+fill_verify('ZERO',1);
+fill_verify('ONES',1);
+fill_verify('AA55',1);
+fill_verify('55AA',1);
+fill_verify('ADDRA',5);
+fill_verify('ADDRB',1);
+
+# Release and reallocate to encourage a different userspace page set, then repeat
+# the patterns most useful for address aliasing/coupling faults.
+@mem=();
+print "$label RAM_REALLOCATE_ROUND=2\n";
+sleep 2;
+fill_verify('ADDRB',2);
+fill_verify('ADDRA',5);
+fill_verify('AA55',1);
+fill_verify('55AA',1);
+
+print "$label RAM_FINAL=PASS tested_mib=$target_mib patterns=10 errors=0\n";
+exit 0;
+PERL
+  RRC=${PIPESTATUS[0]:-99}
+  if [ "$RRC" -eq 0 ]; then
+    say "$LABEL RAM_DIAGNOSTIC=PASS"
+    return 0
+  elif [ "$RRC" -eq 2 ]; then
+    fail "$LABEL RAM_DIAGNOSTIC=FAIL data mismatch detected"
+  else
+    fail "$LABEL RAM_DIAGNOSTIC=INCONCLUSIVE engine_exit=$RRC (possible memory pressure or Recovery limitation)"
+  fi
+}
