@@ -16,7 +16,7 @@ if command -v sw_vers >/dev/null 2>&1; then
   VER=$(sw_vers -productVersion 2>/dev/null || printf 'unknown')
 fi
 say "RECOVERY_VERSION=$VER"
-say 'MODE=CATALINA_INSTALL_ESD_RESCUE'
+say 'MODE=CATALINA_INSTALL_ESD_RESCUE_V2'
 
 if command -v caffeinate >/dev/null 2>&1; then
   caffeinate -di -w $$ >/tmp/catalina-rescue-caffeinate.log 2>&1 &
@@ -60,6 +60,7 @@ verify_pkg() {
     return 0
   fi
   say 'XAR_VERIFY_FAILED'
+  tail -n 6 /tmp/catalina-xar.log 2>/dev/null || true
   return 1
 }
 
@@ -69,31 +70,47 @@ if [ -f "$FINAL" ]; then
     say "CATALINA_PACKAGE_READY=$FINAL"
     exit 0
   fi
-  say 'Existing final package is incomplete or corrupt; leaving it untouched.'
+  say 'Existing final package is incomplete/corrupt; it will not be overwritten until a replacement verifies.'
 fi
 
 URL=''
-for L in /var/log/install.log /private/var/log/install.log /tmp/install.log; do
-  if [ -f "$L" ]; then
-    U=$(grep -aoE 'https?://[^[:space:]"<>]*InstallESDDmg\.pkg' "$L" 2>/dev/null | awk 'END { print }')
-    if [ -n "$U" ]; then
-      URL=$U
-    fi
-  fi
-done
+find_url_in_file() {
+  F=$1
+  [ -f "$F" ] || return 0
+  FS=$(size "$F")
+  # Never grep multi-GB installer payloads. Metadata/log files only.
+  [ "$FS" -gt 0 ] 2>/dev/null || return 0
+  [ "$FS" -le 16777216 ] 2>/dev/null || return 0
+  U=$(grep -aoE 'https?://[^[:space:]"<>]*InstallESDDmg\.pkg' "$F" 2>/dev/null | awk 'END { print }')
+  [ -n "$U" ] && URL=$U
+}
 
-for F in "$CAT_DIR"/*; do
-  if [ -f "$F" ]; then
-    U=$(grep -aoE 'https?://[^[:space:]"<>]*InstallESDDmg\.pkg' "$F" 2>/dev/null | awk 'END { print }')
-    if [ -n "$U" ]; then
-      URL=$U
-    fi
-  fi
+say 'SEARCH_URL_IN_RECOVERY_LOGS'
+for L in /var/log/install.log /private/var/log/install.log /tmp/install.log /var/log/system.log /private/var/log/system.log; do
+  find_url_in_file "$L"
 done
 
 if [ -z "$URL" ]; then
+  say 'SEARCH_URL_IN_INSTALL_DATA_METADATA'
+  for F in "$CAT_DIR"/*.log "$CAT_DIR"/*.txt "$CAT_DIR"/*.plist "$CAT_DIR"/*.xml "$CAT_DIR"/*.json; do
+    find_url_in_file "$F"
+  done
+  for SD in "$CAT_DIR"/*; do
+    [ -d "$SD" ] || continue
+    for F in "$SD"/*.log "$SD"/*.txt "$SD"/*.plist "$SD"/*.xml "$SD"/*.json; do
+      find_url_in_file "$F"
+    done
+  done
+fi
+
+if [ -z "$URL" ]; then
   say 'INSTALL_ESD_URL_NOT_FOUND'
-  say 'Run the Catalina installer until the download starts or fails, then run this command again.'
+  say 'CACHE_CONTENTS:'
+  for F in "$CAT_DIR"/*; do
+    [ -e "$F" ] || continue
+    say "$(size "$F") $F"
+  done
+  say 'The large cache files were deliberately NOT scanned. Start/retry Catalina once so the URL is logged, then rerun this same command.'
   exit 0
 fi
 
@@ -101,15 +118,16 @@ say "INSTALL_ESD_URL=$URL"
 
 if [ -f "$PART" ]; then
   S1=$(size "$PART")
+  say "PARTIAL_FOUND bytes=$S1"
   sleep 8
   S2=$(size "$PART")
-  say "PARTIAL_BYTES=$S2"
+  say "PARTIAL_BYTES_AFTER_8S=$S2"
   if [ "$S1" != "$S2" ]; then
     say 'APPLE_DOWNLOADER_IS_ACTIVE; not touching the partial file.'
     exit 0
   fi
 else
-  say "PARTIAL_NOT_FOUND; creating $PART"
+  say "PARTIAL_NOT_FOUND; will create $PART"
 fi
 
 ATT=1
