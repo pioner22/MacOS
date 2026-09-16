@@ -141,3 +141,45 @@ raw_sequential_scan(){
   say "$LABEL TIMING_PARSE_ERRORS=$TIMING_PARSE_ERRORS"
   say "$LABEL IO_ERRORS=$SCAN_IOERR"
 }
+
+# Repeated probe for the one severe prewrite anomaly observed at chunk 8233
+# (offset 552507277312, LBA4K 134889472). Reads neighbors too, verifies SHA-256
+# against the deterministic pattern, and records repeat latency. This runs only
+# after a complete known pattern exists on disk.
+targeted_anomaly_probe(){
+  PAT=$1
+  LABEL=$2
+  say "--- $LABEL: TARGETED ANOMALY PROBE around chunk 8233 / LBA4K 134889472 ---"
+  PROBE_HASHERR=0; PROBE_IOERR=0; PROBE_SLOW=0; PROBE_READS=0
+  DDSTAT="/tmp/ssd-mhdd-probe-dd-$$"
+  for C in 8232 8233 8234; do
+    hash_expected_stream "$PAT" "$C" "$CHUNK_SECTORS"
+    EXP="$EXPECT_HASH"
+    R=1
+    while [ "$R" -le 12 ]; do
+      : > "$DDSTAT"; : > "$HASHOUT"
+      case "$SHA_TOOL" in
+        sha256sum) dd if="$RAW" bs=1048576 skip=$((C*CHUNK_MIB)) count="$CHUNK_MIB" 2>"$DDSTAT" | sha256sum > "$HASHOUT";;
+        shasum) dd if="$RAW" bs=1048576 skip=$((C*CHUNK_MIB)) count="$CHUNK_MIB" 2>"$DDSTAT" | shasum -a 256 > "$HASHOUT";;
+      esac
+      P=("${PIPESTATUS[@]}"); DRC=${P[0]:-99}; HRC=${P[1]:-99}; GOT=$(hashout_value)
+      RATE=$(dd_rate_mibs "$DDSTAT"); ELAPSED=$(dd_elapsed_secs "$DDSTAT")
+      PROBE_READS=$((PROBE_READS+1))
+      [ "$DRC" -eq 0 ] && [ "$HRC" -eq 0 ] || { PROBE_IOERR=$((PROBE_IOERR+1)); err "$LABEL PROBE_IO_ERROR chunk=$C repeat=$R rc=$DRC/$HRC"; }
+      [ "$GOT" = "$EXP" ] || { PROBE_HASHERR=$((PROBE_HASHERR+1)); err "$LABEL PROBE_HASH_MISMATCH chunk=$C repeat=$R got=$GOT expected=$EXP"; }
+      if [ "$RATE" -gt 0 ] && [ "$RATE" -lt 100 ]; then PROBE_SLOW=$((PROBE_SLOW+1)); fi
+      say "$LABEL PROBE chunk=$C repeat=$R rate=${RATE}MiB/s elapsed=${ELAPSED}s hash=$([ "$GOT" = "$EXP" ] && echo PASS || echo FAIL)"
+      R=$((R+1))
+    done
+  done
+  rm -f "$DDSTAT"
+  say "$LABEL PROBE_SUMMARY reads=$PROBE_READS io_errors=$PROBE_IOERR hash_errors=$PROBE_HASHERR slow_under_100MiBps=$PROBE_SLOW"
+  if [ "$PROBE_HASHERR" -gt 0 ] || [ "$PROBE_IOERR" -gt 0 ]; then
+    fail "$LABEL targeted anomaly probe found data/I-O errors"
+  fi
+  if [ "$PROBE_SLOW" -ge 3 ]; then
+    err "$LABEL PERSISTENT_READ_LATENCY_ANOMALY slow_reads=$PROBE_SLOW/$PROBE_READS region_chunk=8233"
+  else
+    say "$LABEL TARGETED_ANOMALY_NOT_PERSISTENT slow_reads=$PROBE_SLOW/$PROBE_READS"
+  fi
+}
