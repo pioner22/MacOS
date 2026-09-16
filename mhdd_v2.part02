@@ -1,0 +1,110 @@
+lat4k_add(){
+  M=$1
+  if [ "$M" -lt 5 ]; then L4_LT5=$((L4_LT5+1))
+  elif [ "$M" -lt 20 ]; then L4_5_20=$((L4_5_20+1))
+  elif [ "$M" -lt 100 ]; then L4_20_100=$((L4_20_100+1))
+  elif [ "$M" -lt 500 ]; then L4_100_500=$((L4_100_500+1))
+  else L4_GE500=$((L4_GE500+1)); fi
+}
+lat4k_summary(){ say "LATENCY_4K_BINS_ms <5:$L4_LT5 5-19:$L4_5_20 20-99:$L4_20_100 100-499:$L4_100_500 >=500:$L4_GE500"; }
+
+validate_candidate(){
+  D=$1
+  I=$(diskutil info "$D" 2>/dev/null) || return 1
+  INTERNAL=$(printf '%s\n' "$I" | awk -F: '/Device Location/{gsub(/^[ \t]+/,"",$2);print $2;exit}')
+  VIRTUAL=$(printf '%s\n' "$I" | awk -F: '/Virtual/{gsub(/^[ \t]+/,"",$2);print $2;exit}')
+  SOLID=$(printf '%s\n' "$I" | awk -F: '/Solid State/{gsub(/^[ \t]+/,"",$2);print $2;exit}')
+  MODEL_C=$(printf '%s\n' "$I" | awk -F: '/Device \/ Media Name/{sub(/^[ \t]+/,"",$2);print $2;exit}')
+  B_C=$(printf '%s\n' "$I" | sed -n 's/.*Disk Size:.*(\([0-9][0-9]*\) Bytes).*/\1/p' | sed -n '1p')
+  [ "$INTERNAL" = Internal ] || return 1
+  [ "$VIRTUAL" = No ] || return 1
+  [ "$SOLID" = Yes ] || return 1
+  printf '%s' "$MODEL_C" | grep -qi 'APPLE SSD' || return 1
+  [ -n "$B_C" ] || return 1
+  [ "$B_C" -gt 800000000000 ] || return 1
+  [ "$B_C" -lt 1300000000000 ] || return 1
+  CAND_INFO=$I; CAND_MODEL=$MODEL_C; CAND_BYTES=$B_C
+  return 0
+}
+
+find_target(){
+  TARGET=''
+  # Prefer the physical store backing the known Apple APFS volume.
+  if [ -d /Volumes/Apple ]; then
+    VINFO=$(diskutil info /Volumes/Apple 2>/dev/null)
+    PS=$(printf '%s\n' "$VINFO" | awk -F: '/APFS Physical Store/{gsub(/^[ \t]+/,"",$2);print $2;exit}')
+    if [ -n "$PS" ]; then
+      BASE=$(printf '%s' "$PS" | sed 's/s[0-9][0-9]*$//')
+      if validate_candidate "/dev/$BASE"; then
+        TARGET="/dev/$BASE"; TARGET_INFO=$CAND_INFO; MODEL=$CAND_MODEL; BYTES=$CAND_BYTES
+        return 0
+      fi
+    fi
+  fi
+  COUNT=0
+  for N in 0 1 2 3 4 5 6 7 8 9; do
+    [ -e "/dev/disk$N" ] || continue
+    if validate_candidate "/dev/disk$N"; then
+      COUNT=$((COUNT+1)); TARGET="/dev/disk$N"; TARGET_INFO=$CAND_INFO; MODEL=$CAND_MODEL; BYTES=$CAND_BYTES
+    fi
+  done
+  [ "$COUNT" -eq 1 ] || fail "expected exactly one internal 0.8-1.3TB APPLE SSD, found $COUNT"
+}
+
+find_target
+DISK=$(basename "$TARGET")
+RAW="/dev/r$DISK"; [ -e "$RAW" ] || RAW="$TARGET"
+ROOTDEV=$(df / 2>/dev/null | awk 'NR==2{print $1}')
+case "$ROOTDEV" in *"$DISK"*) fail "refusing: Recovery root appears to be on target disk ($ROOTDEV)";; esac
+[ "$((BYTES % SECTOR_BYTES))" -eq 0 ] || fail "disk size $BYTES is not 4KiB aligned"
+TOTAL_SECTORS=$((BYTES/SECTOR_BYTES))
+TOTAL_CHUNKS=$(((BYTES+CHUNK_BYTES-1)/CHUNK_BYTES))
+BOOT_NOW=$(boot_epoch); [ -n "$BOOT_NOW" ] || BOOT_NOW=0
+
+say '============================================================'
+say 'MODE=MHDD_LIKE_DESTRUCTIVE_FULL_LBA_TEST'
+say "VERSION=$VERSION"
+say "TARGET=$TARGET RAW=$RAW MODEL=$MODEL"
+say "BYTES=$BYTES LOGICAL_4K_SECTORS=$TOTAL_SECTORS CHUNKS_64MiB=$TOTAL_CHUNKS"
+say "SHA256_TOOL=$SHA_TOOL TIMER_HIRES=$TIMER_HIRES BOOT=$BOOT_NOW"
+say 'Pattern data is deterministic AES-256-CTR; every 16-byte position differs by stream position/chunk IV.'
+say 'Any bit flip, stale read, misplaced write, or wrong logical address should change SHA-256.'
+say 'This validates the logical LBA/T2/FTL path. Hidden spare NAND cells are not directly addressable.'
+say '============================================================'
+
+pattern_params(){
+  PAT=$1; IDX=$2
+  if [ "$PAT" = A ]; then PKEY=$KEY_A; PREFIX=$IV_PREFIX_A
+  else PKEY=$KEY_B; PREFIX=$IV_PREFIX_B; fi
+  # 8-byte fixed prefix + 8-byte chunk index = 16-byte CTR IV.
+  PIV=$(printf '%s%016x' "$PREFIX" "$IDX")
+}
+
+gen_pattern(){
+  PAT=$1; IDX=$2; NSECS=$3
+  pattern_params "$PAT" "$IDX"
+  if [ "$NSECS" -eq "$CHUNK_SECTORS" ]; then
+    dd if=/dev/zero bs=1048576 count="$CHUNK_MIB" 2>/dev/null | openssl enc -aes-256-ctr -K "$PKEY" -iv "$PIV" -nosalt 2>/dev/null
+  else
+    dd if=/dev/zero bs=4096 count="$NSECS" 2>/dev/null | openssl enc -aes-256-ctr -K "$PKEY" -iv "$PIV" -nosalt 2>/dev/null
+  fi
+}
+
+make_marker(){
+  STATE=$1; PAT=$2; BOOTVAL=$3
+  PAYLOAD="$VERSION|STATE=$STATE|PATTERN=$PAT|TOTAL=$BYTES|BOOT=$BOOTVAL"
+  CHK=$(sha_text "$PAYLOAD")
+  printf '%s|CHK=%s\n' "$PAYLOAD" "$CHK" > "$TEXTTMP"
+  dd if="$TEXTTMP" of="$MARKER" bs=4096 count=1 conv=sync 2>/dev/null || return 1
+  [ "$(stat -f '%z' "$MARKER" 2>/dev/null)" = 4096 ]
+}
+
+read_marker0(){ dd if="$RAW" bs=4096 count=1 2>/dev/null | tr '\000' '\n' | sed -n '1p'; }
+marker_valid(){
+  LINE=$1
+  case "$LINE" in "$VERSION"'|'*) ;; *) return 1;; esac
+  PAY=${LINE%|CHK=*}; GOT=${LINE##*|CHK=}
+  [ "$PAY" != "$LINE" ] || return 1
+  [ "$(sha_text "$PAY")" = "$GOT" ]
+}
+marker_field(){ LINE=$1; KEY=$2; printf '%s\n' "$LINE" | tr '|' '\n' | awk -F= -v k="$KEY" '$1==k{print $2;exit}'; }
