@@ -20,7 +20,13 @@ if [ "$RC" -ne 0 ] || [ ! -s "$TMP" ]; then
   exit 1
 fi
 
-/bin/bash "$TMP"
+# st.sh itself may arrive via `curl ... | bash`, so inherited stdin is the exhausted pipe.
+# Reconnect the diagnostic's stdin to the terminal when a TTY exists, so confirmations work.
+if [ -r /dev/tty ]; then
+  /bin/bash "$TMP" </dev/tty
+else
+  /bin/bash "$TMP"
+fi
 BRC=$?
 rm -f "$TMP"
 
