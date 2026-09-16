@@ -41,7 +41,7 @@ done
 
 # Assemble the exact pure-storage engine but never execute it.
 SSD="$TMPDIR_SELF/ssd-assembled.sh"; : > "$SSD"; SSD_FETCH_BAD=0
-for F in mhdd_v2.part01 mhdd_v2.part02 mhdd_v2.part03 mhdd_v2.part04 mhdd_v2.part05_storage mhdd_v2.part06; do
+for F in mhdd_v2.part01 mhdd_v2.part02 mhdd_v2.part03 mhdd_v2.part04 mhdd_v2.part05_storage mhdd_v2.part06_storage; do
   O="$TMPDIR_SELF/$F"; CHECKS=$((CHECKS+1))
   if curl -fsSL --connect-timeout 20 -H 'Cache-Control: no-cache' "$BASE/$F?t=$(date +%s 2>/dev/null || echo 0)" -o "$O"; then
     cat "$O" >> "$SSD"
@@ -76,7 +76,6 @@ fi
 TSV="$TMPDIR_SELF/network-fixtures.tsv"
 CHECKS=$((CHECKS+1))
 if curl -fsSL --connect-timeout 20 "$BASE/network-fixtures.tsv" -o "$TSV"; then
-  RANGE_ROW='range512_offset256_len16	16777216	6b2bd172178b6e8a4d992581273e7962efe0ec8066e6204537fe27a34b7d940c	nettest-512MiB.bin bytes 268435456-285212671'
   if awk -F '\t' '$1=="range512_offset256_len16" && $2=="16777216" && $3=="6b2bd172178b6e8a4d992581273e7962efe0ec8066e6204537fe27a34b7d940c" {ok=1} END{exit ok?0:1}' "$TSV"; then
     say 'SELFTEST_RANGE_MANIFEST=PASS'
   else
