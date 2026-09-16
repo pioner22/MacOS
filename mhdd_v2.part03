@@ -5,7 +5,6 @@ hash_expected_stream(){
   case "$SHA_TOOL" in
     sha256sum) gen_pattern "$PAT" "$IDX" "$NSECS" | sha256sum > "$HASHOUT";;
     shasum) gen_pattern "$PAT" "$IDX" "$NSECS" | shasum -a 256 > "$HASHOUT";;
-    openssl) gen_pattern "$PAT" "$IDX" "$NSECS" | openssl dgst -sha256 > "$HASHOUT";;
   esac
   P=("${PIPESTATUS[@]}")
   EXP_GEN_RC=${P[0]:-99}; EXP_HASH_RC=${P[1]:-99}
@@ -31,14 +30,12 @@ hash_actual_chunk(){
     case "$SHA_TOOL" in
       sha256sum) dd if="$RAW" bs=1048576 skip="$SKIPM" count="$CHUNK_MIB" 2>>"$LOG" | sha256sum > "$HASHOUT";;
       shasum) dd if="$RAW" bs=1048576 skip="$SKIPM" count="$CHUNK_MIB" 2>>"$LOG" | shasum -a 256 > "$HASHOUT";;
-      openssl) dd if="$RAW" bs=1048576 skip="$SKIPM" count="$CHUNK_MIB" 2>>"$LOG" | openssl dgst -sha256 > "$HASHOUT";;
     esac
   else
     STARTSEC=$((IDX*CHUNK_SECTORS))
     case "$SHA_TOOL" in
       sha256sum) dd if="$RAW" bs=4096 skip="$STARTSEC" count="$NSECS" 2>>"$LOG" | sha256sum > "$HASHOUT";;
       shasum) dd if="$RAW" bs=4096 skip="$STARTSEC" count="$NSECS" 2>>"$LOG" | shasum -a 256 > "$HASHOUT";;
-      openssl) dd if="$RAW" bs=4096 skip="$STARTSEC" count="$NSECS" 2>>"$LOG" | openssl dgst -sha256 > "$HASHOUT";;
     esac
   fi
   P=("${PIPESTATUS[@]}")
@@ -96,15 +93,51 @@ PERL
   rm -f "$EXPECT" "$ACTUAL"
 }
 
+# BSD/macOS dd itself reports sub-second elapsed time and bytes/sec even when
+# Perl Time::HiRes is absent. Parse that output instead of the 1-second shell clock.
+dd_rate_mibs(){
+  F=$1
+  BPS=$(sed -n 's/.*(\([0-9][0-9]*\) bytes\/sec).*/\1/p' "$F" | sed -n '1p')
+  if [ -n "$BPS" ]; then awk -v b="$BPS" 'BEGIN{printf "%.0f",b/1048576.0}'; else printf '0'; fi
+}
+dd_elapsed_secs(){
+  F=$1
+  V=$(sed -n 's/.* transferred in \([0-9][0-9.]*\) secs.*/\1/p' "$F" | sed -n '1p')
+  [ -n "$V" ] && printf '%s' "$V" || printf 'NA'
+}
+
 raw_sequential_scan(){
   LABEL=$1
-  say "--- $LABEL: 64MiB RAW READ THROUGHPUT SCAN ---"
-  throughput_reset; SCAN_IOERR=0
+  say "--- $LABEL: 64MiB RAW READ THROUGHPUT SCAN (native dd timing) ---"
+  throughput_reset; SCAN_IOERR=0; TIMING_PARSE_ERRORS=0
+  DDSTAT="/tmp/ssd-mhdd-ddstat-$$"
   I=0
   while [ "$I" -lt "$TOTAL_CHUNKS" ]; do
     OFFSET=$((I*CHUNK_BYTES)); REM=$((BYTES-OFFSET)); THIS=$CHUNK_BYTES; [ "$REM" -lt "$THIS" ] && THIS=$REM
-    T0=$(now_ms)
+    : > "$DDSTAT"
     if [ "$THIS" -eq "$CHUNK_BYTES" ]; then
-      dd if="$RAW" of=/dev/null bs=1048576 skip=$((I*CHUNK_MIB)) count="$CHUNK_MIB" 2>>"$LOG"
+      dd if="$RAW" of=/dev/null bs=1048576 skip=$((I*CHUNK_MIB)) count="$CHUNK_MIB" 2>"$DDSTAT"
     else
-      NSECS=$((THIS/SECTOR_BYTES)); dd if="$RAW" of=/dev/null bs=4096 skip=$((I*CHUNK_SECTORS)) count="$NSECS" 2>>"$LOG"
+      NSECS=$((THIS/SECTOR_BYTES)); dd if="$RAW" of=/dev/null bs=4096 skip=$((I*CHUNK_SECTORS)) count="$NSECS" 2>"$DDSTAT"
+    fi
+    RC=$?
+    cat "$DDSTAT" >> "$LOG"
+    RATE=$(dd_rate_mibs "$DDSTAT")
+    ELAPSED=$(dd_elapsed_secs "$DDSTAT")
+    if [ "$RATE" -gt 0 ]; then
+      CLASS=$(throughput_class "$RATE"); throughput_add "$RATE"
+    else
+      CLASS=UNMEASURED; TIMING_PARSE_ERRORS=$((TIMING_PARSE_ERRORS+1))
+    fi
+    [ "$RC" -eq 0 ] || { SCAN_IOERR=$((SCAN_IOERR+1)); err "$LABEL READ_IO_ERROR chunk=$I offset=$OFFSET rc=$RC rate=${RATE}MiB/s"; }
+    if [ "$RATE" -gt 0 ] && [ "$RATE" -lt 100 ]; then
+      say "$LABEL READ_DEVIATION chunk=$I offset=$OFFSET class=$CLASS rate=${RATE}MiB/s elapsed=${ELAPSED}s"
+    fi
+    [ $((I%128)) -ne 0 ] || say "$LABEL PROGRESS chunk=$I/$TOTAL_CHUNKS rate=${RATE}MiB/s class=$CLASS elapsed=${ELAPSED}s"
+    I=$((I+1))
+  done
+  rm -f "$DDSTAT"
+  throughput_summary
+  say "$LABEL TIMING_PARSE_ERRORS=$TIMING_PARSE_ERRORS"
+  say "$LABEL IO_ERRORS=$SCAN_IOERR"
+}
