@@ -33,35 +33,37 @@ echo 'ASSEMBLY=PASS'
 /bin/bash "$TMP" 2>&1 | tee "$OUT"
 RC=${PIPESTATUS[0]:-99}
 
-if grep -Eq 'VERIFY_HASH_MISMATCH|VERIFY_READ_ERROR|READ_IO_ERROR|WRITE_ERROR|BAD_LBA4K|PATTERN_[AB]_.*FAILED|STORAGE_PATH_SUSPECT' "$OUT"; then
+# A normal multi-boot checkpoint is not a full PASS.
+if grep -Eq 'REBOOT_REQUIRED|STAGE=COMPLETE_A|STAGE=COMPLETE_B' "$OUT"; then
+  echo 'RESULT=REBOOT_REQUIRED'
+  echo 'RU: Этап завершён штатно; полный SSD-тест ЕЩЁ НЕ ЗАКОНЧЕН. Нужна реальная перезагрузка для cold persistence verify.'
+  echo 'EN: Stage completed normally; the full SSD test is NOT FINISHED yet. A real reboot is required for cold persistence verification.'
+  echo 'NEXT_RU: Перезагрузитесь в Internet Recovery и снова выберите SSD/HDD TEST.'
+  echo 'NEXT_EN: Reboot into Internet Recovery and select SSD/HDD TEST again.'
+  rm -f "$TMP" "$OUT"; exit 4
+fi
+
+if grep -Eq 'VERIFY_HASH_MISMATCH|VERIFY_READ_ERROR|READ_IO_ERROR|WRITE_ERROR|BAD_LBA4K|PATTERN_[AB]_.*FAILED|PROBE_HASH_MISMATCH|PROBE_IO_ERROR|targeted anomaly probe found data/I-O errors|final GPT/APFS verification failed|raw media tests passed but final GPT/APFS verification failed' "$OUT"; then
   echo 'RESULT=FAIL'
-  echo 'RU: Обнаружена ошибка чтения/записи или несовпадение данных накопителя/storage path.'
-  echo 'EN: A storage read/write error or data mismatch was detected.'
+  echo 'RU: Обнаружена ошибка чтения/записи, несовпадение данных или ошибка финальной проверки storage path.'
+  echo 'EN: A storage read/write error, data mismatch, or final storage-path verification failure was detected.'
   echo 'NEXT_RU: Сохраните лог, не доверяйте накопителю. Перед заменой SSD исключите RAM/T2/I/O path отдельными тестами.'
   echo 'NEXT_EN: Preserve the log and do not trust the drive. Before replacing storage, isolate RAM/T2/I/O path with separate tests.'
   rm -f "$TMP" "$OUT"; exit 2
 fi
 if grep -q 'FINAL=PASS_FULL_DEVICE_LBA_WRITE_READ_PERSISTENCE' "$OUT"; then
   echo 'RESULT=PASS'
-  echo 'RU: Накопитель прошёл полный логический write/read/hash/cold-verify цикл.'
-  echo 'EN: Storage passed the complete logical write/read/hash/cold-verify cycle.'
+  echo 'RU: Накопитель прошёл ПОЛНЫЙ логический write/read/hash/cold-verify цикл и финальную GPT/APFS проверку.'
+  echo 'EN: Storage passed the COMPLETE logical write/read/hash/cold-verify cycle and final GPT/APFS verification.'
   echo 'NEXT_RU: После ремонта других узлов повторите тест перед эксплуатацией важных данных.'
   echo 'NEXT_EN: After repairing other components, repeat before trusting important data.'
   rm -f "$TMP" "$OUT"; exit 0
 fi
-if grep -Eq 'REBOOT_REQUIRED|STAGE=COMPLETE_A|STAGE=COMPLETE_B' "$OUT"; then
-  echo 'RESULT=STATE_REBOOT_REQUIRED'
-  echo 'RU: Текущий этап завершён; нужна холодная/реальная перезагрузка для продолжения проверки сохранности данных.'
-  echo 'EN: Current stage completed; a real reboot is required to continue persistence verification.'
-  echo 'NEXT_RU: Перезагрузитесь в Internet Recovery и снова выберите SSD/HDD TEST.'
-  echo 'NEXT_EN: Reboot into Internet Recovery and select SSD/HDD TEST again.'
-  rm -f "$TMP" "$OUT"; exit 4
-fi
 if [ "$RC" -eq 0 ]; then
-  echo 'RESULT=PASS_OR_STAGE_COMPLETE'
-  echo 'RU: Этап завершён без зарегистрированной ошибки, но полный цикл ещё может быть не закончен.'
-  echo 'EN: Stage completed without a recorded error, but the full cycle may not be finished.'
-  rm -f "$TMP" "$OUT"; exit 0
+  echo 'RESULT=INCONCLUSIVE stage_returned_zero_without_final_marker'
+  echo 'RU: Движок завершился кодом 0, но не найден ни финальный PASS, ни checkpoint перезагрузки; полный PASS не объявляется.'
+  echo 'EN: Engine returned 0 but neither final PASS nor a reboot checkpoint was found; full PASS is not declared.'
+  rm -f "$TMP" "$OUT"; exit 3
 fi
 echo "RESULT=INCONCLUSIVE rc=$RC"
 echo 'RU: Тест накопителя прерван/ограничен средой, аппаратный вывод не делаем.'
