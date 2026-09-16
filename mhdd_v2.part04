@@ -1,0 +1,110 @@
+    fi
+    RC=$?; T1=$(now_ms); MS=$((T1-T0)); RATE=$(rate_mibs "$THIS" "$MS"); CLASS=$(throughput_class "$RATE"); throughput_add "$RATE"
+    [ "$RC" -eq 0 ] || { SCAN_IOERR=$((SCAN_IOERR+1)); err "$LABEL READ_IO_ERROR chunk=$I offset=$OFFSET rc=$RC rate=${RATE}MiB/s"; }
+    [ "$RATE" -ge 100 ] || say "$LABEL READ_DEVIATION chunk=$I offset=$OFFSET class=$CLASS rate=${RATE}MiB/s ms=$MS"
+    [ $((I%128)) -ne 0 ] || say "$LABEL PROGRESS chunk=$I/$TOTAL_CHUNKS rate=${RATE}MiB/s class=$CLASS"
+    I=$((I+1))
+  done
+  throughput_summary; say "$LABEL IO_ERRORS=$SCAN_IOERR"
+}
+
+random_4k_scan(){
+  LABEL=$1
+  say "--- $LABEL: RANDOM 4KiB LBA LATENCY SAMPLE ($RANDOM_SAMPLES reads) ---"
+  RND_SUM='/tmp/ssd-mhdd-random-summary.txt'
+  rm -f "$RND_SUM"
+  perl -MTime::HiRes=time -MFcntl=SEEK_SET - "$RAW" "$TOTAL_SECTORS" "$RANDOM_SAMPLES" "$LABEL" <<'PERL' | tee -a "$LOG" "$RND_SUM"
+use strict;
+use warnings;
+use Time::HiRes qw(time);
+use Fcntl qw(SEEK_SET);
+my ($dev,$total,$samples,$label)=@ARGV;
+open my $F,'<:raw',$dev or die "RANDOM_OPEN_ERROR dev=$dev error=$!\n";
+my ($lt5,$b5_20,$b20_100,$b100_500,$ge500,$io)=(0,0,0,0,0,0);
+my $x=305419896;
+for (my $i=0;$i<$samples;$i++) {
+  $x=(1103515245*$x+12345) & 2147483647;
+  my $lba=$x % $total;
+  my $t0=time();
+  my $pos=sysseek($F,$lba*4096,SEEK_SET);
+  my $buf='';
+  my $n=defined($pos) ? sysread($F,$buf,4096) : undef;
+  my $ms=(time()-$t0)*1000.0;
+  if (!defined($pos) || !defined($n) || $n != 4096) {
+    $io++;
+    my $nv=defined($n)?$n:'undef';
+    print "$label RANDOM_READ_IO_ERROR sample=$i lba4k=$lba bytes=$nv ms=".sprintf('%.3f',$ms)."\n";
+  }
+  if ($ms < 5) {$lt5++}
+  elsif ($ms < 20) {$b5_20++}
+  elsif ($ms < 100) {$b20_100++}
+  elsif ($ms < 500) {$b100_500++}
+  else {$ge500++}
+  if ($ms >= 100) {
+    print "$label RANDOM_LATENCY_DEVIATION sample=$i lba4k=$lba ms=".sprintf('%.3f',$ms)."\n";
+  }
+  if (($i % 512)==0) {
+    print "$label RANDOM_PROGRESS sample=$i/$samples lba4k=$lba ms=".sprintf('%.3f',$ms)."\n";
+  }
+}
+print "LATENCY_4K_BINS_ms <5:$lt5 5-19:$b5_20 20-99:$b20_100 100-499:$b100_500 >=500:$ge500\n";
+print "RANDOM_SUMMARY ioerr=$io lt5=$lt5 b5_20=$b5_20 b20_100=$b20_100 b100_500=$b100_500 ge500=$ge500\n";
+PERL
+  PRC=${PIPESTATUS[0]:-1}
+  [ "$PRC" -eq 0 ] || { RND_IOERR=1; err "$LABEL RANDOM_SCAN_ENGINE_ERROR rc=$PRC"; return; }
+  RND_IOERR=$(sed -n 's/^RANDOM_SUMMARY ioerr=\([0-9][0-9]*\).*/\1/p' "$RND_SUM" | sed -n '1p')
+  [ -n "$RND_IOERR" ] || RND_IOERR=1
+  say "$LABEL RANDOM_IO_ERRORS=$RND_IOERR"
+}
+
+write_pattern_pass(){
+  PAT=$1
+  say "--- FULL DEVICE WRITE PATTERN $PAT ---"
+  throughput_reset; WRITE_IOERR=0; I=0
+  while [ "$I" -lt "$TOTAL_CHUNKS" ]; do
+    OFFSET=$((I*CHUNK_BYTES)); REM=$((BYTES-OFFSET)); THIS=$CHUNK_BYTES; [ "$REM" -lt "$THIS" ] && THIS=$REM
+    NSECS=$((THIS/SECTOR_BYTES)); T0=$(now_ms)
+    gen_pattern "$PAT" "$I" "$NSECS" | dd of="$RAW" bs=1048576 seek=$((I*CHUNK_MIB)) conv=notrunc 2>>"$LOG"
+    P=("${PIPESTATUS[@]}"); GRC=${P[0]:-99}; WRC=${P[1]:-99}
+    if [ "$I" -eq 0 ]; then
+      MRC=0
+      make_marker "INPROGRESS_$PAT" "$PAT" "$BOOT_NOW" || MRC=1
+      [ "$MRC" -ne 0 ] || dd if="$MARKER" of="$RAW" bs=4096 seek=0 count=1 conv=notrunc 2>>"$LOG"
+      MWRC=$?
+    else MRC=0; MWRC=0; fi
+    T1=$(now_ms); MS=$((T1-T0)); RATE=$(rate_mibs "$THIS" "$MS"); CLASS=$(throughput_class "$RATE"); throughput_add "$RATE"
+    if [ "$GRC" -ne 0 ] || [ "$WRC" -ne 0 ] || [ "$MRC" -ne 0 ] || [ "$MWRC" -ne 0 ]; then
+      WRITE_IOERR=$((WRITE_IOERR+1)); err "WRITE_ERROR pattern=$PAT chunk=$I gen_rc=$GRC write_rc=$WRC marker_rc=$MRC/$MWRC"
+    fi
+    [ "$RATE" -ge 100 ] || say "WRITE_DEVIATION pattern=$PAT chunk=$I class=$CLASS rate=${RATE}MiB/s ms=$MS"
+    [ $((I%128)) -ne 0 ] || say "WRITE_PROGRESS pattern=$PAT chunk=$I/$TOTAL_CHUNKS rate=${RATE}MiB/s class=$CLASS errors=$WRITE_IOERR"
+    if [ $(((I+1)%SYNC_EVERY)) -eq 0 ]; then S0=$(now_ms); sync; S1=$(now_ms); SMS=$((S1-S0)); [ "$SMS" -le 5000 ] || say "SYNC_DEVIATION pattern=$PAT after_chunk=$I ms=$SMS"; fi
+    I=$((I+1)); MRC=0
+  done
+  sync; sleep 5; throughput_summary; say "WRITE_PATTERN_${PAT}_IO_ERRORS=$WRITE_IOERR"
+}
+
+verify_pattern_pass(){
+  PAT=$1; HEADSTATE=$2; HEADBOOT=$3
+  say "--- FULL DEVICE SHA256 VERIFY PATTERN $PAT state=$HEADSTATE ---"
+  throughput_reset; VERIFY_IOERR=0; VERIFY_HASHERR=0; I=0
+  while [ "$I" -lt "$TOTAL_CHUNKS" ]; do
+    OFFSET=$((I*CHUNK_BYTES)); REM=$((BYTES-OFFSET)); THIS=$CHUNK_BYTES; [ "$REM" -lt "$THIS" ] && THIS=$REM; NSECS=$((THIS/SECTOR_BYTES))
+    if [ "$I" -eq 0 ]; then
+      hash_expected_chunk0 "$PAT" "$NSECS" "$HEADSTATE" "$HEADBOOT" || { VERIFY_IOERR=$((VERIFY_IOERR+1)); err "EXPECTED_GENERATION_ERROR pattern=$PAT chunk=0"; EXPECT_HASH=''; }
+    else
+      hash_expected_stream "$PAT" "$I" "$NSECS"
+      if [ "$EXP_GEN_RC" -ne 0 ] || [ "$EXP_HASH_RC" -ne 0 ]; then VERIFY_IOERR=$((VERIFY_IOERR+1)); err "EXPECTED_GENERATION_ERROR pattern=$PAT chunk=$I rc=$EXP_GEN_RC/$EXP_HASH_RC"; fi
+    fi
+    T0=$(now_ms); hash_actual_chunk "$I" "$NSECS"; T1=$(now_ms); MS=$((T1-T0)); RATE=$(rate_mibs "$THIS" "$MS"); CLASS=$(throughput_class "$RATE"); throughput_add "$RATE"
+    BAD=0
+    if [ "$ACT_READ_RC" -ne 0 ] || [ "$ACT_HASH_RC" -ne 0 ]; then VERIFY_IOERR=$((VERIFY_IOERR+1)); BAD=1; err "VERIFY_READ_ERROR pattern=$PAT chunk=$I rc=$ACT_READ_RC/$ACT_HASH_RC"
+    elif [ "$ACTUAL_HASH" != "$EXPECT_HASH" ]; then VERIFY_HASHERR=$((VERIFY_HASHERR+1)); BAD=1; err "VERIFY_HASH_MISMATCH pattern=$PAT chunk=$I lba4k_start=$((I*CHUNK_SECTORS)) got=$ACTUAL_HASH expected=$EXPECT_HASH"
+    fi
+    [ "$RATE" -ge 100 ] || say "VERIFY_DEVIATION pattern=$PAT chunk=$I class=$CLASS rate=${RATE}MiB/s ms=$MS"
+    [ "$BAD" -eq 0 ] || localize_chunk "$PAT" "$I" "$NSECS" "$HEADSTATE" "$HEADBOOT"
+    [ $((I%128)) -ne 0 ] || say "VERIFY_PROGRESS pattern=$PAT chunk=$I/$TOTAL_CHUNKS rate=${RATE}MiB/s class=$CLASS ioerr=$VERIFY_IOERR hasherr=$VERIFY_HASHERR"
+    I=$((I+1))
+  done
+  throughput_summary; say "VERIFY_PATTERN_${PAT}_IO_ERRORS=$VERIFY_IOERR"; say "VERIFY_PATTERN_${PAT}_HASH_ERRORS=$VERIFY_HASHERR"
+}
