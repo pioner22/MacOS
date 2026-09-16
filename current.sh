@@ -1,12 +1,12 @@
 #!/bin/bash
-# Dynamic diagnostic dispatcher: assemble the current MHDD-like SSD test.
+# Dynamic diagnostic dispatcher: assemble the current Recovery-safe MHDD-like SSD test.
 set +u
 BASE='https://raw.githubusercontent.com/pioner22/MacOS/main'
 TMP="/tmp/mhdd-current-$$.sh"
 rm -f "$TMP"
 
-echo 'CURRENT_DIAGNOSTIC=SSD_MHDD_V2'
-echo 'Assembling destructive full-LBA diagnostic...'
+echo 'CURRENT_DIAGNOSTIC=SSD_MHDD_V2R1_RECOVERY'
+echo 'Assembling Recovery-compatible destructive full-LBA diagnostic...'
 
 for P in 01 02 03 04 05 06; do
   URL="$BASE/mhdd_v2.part${P}?t=$(date +%s 2>/dev/null || echo 0)-$P"
