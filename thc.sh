@@ -59,14 +59,24 @@ if [ -f "$OUT" ]; then
     curl -fL -H 'Cache-Control: no-cache' "$NEXT" | /bin/bash
     exit $?
   fi
-  mv "$OUT" "$OUT.bad" 2>/dev/null || true
+  say "REMOVING_INVALID_PACKAGE=$OUT"
+  rm -f "$OUT" || fail 'cannot remove invalid InstallAssistant.pkg'
 fi
 
-# The previous resume-built file failed XAR verification. Keep it until a new
-# package passes, but never resume from it again.
+# The old resume-built .part already failed XAR verification. It must never be
+# used as a source for the chunked download, so remove it now to reclaim space.
 if [ -f "$PART" ]; then
-  say "BAD_RESUME_PACKAGE_PRESERVED=$PART bytes=$(size "$PART")"
+  say "REMOVING_KNOWN_BAD_RESUME=$PART bytes=$(size "$PART")"
+  rm -f "$PART" || fail 'cannot remove known-bad resume package'
 fi
+# Files named .bad are created only after this helper has already classified
+# them as invalid, so they are safe to discard as well.
+if [ -f "$OUT.bad" ]; then
+  say "REMOVING_KNOWN_BAD_PACKAGE=$OUT.bad bytes=$(size "$OUT.bad")"
+  rm -f "$OUT.bad" || true
+fi
+# A previous unverified assembled file is disposable; verified OUT is handled above.
+rm -f "$FRESH"
 
 INDEX=0
 START=0
@@ -122,7 +132,6 @@ verify_xar "$FRESH" || fail 'fresh chunked package still failed XAR verification
 
 mv "$FRESH" "$OUT" || fail 'cannot finalize verified InstallAssistant.pkg'
 rm -rf "$CHUNKDIR"
-rm -f "$PART"
 say "FRESH_PACKAGE_READY=$OUT"
 say 'Launching Tahoe media builder with the verified package...'
 curl -fL -H 'Cache-Control: no-cache' "$NEXT" | /bin/bash
