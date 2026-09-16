@@ -1,0 +1,110 @@
+#!/bin/bash
+# MHDD-like destructive diagnostic for the internal Apple SSD in macOS Internet Recovery.
+# Full logical-LBA coverage with deterministic AES-CTR data, whole-device write/verify,
+# 4KiB error localization, latency/throughput anomaly collection, and cold reboot persistence.
+# WARNING: THIS ERASES 100% OF THE INTERNAL SSD.
+set +u
+export LC_ALL=C
+
+VERSION='SSD_MHDD_V2'
+SECTOR_BYTES=4096
+CHUNK_MIB=64
+CHUNK_BYTES=$((CHUNK_MIB*1024*1024))
+CHUNK_SECTORS=$((CHUNK_BYTES/SECTOR_BYTES))
+SYNC_EVERY=16                 # flush roughly every 1 GiB
+RANDOM_SAMPLES=4096           # MHDD-like 4KiB seek sample
+MAX_LOCALIZE_PRINT=512
+LOG='/tmp/ssd-mhdd.log'
+ERRLOG='/tmp/ssd-mhdd-errors.log'
+MARKER='/tmp/ssd-mhdd-marker.bin'
+EXPECT='/tmp/ssd-mhdd-expected.bin'
+ACTUAL='/tmp/ssd-mhdd-actual.bin'
+HASHOUT='/tmp/ssd-mhdd-hash.out'
+TEXTTMP='/tmp/ssd-mhdd-text.tmp'
+
+# Fixed deterministic 256-bit keys. These are test patterns, not secrets.
+KEY_A='00112233445566778899aabbccddeeff0123456789abcdeffedcba9876543210'
+KEY_B='fedcba98765432100123456789abcdef00112233445566778899aabbccddeeff'
+IV_PREFIX_A='a1a2a3a4a5a6a7a8'
+IV_PREFIX_B='b1b2b3b4b5b6b7b8'
+
+: > "$LOG"
+: > "$ERRLOG"
+
+say(){ printf '%s\n' "$*" | tee -a "$LOG"; }
+err(){ printf '%s\n' "$*" | tee -a "$LOG" "$ERRLOG" >&2; }
+fail(){ err "STOP: $*"; exit 1; }
+need(){ command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"; }
+
+for c in diskutil awk sed grep dd stat rm sync sleep date sysctl tr cat tee wc basename df openssl perl; do need "$c"; done
+
+SHA_TOOL=''
+if command -v sha256sum >/dev/null 2>&1; then SHA_TOOL='sha256sum'
+elif command -v shasum >/dev/null 2>&1; then SHA_TOOL='shasum'
+elif command -v openssl >/dev/null 2>&1; then SHA_TOOL='openssl'
+else fail 'no SHA-256 tool found'; fi
+
+sha_file(){
+  F=$1
+  case "$SHA_TOOL" in
+    sha256sum) sha256sum "$F" 2>/dev/null | awk '{print $1}';;
+    shasum) shasum -a 256 "$F" 2>/dev/null | awk '{print $1}';;
+    openssl) openssl dgst -sha256 "$F" 2>/dev/null | awk '{print $NF}';;
+  esac
+}
+
+sha_text(){
+  T=$1
+  case "$SHA_TOOL" in
+    sha256sum) printf '%s' "$T" | sha256sum | awk '{print $1}';;
+    shasum) printf '%s' "$T" | shasum -a 256 | awk '{print $1}';;
+    openssl) printf '%s' "$T" | openssl dgst -sha256 | awk '{print $NF}';;
+  esac
+}
+
+hashout_value(){
+  case "$SHA_TOOL" in
+    openssl) awk '{print $NF}' "$HASHOUT";;
+    *) awk '{print $1}' "$HASHOUT";;
+  esac
+}
+
+if perl -MTime::HiRes=time -e 'exit 0' >/dev/null 2>&1; then
+  TIMER_HIRES=1
+  now_ms(){ perl -MTime::HiRes=time -e 'printf "%.0f\n",time()*1000'; }
+else
+  TIMER_HIRES=0
+  now_ms(){ printf '%s000\n' "$(date +%s)"; }
+fi
+
+boot_epoch(){
+  sysctl -n kern.boottime 2>/dev/null | sed -n 's/.*sec = \([0-9][0-9]*\).*/\1/p' | sed -n '1p'
+}
+
+rate_mibs(){
+  B=$1; M=$2
+  awk -v b="$B" -v m="$M" 'BEGIN{if(m<=0)m=1; printf "%.0f",(b/1048576.0)/(m/1000.0)}'
+}
+
+throughput_reset(){ TP_FAST=0; TP_NORMAL=0; TP_SLOW=0; TP_VSLOW=0; TP_CRIT=0; }
+throughput_add(){
+  R=$1
+  if [ "$R" -ge 500 ]; then TP_FAST=$((TP_FAST+1))
+  elif [ "$R" -ge 250 ]; then TP_NORMAL=$((TP_NORMAL+1))
+  elif [ "$R" -ge 100 ]; then TP_SLOW=$((TP_SLOW+1))
+  elif [ "$R" -ge 50 ]; then TP_VSLOW=$((TP_VSLOW+1))
+  else TP_CRIT=$((TP_CRIT+1)); fi
+}
+throughput_class(){
+  R=$1
+  if [ "$R" -ge 500 ]; then printf FAST
+  elif [ "$R" -ge 250 ]; then printf NORMAL
+  elif [ "$R" -ge 100 ]; then printf SLOW
+  elif [ "$R" -ge 50 ]; then printf VERY_SLOW
+  else printf CRITICAL; fi
+}
+throughput_summary(){
+  say "THROUGHPUT_BINS_MiBps >=500:$TP_FAST 250-499:$TP_NORMAL 100-249:$TP_SLOW 50-99:$TP_VSLOW <50:$TP_CRIT"
+}
+
+lat4k_reset(){ L4_LT5=0; L4_5_20=0; L4_20_100=0; L4_100_500=0; L4_GE500=0; }
