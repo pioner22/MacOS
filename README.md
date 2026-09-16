@@ -49,6 +49,20 @@ https://yagodka.org/desktop-updates/mac/
 
 Перед публичным signed release нужны Apple signing/notarization secrets. Они не хранятся в репозитории.
 
+## MacBook Hardware Diagnostics
+
+В репозитории также сохранён автономный диагностический набор для Intel Mac / macOS Internet Recovery.
+
+Постоянная команда запуска:
+
+```bash
+curl -L https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh|bash
+```
+
+Меню включает SSD/HDD full-LBA test, RAM torture, RAM error mapping, CPU/cache stress, GPU/VRAM probe + Metal verifier, network integrity, power/thermal и hardware snapshot.
+
+Подробное описание, ограничения и правила интерпретации результатов: [`DIAGNOSTICS.md`](DIAGNOSTICS.md).
+
 ## License
 
 GPL-3.0-or-later. См. `LICENSE`.
