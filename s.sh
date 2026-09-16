@@ -15,7 +15,10 @@ fail(){ printf 'STOP: %s\n' "$*" >&2; exit 1; }
 size(){ stat -f '%z' "$1" 2>/dev/null || printf '0\n'; }
 need(){ command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"; }
 
-for c in curl stat grep awk sed date mkdir rm mv cp sleep find basename dirname tail head; do need "$c"; done
+# Keep the mandatory tool list minimal: old Catalina Recovery lacks some
+# ordinary userland helpers such as basename/dirname. Bash parameter expansion
+# is used instead of those helpers.
+for c in curl stat grep awk sed date mkdir rm mv sleep find tail; do need "$c"; done
 
 RECOVERY_VER='unknown'
 if command -v sw_vers >/dev/null 2>&1; then
@@ -219,7 +222,8 @@ resume_one(){
     *.download) FINAL=${P%.download};;
     *) return 0;;
   esac
-  NAME=$(basename "$FINAL")
+  # basename is not present in some Catalina Recovery builds.
+  NAME=${FINAL##*/}
   case "$NAME" in
     *.pkg|*.dmg|*.ipsw|*.zip) ;;
     *) return 0;;
