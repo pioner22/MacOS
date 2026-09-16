@@ -33,6 +33,16 @@ echo 'ASSEMBLY=PASS'
 /bin/bash "$TMP" 2>&1 | tee "$OUT"
 RC=${PIPESTATUS[0]:-99}
 
+# Actual I/O/data failures always override a later checkpoint marker.
+if grep -Eq 'VERIFY_HASH_MISMATCH|VERIFY_READ_ERROR|READ_IO_ERROR|WRITE_ERROR|BAD_LBA4K|PATTERN_[AB]_.*FAILED|PROBE_HASH_MISMATCH|PROBE_IO_ERROR|targeted anomaly probe found data/I-O errors|final GPT/APFS verification failed|raw media tests passed but final GPT/APFS verification failed' "$OUT"; then
+  echo 'RESULT=FAIL'
+  echo 'RU: Обнаружена ошибка чтения/записи, несовпадение данных или ошибка финальной проверки storage path.'
+  echo 'EN: A storage read/write error, data mismatch, or final storage-path verification failure was detected.'
+  echo 'NEXT_RU: Сохраните лог, не доверяйте накопителю. Перед заменой SSD исключите RAM/T2/I/O path отдельными тестами.'
+  echo 'NEXT_EN: Preserve the log and do not trust the drive. Before replacing storage, isolate RAM/T2/I/O path with separate tests.'
+  rm -f "$TMP" "$OUT"; exit 2
+fi
+
 # A normal multi-boot checkpoint is not a full PASS.
 if grep -Eq 'REBOOT_REQUIRED|STAGE=COMPLETE_A|STAGE=COMPLETE_B' "$OUT"; then
   echo 'RESULT=REBOOT_REQUIRED'
@@ -43,14 +53,6 @@ if grep -Eq 'REBOOT_REQUIRED|STAGE=COMPLETE_A|STAGE=COMPLETE_B' "$OUT"; then
   rm -f "$TMP" "$OUT"; exit 4
 fi
 
-if grep -Eq 'VERIFY_HASH_MISMATCH|VERIFY_READ_ERROR|READ_IO_ERROR|WRITE_ERROR|BAD_LBA4K|PATTERN_[AB]_.*FAILED|PROBE_HASH_MISMATCH|PROBE_IO_ERROR|targeted anomaly probe found data/I-O errors|final GPT/APFS verification failed|raw media tests passed but final GPT/APFS verification failed' "$OUT"; then
-  echo 'RESULT=FAIL'
-  echo 'RU: Обнаружена ошибка чтения/записи, несовпадение данных или ошибка финальной проверки storage path.'
-  echo 'EN: A storage read/write error, data mismatch, or final storage-path verification failure was detected.'
-  echo 'NEXT_RU: Сохраните лог, не доверяйте накопителю. Перед заменой SSD исключите RAM/T2/I/O path отдельными тестами.'
-  echo 'NEXT_EN: Preserve the log and do not trust the drive. Before replacing storage, isolate RAM/T2/I/O path with separate tests.'
-  rm -f "$TMP" "$OUT"; exit 2
-fi
 if grep -q 'FINAL=PASS_FULL_DEVICE_LBA_WRITE_READ_PERSISTENCE' "$OUT"; then
   echo 'RESULT=PASS'
   echo 'RU: Накопитель прошёл ПОЛНЫЙ логический write/read/hash/cold-verify цикл и финальную GPT/APFS проверку.'
