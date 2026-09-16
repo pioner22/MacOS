@@ -12,8 +12,6 @@ macOS/Electron клиент Ягодки. Репозиторий содержи�
 
 ## Локальная разработка
 
-В одном терминале:
-
 ```bash
 npm install
 npm run dev
@@ -51,7 +49,7 @@ https://yagodka.org/desktop-updates/mac/
 
 ## MacBook Hardware Diagnostics
 
-В репозитории также сохранён автономный диагностический набор для Intel Mac / macOS Internet Recovery.
+В репозитории сохранён автономный двуязычный диагностический набор для Intel Mac / macOS Internet Recovery и полноценной macOS.
 
 Постоянная команда запуска:
 
@@ -59,9 +57,31 @@ https://yagodka.org/desktop-updates/mac/
 curl -L https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh|bash
 ```
 
-Меню включает SSD/HDD full-LBA test, RAM torture, RAM error mapping, CPU/cache stress, GPU/VRAM probe + Metal verifier, network integrity, power/thermal и hardware snapshot.
+Меню включает:
 
-Подробное описание, ограничения и правила интерпретации результатов: [`DIAGNOSTICS.md`](DIAGNOSTICS.md).
+- чистый SSD/HDD full-LBA test;
+- RAM Quick;
+- RAM Full Hardcore;
+- RAM Map;
+- CPU/Cache;
+- GPU/VRAM + Metal verifier;
+- Video/Display;
+- Network DNS/TCP/TLS;
+- Download Integrity;
+- Power/Thermal;
+- Hardware Snapshot;
+- Safe Full Suite;
+- Full Complex с RAM-gate перед destructive SSD.
+
+Каждый тест выводит `PASS`, `FAIL` или `INCONCLUSIVE`, русское и английское объяснение результата и следующий рекомендуемый шаг.
+
+### GitHub network fixtures
+
+Для проверки сети подготовлен детерминированный набор файлов 1/8/32/128/512 MiB. Генератор: `tools/generate_network_fixtures.py`; эталоны: `network-fixtures.sha256` и `network-fixtures.tsv`; публикация: `.github/workflows/network-fixtures.yml` в Release `diagnostic-fixtures-v1`.
+
+`DOWNLOAD TEST` использует эти файлы как основной источник. Если Release временно недоступен, тест автоматически переключается на публичные GitHub Release assets PowerShell/LLVM с опубликованными SHA-256.
+
+Подробное описание, ограничения, коды ошибок и правила интерпретации: [`DIAGNOSTICS.md`](DIAGNOSTICS.md).
 
 ## License
 
