@@ -1,25 +1,25 @@
-# Mac Hardware Diagnostics — 2.0.0-rc2
+# Mac Hardware Diagnostics — 2.0.0-rc3
 
 ## Русский
 
-Одна активная реализация: `diagnostics_v2/`. Постоянный запуск:
+Основной сценарий — Terminal в Recovery без установленной ОС. Работа из полной macOS сохранена. Постоянная команда:
 
 ```bash
 curl -fL https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh | bash
 ```
 
-`st.sh` читает актуальный `diagnostics-release.tsv`, затем проверяет и запускает единый пакет по неизменяемой ревизии. Ожидаемая текущая строка: `RELEASE_VERSION=2.0.0-rc2`.
+Минимальный preflight → проверка неизменяемого пакета → фактическая модель/CPU/архитектура/ОС/среда → пробы инструментов → составной профиль → сохранение профиля → меню. Ожидаемая версия `RELEASE_VERSION=2.0.0-rc3`. Профили — правила выбора сценария, не сертификат совместимости.
 
-Сначала пункт **14 SELFTEST**, затем **16 POST-REPAIR** в полной Intel macOS с Command Line Tools. **1/13 и старый RAW-тест заблокированы**. Пункт **17** пишет только новый временный файл 1 GiB; **18** отдельно проверяет 40-GiB RAM→внешний RESCUE с согласием. Пункт **15** — модель и фактически загруженная ОС. Обязательное mlock не ослаблено. Отсутствие инструментов/ресурсов — INCONCLUSIVE, не аппаратный диагноз.
+Без компилятора Recovery получает ограниченные Perl-сценарии при наличии работающих зависимостей: RAM quick до 256 МиБ, extended до 1 ГиБ; новый файл до 256 МиБ; уменьшенная CPU/SHA нагрузка и сетевые проверки. Чистый RAM/file screen остаётся INCONCLUSIVE с объяснением ограничений, а не полным аппаратным PASS. Большой нативный тест требует совместимого toolchain и успешного mlock. Готовые проверенные macOS/Recovery-бинарники пока не поставляются.
 
-Результат: `REPORT_RU_EN.md`, `summary.tsv` и подробные логи в отдельном каталоге. Не выполненные этапы отображаются NOT_RUN. После Ctrl+C запуск останавливается; зависимые тесты после неполного/ошибочного RAM/CPU не стартуют. Чистые автоматические этапы не заменяют независимый тест и холодный повтор: остаётся PENDING_MANUAL.
+14 — SELFTEST; 15 — профиль; 16 — адаптивный комплекс без стирания; 17 — отдельный новый файл; 18 — отдельный native RAM→RESCUE 40 ГиБ с согласием; 19 — локальный минимальный пакет обратной связи, БЕЗ отправки. 1/13 и legacy RAW остаются заблокированы. SAFE 12 не запускает файловую запись или extended RAM.
 
-- [Описание единого выпуска и ограничений](docs/diagnostics/UNIFIED_RC2.md)
-- [Фактические 93 проверки](docs/diagnostics/QA_RESULTS.md)
-- [Полный журнал](docs/diagnostics/qa-rc2-linux.log)
-- [Базовая инструкция нативных движков](docs/diagnostics/POST_REPAIR_RU.md)
-- [Состояния](RESULT_STATES_RU_EN.md)
+Профиль/пробы/инструменты сохраняются до меню. `REPORT_RU_EN.md`, `summary.tsv`, `environment.tsv`, `capabilities.tsv`, `probes.log` и журналы движков находятся в каталоге сеанса. Recovery /tmp может исчезнуть после перезагрузки: сохраняйте на смонтированный внешний том. Автоматического форматирования и публикации полных логов нет.
+
+[Архитектура, профили, качество и обратная связь](docs/diagnostics/RECOVERY_PRODUCT_RU.md) · [Фактическая проверка rc3](docs/diagnostics/RC3_QA.md)
 
 ## English
 
-One active implementation; the permanent URL resolves the current release descriptor once and pins/verifies the complete package. Start with toolkit self-test (14); post-repair (16) needs full Intel macOS and Command Line Tools. RAW (1/13) stays quarantined, file mode (17) is non-destructive, bridge (18) requires separate consent. Reports distinguish unexecuted/incomplete/manual stages from PASS. Real macOS/Metal and the user's hardware remain to be validated.
+Recovery is the primary scenario, with full macOS retained. Detection and tool probes precede profile selection and the diagnostic menu. Limited Perl RAM/file screening is explicitly INCONCLUSIVE, not native/full hardware acceptance. Native prebuilt Recovery binaries are not yet supplied. Legacy RAW stays blocked. Option 19 produces a reviewed local metadata/issue-draft package and never uploads raw logs or credentials.
+
+[Architecture and limits](docs/diagnostics/RECOVERY_PRODUCT_EN.md) · [Actual QA](docs/diagnostics/RC3_QA.md)

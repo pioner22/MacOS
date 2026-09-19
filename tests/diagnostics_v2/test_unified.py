@@ -25,19 +25,19 @@ class UnifiedTests(unittest.TestCase):
     def interactive(self,script):
         return pexpect.spawn('/bin/bash',['-c',self.prefix+script],encoding='utf-8',timeout=10)
     def test_version(self):
-        p=self.shell('main --version');self.assertEqual(p.returncode,0);self.assertIn('2.0.0-rc2',p.stdout)
-    def test_menu_exit_no_session(self):
+        p=self.shell('main --version');self.assertEqual(p.returncode,0);self.assertIn('2.0.0-rc3',p.stdout)
+    def test_menu_exit_keeps_profile_without_test(self):
         p=self.interactive('main menu');p.expect('> ');p.sendline('0');p.expect(pexpect.EOF);p.close()
-        self.assertEqual(p.exitstatus,0);self.assertEqual(list(self.d.iterdir()),[])
+        self.assertEqual(p.exitstatus,0);self.assertTrue(list(self.d.glob('macdiag-v2.*/environment.tsv')));self.assertFalse(list(self.d.glob('macdiag-v2.*/*/engine.log')))
     def test_invalid_menu_reprompt(self):
         p=self.interactive('main menu');p.expect('> ');p.sendline('99');p.expect('UNKNOWN_SELECTION');p.expect('> ');p.sendline('0');p.expect(pexpect.EOF);p.close();self.assertEqual(p.exitstatus,0)
     def test_menu_routes_all_choices(self):
-        modes={1:'raw',2:'ramquick',3:'ramfull',4:'rammap',5:'cpu',6:'gpu',7:'display',8:'network',9:'download',10:'power',11:'snapshot',12:'safe',13:'raw',14:'selftest',16:'acceptance',17:'storage',18:'bridge'}
+        modes={1:'raw',2:'ramquick',3:'ramfull',4:'rammap',5:'cpu',6:'gpu',7:'display',8:'network',9:'download',10:'power',11:'snapshot',12:'safe',13:'raw',14:'selftest',16:'acceptance',17:'storage',18:'bridge',19:'support'}
         for n,mode in modes.items():
             with self.subTest(n=n):
                 p=self.interactive('profile_detect; menu; echo SELECTED=$MODE');p.expect('> ');p.sendline(str(n));p.expect('SELECTED='+mode);p.expect(pexpect.EOF);p.close();self.assertEqual(p.exitstatus,0)
     def test_profile_mismatch_does_not_launch_test(self):
-        p=self.interactive('main menu');p.expect('> ');p.sendline('15');p.expect('MODEL:');p.sendline('1');p.expect('RUNNING OS:');p.sendline('7');p.expect('ENVIRONMENT:');p.sendline('2');p.expect('PROFILE_MISMATCH');p.expect('> ');p.sendline('0');p.expect(pexpect.EOF);p.close();self.assertEqual(p.exitstatus,0);self.assertEqual(list(self.d.iterdir()),[])
+        p=self.interactive('main menu');p.expect('> ');p.sendline('15');p.expect('MODEL /');p.sendline('1');p.expect('RUNNING OS /');p.sendline('7');p.expect('ENV /');p.sendline('2');p.expect('PROFILE_MISMATCH');p.expect('> ');p.sendline('0');p.expect(pexpect.EOF);p.close();self.assertEqual(p.exitstatus,0);self.assertTrue(list(self.d.glob('macdiag-v2.*/environment.tsv')));self.assertFalse(list(self.d.glob('macdiag-v2.*/*/engine.log')))
     def test_blank_consent_is_not_authorized(self):
         p=self.interactive('main storage');p.expect('> ');p.sendline(str(self.d));p.expect('> ');p.sendline('');p.expect(pexpect.EOF);p.close();self.assertEqual(p.exitstatus,3);self.assertIn('INCONCLUSIVE',self.report())
     def test_eof_consent_no_write(self):
@@ -82,7 +82,7 @@ class UnifiedTests(unittest.TestCase):
         s=(ROOT/'metal_vram.m').read_text();self.assertIn('MTLResourceStorageModeManaged',s);self.assertIn('synchronizeResource:readback',s)
     def test_offline_latest_descriptor_selftest(self):
         p=subprocess.run(['/bin/bash',str(BASE/'st.sh'),'--offline','selftest'],capture_output=True,text=True,timeout=10,env=dict(os.environ,MACDIAG_REPORT_DIR=str(self.d)))
-        self.assertEqual(p.returncode,0,p.stdout+p.stderr);self.assertIn('RELEASE_VERSION=2.0.0-rc2',p.stdout);self.assertIn('REPORT=',p.stdout)
+        self.assertEqual(p.returncode,0,p.stdout+p.stderr);self.assertIn('RELEASE_VERSION=2.0.0-rc3',p.stdout);self.assertIn('REPORT=',p.stdout)
     def test_offline_corrupted_package_stops(self):
         import shutil
         copy=self.d/'package';shutil.copytree(BASE,copy);(copy/'diagnostics_v2'/'run.sh').write_text('echo SHOULD_NOT_RUN\n')
