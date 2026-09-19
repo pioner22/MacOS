@@ -1,0 +1,55 @@
+name: Diagnostic safety regressions
+on:
+  push:
+    paths: ['diagnostics/**', 'tests/diagnostics/**', '*.sh', 'tools/build_diag_manifest.py', '.github/workflows/diagnostics-audit.yml']
+  pull_request:
+    paths: ['diagnostics/**', 'tests/diagnostics/**', '*.sh', 'tools/build_diag_manifest.py', '.github/workflows/diagnostics-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact workflow revision without third-party actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Run bounded non-destructive regressions
+        shell: bash
+        env:
+          DIAG_TEST_BASH: /bin/bash
+        run: |
+          set -euo pipefail
+          /bin/bash --version | head -1
+          python3 -m unittest discover -s tests/diagnostics -v
+      - name: Verify generated source manifest is current
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/build_diag_manifest.py
+          git diff --exit-code -- diagnostics/package.tsv
+      - name: Native memory and file engines with sanitizers
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined diagnostics/ram_native.c -o /tmp/diag-ram-asan
+          /tmp/diag-ram-asan 16 2 quick 0
+          cc -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined diagnostics/storage_file.c -o /tmp/diag-file-asan
+          /tmp/diag-file-asan "$RUNNER_TEMP" 16
+      - name: Compile Metal verifier (no GPU stress on CI)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun clang -fobjc-arc -framework Foundation -framework Metal diagnostics/metal_vram.m -o "$RUNNER_TEMP/diag-metal"
