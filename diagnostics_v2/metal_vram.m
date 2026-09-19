@@ -30,7 +30,9 @@ static int testDevice(id<MTLDevice> dev,NSUInteger requested){
         id<MTLCommandQueue> q=[dev newCommandQueue];if(!pipe||!q||!pipe.maxTotalThreadsPerThreadgroup)return 3;
         NSMutableArray<id<MTLBuffer>> *buffers=[NSMutableArray array];
         for(NSUInteger i=0;i<count;i++){id<MTLBuffer> b=[dev newBufferWithLength:size options:MTLResourceStorageModePrivate];if(!b)return 3;[buffers addObject:b];}
-        id<MTLBuffer> readback=[dev newBufferWithLength:size options:MTLResourceStorageModeShared];if(!readback||!readback.contents)return 3;
+        BOOL unified=dev.hasUnifiedMemory;
+        MTLResourceOptions mode=unified?MTLResourceStorageModeShared:MTLResourceStorageModeManaged;
+        id<MTLBuffer> readback=[dev newBufferWithLength:size options:mode];if(!readback||!readback.contents)return 3;
         NSUInteger words=size/4,group=MIN((NSUInteger)256,pipe.maxTotalThreadsPerThreadgroup);
         for(uint32_t pass=0;pass<8;pass++){
             for(NSUInteger i=0;i<count;i++){
@@ -43,10 +45,10 @@ static int testDevice(id<MTLDevice> dev,NSUInteger requested){
             }
             sleep(1);
             for(NSUInteger i=0;i<count;i++){
-                memset(readback.contents,0,size);
+                // GPU overwrites the complete readback; no CPU dirty managed range.
                 id<MTLCommandBuffer> cb=[q commandBuffer];if(!cb)return 3;
                 id<MTLBlitCommandEncoder> be=[cb blitCommandEncoder];if(!be)return 3;
-                [be copyFromBuffer:buffers[i] sourceOffset:0 toBuffer:readback destinationOffset:0 size:size];[be endEncoding];[cb commit];[cb waitUntilCompleted];
+                [be copyFromBuffer:buffers[i] sourceOffset:0 toBuffer:readback destinationOffset:0 size:size];if(!unified)[be synchronizeResource:readback];[be endEncoding];[cb commit];[cb waitUntilCompleted];
                 if(cb.status!=MTLCommandBufferStatusCompleted){NSLog(@"GPU_READBACK_ERROR=%@",cb.error);return 2;}
                 uint32_t seed=0x13579bdfu^pass*0x01020304u^(uint32_t)i*0x9e3779b9u;
                 const uint32_t *p=readback.contents;

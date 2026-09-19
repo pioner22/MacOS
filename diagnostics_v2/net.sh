@@ -2,12 +2,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Library: every retry owns a new stream, counter, hash, and HTTP header file.
 net_attempt(){
-  local url expected size range total work crc ccr hrc got count http cr rr
+  local url expected size range total work crc ccr hrc got count http cr encoding
   local -a extra codes
   url=$1; expected=$2; size=$3; range=${4:-}; total=${5:-}
   case "$url" in https://*) ;; *) NET_REASON=HTTPS_REQUIRED; return 3;; esac
   case "$expected" in *[!a-f0-9]*|'') NET_REASON=INVALID_SHA; return 3;; esac
   [ "${#expected}" = 64 ] && valid_uint "$size" 1 999999999 || { NET_REASON=INVALID_SPEC; return 3; }
+  if [ -n "$range" ]; then
+    local first last
+    first=${range%-*}; last=${range#*-}
+    valid_uint "$first" 0 999999999 && valid_uint "$last" 0 999999999 &&
+      valid_uint "$total" 1 999999999 && [ "$last" -ge "$first" ] &&
+      [ "$last" -lt "$total" ] && [ $((last-first+1)) -eq "$size" ] || { NET_REASON=INVALID_RANGE_SPEC; return 3; }
+  fi
   work=$(mktemp -d "$STEP_DIR/transfer.XXXXXX") || return 3
   extra=()
   [ -z "$range" ] || extra=(-r "$range")
@@ -23,8 +30,11 @@ net_attempt(){
   count=$(cat "$work/count" 2>/dev/null); got=$(awk 'NR==1{print $1}' "$work/hash")
   http=$(awk '/^HTTP\//{x=$2}END{print x}' "$work/headers")
   cr=$(awk 'BEGIN{IGNORECASE=0} /^HTTP\//{x=""} tolower($1)=="content-range:"{sub(/^[^:]*:[ \t]*/,"");sub(/\r$/,"");x=$0} END{print x}' "$work/headers")
+  encoding=$(awk '/^HTTP\//{x=""} tolower($1)=="content-encoding:"{sub(/^[^:]*:[ \t]*/,"");sub(/\r$/,"");x=tolower($0)} END{print x}' "$work/headers")
   say "TRANSFER_END curl=$crc counter=$ccr hash_rc=$hrc http=$http bytes=$count sha256=$got"
   NET_CURL=$crc; NET_REASON=UNKNOWN
+  case "$http" in 401|403|404|429) NET_REASON=REMOTE_ASSET_UNAVAILABLE; return 3;;esac
+  if [ -n "$encoding" ] && [ "$encoding" != identity ]; then NET_REASON=UNEXPECTED_CONTENT_ENCODING; return 3;fi
   if [ "$hrc" -ne 0 ] || { [ "$ccr" -ne 0 ] && [ "$ccr" -ne 4 ]; }; then NET_REASON=LOCAL_STREAM_TOOL_ERROR; return 3; fi
   if [ -n "$range" ] && [ "$http" = 200 ]; then NET_REASON=RANGE_NOT_SUPPORTED; return 3; fi
   if [ "$ccr" = 4 ]; then NET_REASON=BODY_TOO_LONG; return 2; fi

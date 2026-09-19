@@ -1,0 +1,102 @@
+test_bootstrap_syntax (test_bootstrap.BootstrapTests.test_bootstrap_syntax) ... ok
+test_bootstrap_valid_package (test_bootstrap.BootstrapTests.test_bootstrap_valid_package) ... ok
+test_manifest_corruption_blocks_execution (test_bootstrap.BootstrapTests.test_manifest_corruption_blocks_execution) ... ok
+test_missing_payload_blocks_execution (test_bootstrap.BootstrapTests.test_missing_payload_blocks_execution) ... ok
+test_payload_corruption_blocks_execution (test_bootstrap.BootstrapTests.test_payload_corruption_blocks_execution) ... ok
+test_truncated_bootstrap_never_executes (test_bootstrap.BootstrapTests.test_truncated_bootstrap_never_executes) ... ok
+test_cancel_aborts_step (cases_base.CommonTests.test_cancel_aborts_step) ... ok
+test_empty_exit_zero_never_passes (cases_base.CommonTests.test_empty_exit_zero_never_passes) ... ok
+test_exit_fail_without_evidence (cases_base.CommonTests.test_exit_fail_without_evidence) ... ok
+test_extra_contract_fields (cases_base.CommonTests.test_extra_contract_fields) ... ok
+test_fail_has_priority_over_incomplete (cases_base.CommonTests.test_fail_has_priority_over_incomplete) ... ok
+test_hash_known_answer (cases_base.CommonTests.test_hash_known_answer) ... ok
+test_manual_pending_not_pass (cases_base.CommonTests.test_manual_pending_not_pass) ... ok
+test_multiline_contract (cases_base.CommonTests.test_multiline_contract) ... ok
+test_no_hash_tool_not_pass (cases_base.CommonTests.test_no_hash_tool_not_pass) ... ok
+test_observation_not_hardware_pass (cases_base.CommonTests.test_observation_not_hardware_pass) ... ok
+test_observation_only_never_passes_suite (cases_base.CommonTests.test_observation_only_never_passes_suite) ... ok
+test_pass_message_but_crash (cases_base.CommonTests.test_pass_message_but_crash) ... ok
+test_process_exit_preserved (cases_base.CommonTests.test_process_exit_preserved) ... ok
+test_structured_failure (cases_base.CommonTests.test_structured_failure) ... ok
+test_structured_pass (cases_base.CommonTests.test_structured_pass) ... ok
+test_timeout_not_pass (cases_base.CommonTests.test_timeout_not_pass) ... ok
+test_uint_validation (cases_base.CommonTests.test_uint_validation) ... ok
+test_bridge_failure_not_ram_pass (cases_base.NativeTests.test_bridge_failure_not_ram_pass) ... ok
+test_device_directory_refused (cases_base.NativeTests.test_device_directory_refused) ... ok
+test_ram_fault_injection_detected (cases_base.NativeTests.test_ram_fault_injection_detected) ... ok
+test_ram_full_walk_patterns (cases_base.NativeTests.test_ram_full_walk_patterns) ... ok
+test_ram_injection_disabled_in_production (cases_base.NativeTests.test_ram_injection_disabled_in_production) ... ok
+test_ram_invalid_arguments (cases_base.NativeTests.test_ram_invalid_arguments) ... ok
+test_ram_lock_limit_inconclusive (cases_base.NativeTests.test_ram_lock_limit_inconclusive) ... ok
+test_ram_map_preserves_failure (cases_base.NativeTests.test_ram_map_preserves_failure) ... ok
+test_ram_selftest (cases_base.NativeTests.test_ram_selftest) ... ok
+test_ram_small_valid_allocation (cases_base.NativeTests.test_ram_small_valid_allocation) ... ok
+test_ram_time_limit_inconclusive (cases_base.NativeTests.test_ram_time_limit_inconclusive) ... ok
+test_root_directory_refused (cases_base.NativeTests.test_root_directory_refused) ... ok
+test_storage_fault_preserved_not_pass (cases_base.NativeTests.test_storage_fault_preserved_not_pass) ... ok
+test_storage_injection_disabled_in_production (cases_base.NativeTests.test_storage_injection_disabled_in_production) ... ok
+test_storage_real_write_read_cleanup (cases_base.NativeTests.test_storage_real_write_read_cleanup) ... ok
+test_bit_flip (test_diagnostics.NetworkTests.test_bit_flip) ... ok
+test_complete_download (test_diagnostics.NetworkTests.test_complete_download) ... ok
+test_http_404 (test_diagnostics.NetworkTests.test_http_404) ... ok
+test_invalid_sha (test_diagnostics.NetworkTests.test_invalid_sha) ... ok
+test_no_unverified_tls_option (test_diagnostics.NetworkTests.test_no_unverified_tls_option) ... ok
+test_oversize_body (test_diagnostics.NetworkTests.test_oversize_body) ... ok
+test_plain_http_rejected (test_diagnostics.NetworkTests.test_plain_http_rejected) ... ok
+test_range_exact (test_diagnostics.NetworkTests.test_range_exact) ... ok
+test_range_ignored_not_dram_failure (test_diagnostics.NetworkTests.test_range_ignored_not_dram_failure) ... ok
+test_range_missing_header (test_diagnostics.NetworkTests.test_range_missing_header) ... ok
+test_range_wrong_offset (test_diagnostics.NetworkTests.test_range_wrong_offset) ... ok
+test_range_wrong_total (test_diagnostics.NetworkTests.test_range_wrong_total) ... ok
+test_redirect_header_block_reset (test_diagnostics.NetworkTests.test_redirect_header_block_reset) ... ok
+test_repeated_calls_do_not_clobber_url_or_hash (test_diagnostics.NetworkTests.test_repeated_calls_do_not_clobber_url_or_hash) ... ok
+test_same_shell_nested_loop_scoping (test_diagnostics.NetworkTests.test_same_shell_nested_loop_scoping) ... ok
+test_short_then_complete_not_false_hash_failure_or_clean_pass (test_diagnostics.NetworkTests.test_short_then_complete_not_false_hash_failure_or_clean_pass) ... ok
+test_timeout_then_complete_not_appended (test_diagnostics.NetworkTests.test_timeout_then_complete_not_appended) ... ok
+test_acceptance_excludes_raw (cases_base.WiringTests.test_acceptance_excludes_raw) ... ok
+test_fixture_reference_hashes (cases_base.WiringTests.test_fixture_reference_hashes) ... ok
+test_gpu_current_compile_status_gate (cases_base.WiringTests.test_gpu_current_compile_status_gate) ... ok
+test_hash_counter_exact (cases_base.WiringTests.test_hash_counter_exact) ... ok
+test_hash_counter_oversize (cases_base.WiringTests.test_hash_counter_oversize) ... ok
+test_no_disk_management_write_commands (cases_base.WiringTests.test_no_disk_management_write_commands) ... ok
+test_perl_syntax (cases_base.WiringTests.test_perl_syntax) ... ok
+test_profile_mismatch (cases_base.WiringTests.test_profile_mismatch) ... ok
+test_shell_syntax (cases_base.WiringTests.test_shell_syntax) ... ok
+test_unknown_env_cannot_be_elevated (cases_base.WiringTests.test_unknown_env_cannot_be_elevated) ... ok
+test_wrong_model_not_enabled (cases_base.WiringTests.test_wrong_model_not_enabled) ... ok
+test_all_entries_syntax (test_entries.EntryTests.test_all_entries_syntax) ... ok
+test_bootstrap_alias_roundtrip_and_corruption (test_entries.EntryTests.test_bootstrap_alias_roundtrip_and_corruption) ... ok
+test_generated_entries_match (test_entries.EntryTests.test_generated_entries_match) ... ok
+test_raw_entries_are_blocked_without_network (test_entries.EntryTests.test_raw_entries_are_blocked_without_network) ... ok
+test_truncated_entry_does_not_execute (test_entries.EntryTests.test_truncated_entry_does_not_execute) ... ok
+test_acceptance_all_automatic_requires_manual (test_unified.UnifiedTests.test_acceptance_all_automatic_requires_manual) ... ok
+test_bad_hash_report_no_hardware_certificate (test_unified.UnifiedTests.test_bad_hash_report_no_hardware_certificate) ... ok
+test_blank_consent_is_not_authorized (test_unified.UnifiedTests.test_blank_consent_is_not_authorized) ... /usr/lib/python3.13/pty.py:95: DeprecationWarning: This process (pid=11828) is multi-threaded, use of forkpty() may lead to deadlocks in the child.
+  pid, fd = os.forkpty()
+ok
+test_ctrl_c_real_pty_stops_sleeping_child (test_unified.UnifiedTests.test_ctrl_c_real_pty_stops_sleeping_child) ... ok
+test_eof_consent_no_write (test_unified.UnifiedTests.test_eof_consent_no_write) ... ok
+test_gpu_failure_blocks_following_load (test_unified.UnifiedTests.test_gpu_failure_blocks_following_load) ... ok
+test_gpu_managed_sync_present (test_unified.UnifiedTests.test_gpu_managed_sync_present) ... ok
+test_incomplete_download_not_erased_by_good_storage (test_unified.UnifiedTests.test_incomplete_download_not_erased_by_good_storage) ... ok
+test_invalid_menu_reprompt (test_unified.UnifiedTests.test_invalid_menu_reprompt) ... /usr/lib/python3.13/pty.py:95: DeprecationWarning: This process (pid=11828) is multi-threaded, use of forkpty() may lead to deadlocks in the child.
+  pid, fd = os.forkpty()
+ok
+test_menu_exit_no_session (test_unified.UnifiedTests.test_menu_exit_no_session) ... ok
+test_menu_routes_all_choices (test_unified.UnifiedTests.test_menu_routes_all_choices) ... ok
+test_missing_result_no_pass (test_unified.UnifiedTests.test_missing_result_no_pass) ... ok
+test_mlock_unavailable_no_dependent_stress (test_unified.UnifiedTests.test_mlock_unavailable_no_dependent_stress) ... ok
+test_offline_corrupted_package_stops (test_unified.UnifiedTests.test_offline_corrupted_package_stops) ... ok
+test_offline_latest_descriptor_selftest (test_unified.UnifiedTests.test_offline_latest_descriptor_selftest) ... ok
+test_profile_mismatch_does_not_launch_test (test_unified.UnifiedTests.test_profile_mismatch_does_not_launch_test) ... ok
+test_ram_failure_blocks_later_stages_and_reports_not_run (test_unified.UnifiedTests.test_ram_failure_blocks_later_stages_and_reports_not_run) ... ok
+test_standalone_pass_report (test_unified.UnifiedTests.test_standalone_pass_report) ... ok
+test_supervisor_log_open_failure_no_execution (test_unified.UnifiedTests.test_supervisor_log_open_failure_no_execution) ... ok
+test_supervisor_preserves_caller_trap (test_unified.UnifiedTests.test_supervisor_preserves_caller_trap) ... ok
+test_supervisor_term_child_group (test_unified.UnifiedTests.test_supervisor_term_child_group) ... ok
+test_version (test_unified.UnifiedTests.test_version) ... ok
+
+----------------------------------------------------------------------
+Ran 93 tests in 41.632s
+
+OK

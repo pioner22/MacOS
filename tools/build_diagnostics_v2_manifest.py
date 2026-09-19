@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 root = Path(__file__).resolve().parents[1] / 'diagnostics_v2'
 names = ['common.sh', 'count_stream.pl', 'fixtures.txt', 'metal_vram.m', 'net.sh',
-         'profile.sh', 'ram_native.c', 'run.sh', 'storage_file.c']
+         'profile.sh', 'ram_native.c', 'run.sh', 'storage_file.c', 'supervise.pl', 'report.sh']
 rows = []
 for name in names:
     data = (root / name).read_bytes()

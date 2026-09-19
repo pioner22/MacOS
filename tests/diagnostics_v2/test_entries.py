@@ -25,9 +25,10 @@ class EntryTests(unittest.TestCase):
             path=Path(d);curl=path/'curl'
             curl.write_text('''#!/usr/bin/env python3
 import os,sys,shutil
+from urllib.parse import urlsplit
 from pathlib import Path
 args=sys.argv[1:];out=Path(args[args.index('-o')+1]);url=next(x for x in args if x.startswith('https://'))
-name=url.rsplit('/',1)[1];root=Path(os.environ['QA_ROOT']);source=root/name if name=='st.sh' else root/'diagnostics_v2'/name
+name=urlsplit(url).path.rsplit('/',1)[1];root=Path(os.environ['QA_ROOT']);source=root/name if name in ('st.sh','diagnostics-release.tsv') else root/'diagnostics_v2'/name
 shutil.copyfile(source,out)
 if os.environ.get('QA_TAMPER') and name=='st.sh':out.write_bytes(out.read_bytes()+b'bad')
 ''');curl.chmod(0o755)
