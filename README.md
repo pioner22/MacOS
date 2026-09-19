@@ -47,42 +47,21 @@ https://yagodka.org/desktop-updates/mac/
 
 Перед публичным signed release нужны Apple signing/notarization secrets. Они не хранятся в репозитории.
 
-## MacBook Hardware Diagnostics
+## MacBook Hardware Diagnostics — 2.0.0-rc2
 
-В репозитории сохранён автономный двуязычный диагностический набор для Intel Mac / macOS Internet Recovery и полноценной macOS.
-
-Постоянная команда запуска:
+Отдельный RU/EN диагностический комплекс для приёмки после ремонта. Активная реализация: `diagnostics_v2/`. Постоянная команда запуска текущего опубликованного пакета:
 
 ```bash
-curl -L https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh|bash
+curl -fL https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh | bash
 ```
 
-Меню включает:
+Пункт 14 — self-test файлов комплекта, 15 — модель и загруженная ОС, 16 — приёмка без стирания, 17 — новый тестовый файл 1 GiB, 18 — отдельный 40-GiB RAM→внешний RESCUE. RAM/CPU/Metal/файловые тесты требуют полной Intel macOS и инструментов сборки. Наличие меню не доказывает поддержку всех версий Recovery.
 
-- чистый destructive SSD/HDD full-LBA test;
-- RAM Quick 8 GiB;
-- RAM Full Hardcore;
-- RAM Map;
-- CPU/Cache;
-- GPU/VRAM + Metal verifier;
-- Video/Display;
-- Network DNS/TCP/TLS/HTTP;
-- Download Integrity + HTTP Range/resume;
-- Power/Thermal;
-- Hardware Snapshot;
-- Safe Full Suite;
-- Full Complex с dependency gates;
-- Toolkit Selftest для проверки самих диагностических файлов.
+**Старые разрушительные пункты 1/13 и ssd_test.sh заблокированы.** Не собирайте legacy mhdd_v2.part* вручную. Файловый тест не проверяет весь физический SSD. Сведения о питании не выдаются за аппаратный PASS. Чистые автоматические стадии требуют независимой и ручной приёмки.
 
-Результаты различаются как `PASS`, `FAIL`, `INCONCLUSIVE` и `REBOOT_REQUIRED`. Для каждого режима выводятся RU/EN объяснение и следующий шаг. `REBOOT_REQUIRED` у многоэтапного SSD-теста не является полным PASS.
+Журналы включают `REPORT_RU_EN.md`, `summary.tsv`, результаты отдельных стадий; незапущенные этапы отмечаются NOT_RUN. Отсутствие remote fixture, ресурсов или компилятора — ограничение проверки, не доказательство неисправной микросхемы. Dedicated Release диагностических сетевых файлов остаётся отдельной задачей; неполное покрытие не превращается в PASS.
 
-### GitHub network fixtures
-
-Для проверки сети подготовлен детерминированный набор файлов 1/8/32/128/512 MiB. Генератор: `tools/generate_network_fixtures.py`; эталоны: `network-fixtures.sha256` и `network-fixtures.tsv`; публикация: `.github/workflows/network-fixtures.yml` или `publish_network_fixtures.sh` в Release `diagnostic-fixtures-v1`.
-
-`DOWNLOAD TEST` выполняет full-stream SHA-256 и, когда dedicated Release доступен, дополнительно проверяет HTTP Range на известном 16 MiB диапазоне внутри 512 MiB объекта. Если Release недоступен, тест автоматически переключается на публичные GitHub Release assets PowerShell/LLVM с опубликованными SHA-256.
-
-Подробное описание, ограничения, коды состояний и dependency-логика: [`DIAGNOSTICS.md`](DIAGNOSTICS.md).
+Подробности: [DIAGNOSTICS.md](DIAGNOSTICS.md), [единый выпуск rc2](docs/diagnostics/UNIFIED_RC2.md), [реальные программные проверки](docs/diagnostics/QA_RESULTS.md).
 
 ## License
 

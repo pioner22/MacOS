@@ -11,11 +11,12 @@ class BootstrapTests(unittest.TestCase):
         c=self.d/'curl'
         c.write_text('''#!/usr/bin/env python3
 import os,sys,shutil
+from urllib.parse import urlsplit
 from pathlib import Path
 args=sys.argv[1:];out=Path(args[args.index('-o')+1]);url=next(x for x in args if x.startswith('https://'))
-name=url.rsplit('/',1)[1]
+name=urlsplit(url).path.rsplit('/',1)[1]
 if name==os.environ.get('MOCK_MISSING'):sys.exit(22)
-source=Path(os.environ['PACKAGE_DIR'])/name
+root=Path(os.environ['PACKAGE_DIR']); source=root.parent/name if name=='diagnostics-release.tsv' else root/name
 if not source.is_file():sys.exit(22)
 shutil.copyfile(source,out)
 if name==os.environ.get('MOCK_CORRUPT'):out.write_bytes(out.read_bytes()+b'bad')

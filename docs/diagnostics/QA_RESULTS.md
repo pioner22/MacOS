@@ -1,25 +1,27 @@
-# Validation / Проверка — 2.0.0-rc1
+# Проверка / Validation — 2.0.0-rc2
 
-Date: 2026-09-19. Actual local command:
+Повторный прогон опубликованного набора исходников перед объединением: **93 tests, 0 failures, 0 errors, 41.632 seconds, OK**.
 
 ```bash
 python3 -m unittest discover -s tests/diagnostics_v2 -v
 ```
 
-**71 tests passed, 0 failures, 0 errors (31.914 seconds).** Exact output: [qa-linux.log](qa-linux.log).
+Среда: Linux, Bash 5.2, Python unittest, pexpect 4.9.0, Perl, curl и системный cc. Это программная проверка, не результат проверки ноутбука.
 
-The run used Linux, Bash 5.2, Python unittest, system cc, curl, Perl and a local TLS HTTP server. RAM/file engines were actually compiled with `-std=c11 -O2 -Wall -Wextra -Werror` and executed on small (1 MiB) test allocations. Test-only builds injected one changed bit/byte. Production builds were checked to ignore those test environment variables. Native full-pattern verification exercised all 134 patterns at that small allocation size.
+Проверены прежние исправления downloader/native RAM/file I/O и дополнительные сценарии: маршруты всех 17 исполняемых пунктов меню, неверный ввод, отклонение противоречащего профиля, пустое/EOF подтверждение записи, отчёт PASS/FAIL/INCONCLUSIVE/PENDING_MANUAL, NOT_RUN после RAM/CPU gate, настоящая отмена Ctrl+C через PTY, TERM для дочерней группы, отказ открытия лога, сохранение обработчиков вызывающего shell, offline-пакет и повреждение файла пакета. Пропуски не выдаются за PASS. HTTP 404 означает недоступный эталон, не поломку RAM.
 
-Covered: per-call URL/hash scope, complete/corrupt/overlong/truncated transfers, timeout and fresh retry, 404, exact/ignored/wrong/missing Content-Range and redirects, byte counting, known hashes, absent/malformed result contracts, unexpected exit after PASS, FAIL priority, observations/manual outcomes, supervisor timeout/cancellation, mlock failure, allocation argument bounds, file corruption after clean bridge pre/post RAM checks, control-file preservation, raw-path refusal, syntax, profile contradictions, bootstrap/alias tampering and truncation, manifest completeness.
+К основным регрессиям относятся реальные локальные TLS/curl передачи: верный/повреждённый/слишком длинный/оборванный объект, timeout+новая попытка с отдельным хэшем, Range и неправильные заголовки. C-движки исполнялись на малых выделениях, fault injection существует только в тестовых сборках.
 
-The five 1/8/32/128/512 MiB fixture SHA-256 references and the 16 MiB range reference were regenerated independently with SHAKE-256. No real downloads from GitHub Release or the user's network were performed by these regressions. Bootstrap/alias tests use a local file-copy transport mock, not HTTPS to GitHub.
+Отдельные ASan/UBSan-прогоны: RAM Full 134 шаблона на 1 MiB, код 0; file I/O 1 MiB, 2 прохода, код 3 (ожидаемое отсутствие macOS cache controls на Linux), содержимое проверено. Диагностик sanitizer не зарегистрировано.
 
-**Not validated:** real macOS/Recovery/Bash 3.2, Metal compilation/execution, Apple F_NOCACHE/F_FULLFSYNC behavior, full 40 GiB bridge, full 48 GiB RAM load, stability after power cycles, physical-chip attribution, the old RAW engine, or automatic unattended long-duration combined burn-in. Correct Linux file verification deliberately returns INCONCLUSIVE for macOS-specific cache controls. Actual hardware acceptance remains pending.
+**Не проверено здесь:** настоящая macOS/Recovery/Bash 3.2, Metal compile/runtime, 40/48 GiB нагрузка, плата пользователя, его сеть, F_NOCACHE/F_FULLFSYNC Apple, холодный повтор. Эти ограничения нельзя заменить Linux PASS.
 
-Legacy profile tests under `tests/test_diagnostic_profile.py` / `tests/test_profile_entrypoints.py` describe the v1 implementation; the old 35-test claim is not a v2 result. Use the explicit v2 discovery command above. Old scripts' names now route to v2, and destructive aliases return BLOCKED. A workflow configuration is provided separately; this local result is not a claimed GitHub Actions success.
+Полный журнал: `qa-rc2-linux.log`; SHA-256: `1736c1059e928931f562c3e2cde013bbac2ed3e5d272cbc458ba5cc7b1ccbf0f`.
 
-RU: Это проверка программной логики, не подтверждение исправности ноутбука. После ремонта сначала проверяются меню/профиль и self-test; затем нативные тесты в полной macOS и независимая проверка. Ограничение инструмента или среды не превращается в аппаратный FAIL. Не передавайте ноутбук на повторную перепайку по одному выводу самописного теста без независимого воспроизведения.
+Пакет: `28f01d8bbc81afff6512fac0d522765bbb8f674e`. Bootstrap: `da6537e4fa8cb81291f9057d5ab6d268432f9f0e`. На каждом новом запуске стабильный bootstrap читает одно актуальное описание выпуска, затем фиксирует все файлы на его commit. Проверка манифеста и размеров выполнена отдельно.
 
-Pinned source package: `1b4e0677e58641255ab69931169effc0693aeee9`.
-Pinned bootstrap: `64f8c220bbf6d88a0c0dd1d000127d96e31d494b`.
-Manifest SHA-256: `6c4d4421165f2a270eababffd79480345c0b7b2e587bdf2319027ba4f90d206a`.
+93 — число test methods; отдельные маршруты меню входят в subtests. Старые числа 71 и 79 не складываются. Их независимые кандидаты не являются двумя активными версиями в новой публикации. CI следует проверять отдельно: наличие workflow не означает зелёный GitHub Actions.
+
+## English
+
+The exact final local suite passed 93 tests in 41.632 seconds. It exercises software semantics, local TLS/curl, small native allocations, injected faults, menu routing, PTY cancellation and generated reports. It does not certify real macOS/Metal or the repaired Mac. Missing capabilities and incomplete coverage stay INCONCLUSIVE. A clean automatic workflow still requires manual and independent acceptance checks. Source and bootstrap references above identify the checked implementation; the release descriptor selects the current published package.
