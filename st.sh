@@ -8,21 +8,30 @@ macdiag_launch(){
   umask 077
   export LC_ALL=C
   mode=${1:-menu}
+  # Minimal built-in preflight before importing any downloaded module.
+  for name in mktemp rm cp mv cat wc tr awk sed grep tee date uname;do
+    command -v "$name" >/dev/null 2>&1 || { echo "BOOTSTRAP_MISSING_TOOL=$name";return 3; }
+  done
+  if [ "$mode" != --offline ];then command -v curl >/dev/null 2>&1 || { echo 'BOOTSTRAP_MISSING_TOOL=curl';return 3; };fi
+  work=$(mktemp -d /tmp/macdiag-package.XXXXXX) || return 3
+  MACDIAG_BOOT_WORK=$work;MACDIAG_BOOT_LOG="$work/bootstrap.log";export MACDIAG_BOOT_LOG
+  : > "$MACDIAG_BOOT_LOG" || return 3
+  printf 'BOOTSTRAP_STAGE=PREFLIGHT\nBASH=%s\nKERNEL=%s ARCH=%s\n' "$BASH_VERSION" "$(uname -s)" "$(uname -m)" | tee -a "$MACDIAG_BOOT_LOG"
+  echo "BOOTSTRAP_LOG=$MACDIAG_BOOT_LOG"
+  # Failed bootstrap evidence is kept; no credentials or environment dump are collected.
+  trap 'echo "BOOTSTRAP_EXIT=$? LOG=$MACDIAG_BOOT_LOG"; echo "RU: Лог в /tmp временный. EN: /tmp evidence may be volatile."' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
   hashcmd=()
-  for name in sha256sum shasum;do
+  for name in sha256sum shasum openssl;do
     command -v "$name" >/dev/null 2>&1 || continue
-    if [ "$name" = shasum ];then hashcmd=(shasum -a 256);else hashcmd=(sha256sum);fi
+    case "$name" in shasum)hashcmd=(shasum -a 256);;openssl)hashcmd=(openssl dgst -sha256 -r);;*)hashcmd=(sha256sum);;esac
     actual=$(printf abc | "${hashcmd[@]}") || { hashcmd=();continue; }
     [ "${actual%% *}" = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad ] && break
     hashcmd=()
   done
   [ "${#hashcmd[@]}" -ne 0 ] || { echo 'INCONCLUSIVE: SHA-256 недоступен / unavailable';return 3; }
-  work=$(mktemp -d /tmp/macdiag-package.XXXXXX) || return 3
-  MACDIAG_BOOT_WORK=$work
-  trap 'rm -rf "$MACDIAG_BOOT_WORK"' EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  trap 'exit 129' HUP
   if [ "$mode" = --offline ];then
     src=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || return 3
     cp "$src/diagnostics-release.tsv" "$work/release.tsv" || return 3
@@ -50,7 +59,7 @@ macdiag_launch(){
   [ "${actual%% *}" = "$manifest_sha" ] || { echo 'INCONCLUSIVE: manifest hash mismatch / повреждён манифест';return 3; }
   n=0
   while IFS=$'\t' read -r sha bytes name extra;do
-    case "$name" in common.sh|count_stream.pl|fixtures.txt|metal_vram.m|net.sh|profile.sh|ram_native.c|run.sh|storage_file.c|report.sh|supervise.pl) ;;*)return 3;;esac
+    case "$name" in common.sh|count_stream.pl|fixtures.txt|metal_vram.m|net.sh|profile.sh|ram_native.c|run.sh|storage_file.c|report.sh|supervise.pl|profiles.tsv|recovery.sh|recovery_ram.pl|recovery_file.pl) ;;*)return 3;;esac
     case "$bytes" in ''|*[!0-9]*)return 3;;esac
     case "$sha" in *[!a-f0-9]*|'')return 3;;esac
     [ "${#sha}" = 64 ] && [ "${#bytes}" -le 6 ] && [ -z "$extra" ] && [ ! -e "$work/$name" ] || return 3
@@ -71,9 +80,9 @@ macdiag_launch(){
     mv "$work/$name.part" "$work/$name" || return 3
     n=$((n+1))
   done < "$work/manifest.tsv"
-  [ "$n" -eq 11 ] || { echo 'INCONCLUSIVE: incomplete package / неполный пакет';return 3; }
-  for name in common.sh profile.sh net.sh report.sh run.sh;do /bin/bash -n "$work/$name" || return 3;done
-  export MACDIAG_CODE_REF=$ref MACDIAG_PACKAGE_WORK=$work
+  [ "$n" -eq 15 ] || { echo 'INCONCLUSIVE: incomplete package / неполный пакет';return 3; }
+  for name in common.sh profile.sh net.sh report.sh recovery.sh run.sh;do /bin/bash -n "$work/$name" || return 3;done
+  export MACDIAG_CODE_REF=$ref MACDIAG_PACKAGE_WORK=$work MACDIAG_RELEASE_VERSION=$version
   # exec keeps the PID/TTY: Ctrl+C reaches the runner directly, no orphan launcher.
   # Validated source cache is retained in /tmp for investigation, not user payloads.
   if command -v caffeinate >/dev/null 2>&1;then caffeinate -di -w $$ > "$work/caffeinate.log" 2>&1 & fi

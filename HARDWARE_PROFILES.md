@@ -1,21 +1,13 @@
-# Профили / Profiles — diagnostics v2
+# Профили оборудования и среды — rc3
 
-## Русский
+Основной реестр: `diagnostics_v2/profiles.tsv`; выбор и пробы: `diagnostics_v2/profile.sh`. Девять шаблонов A2141/Intel/Apple Recovery/full, safe, ambiguous installer/recovery и unknown дополняются версией ОС, архитектурой процесса и типом консоли. Это составной профиль, а не сотни копий одного shell-скрипта.
 
-Эта страница заменяет инструкцию профилей v1. Пункт **15** сохранён. Авторитетный исполняемый профиль находится в `diagnostics_v2/profile.sh`; старый `diagnostic_profile.sh` оставлен как исторический модуль и не используется новым загрузчиком.
+Порядок: minimal preflight → hardware/OS/environment → фактически работающие инструменты → backend policy → журнал профиля → меню. Присутствующая команда и успешно проверенная команда имеют разные состояния. Пробы ограничены временем. Root UID не равен Recovery; x86_64 процесса не равен Intel CPU при Rosetta; ОС установщика не равна загруженной ОС.
 
-Автоматически читаются `hw.model`, архитектура процесса, тип CPU с учётом Rosetta, объём RAM, версия и сборка работающей macOS. Recovery определяется консервативно по CDIS и Base System; полная ОС — по Finder и маркеру завершённой настройки. Неопределённая среда остаётся unknown. Это эвристика, а не доказательство способа загрузки.
+В Recovery без toolchain выбирается ограниченный Perl screen, если его зависимости работают. Без них тест помечается недоступным. Native сохраняет обязательный mlock и бюджет памяти. Неизвестная среда не получает право на большую нагрузку. Ручной профиль может ограничить запуск, но не подменить факты. Все профили пока SOFTWARE_TESTED_REAL_HARDWARE_PENDING.
 
-Модель: AUTO, A2141 (`MacBookPro16,1` / `MacBookPro16,4` с Intel), Generic Intel, Apple silicon, Limited. ОС: AUTO, Catalina, Big Sur, Monterey, Ventura, Sonoma, Sequoia, Tahoe, Other. Среда: AUTO, Recovery, Full macOS, Limited. Ручной выбор не может противоречить обнаруженному оборудованию/ОС или превратить unknown в полную ОС. Название целевого установщика не является версией загруженной среды.
+Пункт 15 меняет подтверждённый профиль, не устанавливает ОС. RAW-пункты 1/13 заблокированы для любой модели. Файловая запись требует отдельного согласия. Пункт 19 сохраняет локальный минимальный экспорт без автоматической отправки.
 
-В версии 2.0.0-rc1 нативные RAM/CPU/файловый/Metal тесты допускаются только для поддерживаемой полной Intel macOS. На Recovery/Apple silicon/unknown они возвращают INCONCLUSIVE. Это преднамеренное ограничение до реальной проверки этих конфигураций. Сеть, self-test и наблюдения имеют собственные ограничения. Выбор модели не устанавливает ОС и не меняет права.
+[Подробная архитектура RU](docs/diagnostics/RECOVERY_PRODUCT_RU.md) · [English](docs/diagnostics/RECOVERY_PRODUCT_EN.md) · [QA rc3](docs/diagnostics/RC3_QA.md)
 
-Старые разрушительные пункты 1/13 и SSD-точка входа заблокированы независимо от модели; ручной выбор A2141 их не разблокирует. Для нового файлового теста используется пункт 17 с отдельным согласием TEST-FILES. Приёмка — пункт 16. Отдельный 40-ГиБ bridge — пункт 18 с согласием RAM-BRIDGE.
-
-Предыдущие 35 проверок относились к v1; они не подтверждают новую версию. Фактические v2 регрессии, границы проверки и инструкция: [QA_RESULTS](docs/diagnostics/QA_RESULTS.md), [Приёмка](docs/diagnostics/POST_REPAIR_RU.md).
-
-## English
-
-Option 15 remains available. The v2 profile implementation is `diagnostics_v2/profile.sh`; the old root profile library is historical and unused by the new launcher. Detection reads real model, CPU/process architecture including Rosetta, RAM and running macOS version/build. Conservative Recovery/full classification remains heuristic. Manual selection cannot elevate an unknown environment or contradict observed data.
-
-Native RAM/CPU/file/Metal tests in this RC are limited to supported full Intel macOS. Recovery, Apple silicon and unknown configurations are not certified by merely appearing in the profile menu. Legacy raw entry points stay quarantined regardless of model. File testing and the external bridge require separate consent. See the current v2 QA and acceptance documents; the former 35 v1 checks are not a v2 result.
+Historical rc1/rc2 documents describe their own revisions. The current profiles are software-tested scenarios, not proof that every listed Mac/Recovery version has been exercised on real hardware.

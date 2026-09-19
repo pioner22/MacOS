@@ -4,7 +4,7 @@
 export LC_ALL=C
 umask 077
 COMMON_ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || return 3
-DIAG_VERSION=2.0.0-rc2
+DIAG_VERSION=2.0.0-rc3
 say(){ printf '%s\n' "$*"; }
 valid_uint(){ case "$1" in ''|*[!0-9]*) return 1;; esac; [ "${#1}" -le 9 ] && [ "$1" -ge "$2" ] && [ "$1" -le "$3" ]; }
 result(){
@@ -27,9 +27,9 @@ need(){ command -v "$1" >/dev/null 2>&1; }
 select_hash(){
   local tool got
   SHA_CMD=()
-  for tool in sha256sum shasum; do
+  for tool in sha256sum shasum openssl; do
     need "$tool" || continue
-    if [ "$tool" = shasum ]; then SHA_CMD=(shasum -a 256); else SHA_CMD=(sha256sum); fi
+    case "$tool" in shasum) SHA_CMD=(shasum -a 256);;openssl) SHA_CMD=(openssl dgst -sha256 -r);;*) SHA_CMD=(sha256sum);;esac
     got=$(printf abc | "${SHA_CMD[@]}") || continue
     if [ "${got%% *}" = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad ]; then return 0; fi
   done
@@ -56,7 +56,7 @@ compile_c(){
   compiler=''
   if [ "$(uname -s)" = Darwin ]; then
     need xcode-select && xcode-select -p >/dev/null 2>&1 || return 3
-    compiler=$(xcrun -f clang 2>/dev/null) || return 3
+    compiler=${CAP_CLANG:-$(xcrun -f clang 2>/dev/null)}; [ -n "$compiler" ] || return 3
   else compiler=$(command -v cc) || return 3; fi
   rm -f "$out"
   "$compiler" -std=c11 -O2 -Wall -Wextra -Werror "$source" -o "$out" > "$STEP_DIR/compile.log" 2>&1 || {

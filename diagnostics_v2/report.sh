@@ -3,9 +3,12 @@
 # Text reports only; no automatic upload, repair verdict, or unverified PASS.
 next_step(){
   case "$1" in
+    *SCREEN_CLEAN*)
+      say 'RU: Скрининг не нашёл несовпадений, но нативное полное покрытие не получено. INCONCLUSIVE здесь не означает поломку.'
+      say 'EN: Screening found no mismatch but native coverage is missing. INCONCLUSIVE here does not mean faulty hardware.';;
     *COMPILER*|*BUILD*|*CLANG*|*TOOLCHAIN*)
-      say 'RU: Нужна полная macOS и установленные Command Line Tools. Ошибка сборки не доказывает дефект оборудования.'
-      say 'EN: Use full macOS with Command Line Tools. A build error is not a hardware diagnosis.';;
+      say 'RU: Нативному движку нужен рабочий совместимый компилятор или проверенный бинарник. В Recovery используйте доступный ограниченный скрининг. Ошибка сборки не доказывает дефект оборудования.'
+      say 'EN: A native engine needs a compatible toolchain or verified binary; Recovery may offer limited screening. A build error is not a hardware diagnosis.';;
     *RESOURCE*|*RAM_INCOMPLETE*|*MLOCK*)
       say 'RU: Смотрите engine.log: mlock, нехватка ресурсов или тайм-аут. Закройте приложения; не считайте это битой RAM.'
       say 'EN: Inspect engine.log for mlock, resource limits or timeout. Close applications; do not diagnose faulty RAM from this alone.';;
@@ -22,8 +25,8 @@ next_step(){
       say 'RU: Запись не разрешена и не запускалась. Для файлового этапа нужен отдельный выбор каталога и подтверждение.'
       say 'EN: Writing was not authorized or started. File testing needs a selected directory and explicit consent.';;
     *FULL*MACOS*|*NON_MACOS*|*PROFILE*)
-      say 'RU: Проверьте фактически загруженную ОС и профиль. В Recovery нативная приёмка этой версии недоступна.'
-      say 'EN: Check the running OS and profile. Native acceptance in this version is unavailable in Recovery.';;
+      say 'RU: Проверьте фактически загруженную ОС и профиль. Recovery выбирает сценарии по доступным инструментам; не подменяйте загруженную ОС целевым установщиком.'
+      say 'EN: Check the running OS and profile. Recovery chooses capability-based scenarios; do not substitute an installer target for the running OS.';;
     *GPU*)
       say 'RU: Сохраните журнал сборки и Metal. Этот тест охватывает путь GPU/драйвер/RAM, а не отдельную микросхему VRAM.'
       say 'EN: Keep the build and Metal logs. This tests the GPU/driver/RAM path, not an isolated VRAM chip.';;
@@ -46,6 +49,10 @@ report_render(){
     printf 'Начало UTC / Started UTC: %s  \nОбновлено UTC / Updated UTC: %s\n\n' "${SESSION_STARTED:-unknown}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf 'Это отчёт о выполненных проверках, не сертификат исправности.\nThis reports completed checks, not whole-machine certification.\n\n'
     printf '```text\n';cat "$SESSION/profile.txt" 2>/dev/null;printf '\n```\n\n'
+    if [ -f "$SESSION/capabilities.tsv" ];then
+      printf '## Возможности среды / Environment capabilities\n\n```text\n'
+      cat "$SESSION/capabilities.tsv";printf '```\n\n'
+    fi
     printf '| Этап / Stage | Состояние / State | Причина / Reason |\n|---|---|---|\n'
     while IFS=$'\t' read -r stage state reason location;do
       [ -n "$stage" ] || continue
