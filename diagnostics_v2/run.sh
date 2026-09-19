@@ -5,20 +5,21 @@ ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || exit 3
 . "$ROOT/profile.sh"
 . "$ROOT/net.sh"
 . "$ROOT/report.sh"
+. "$ROOT/recovery.sh"
 selftest_main(){
   local f got size sha name bad=0 count=0 seen=" "
   select_hash || { unknown SHA256_KNOWN_ANSWER_FAILED; return 3; }
-  for f in common.sh profile.sh net.sh report.sh run.sh; do /bin/bash -n "$ROOT/$f" || bad=1; done
-  if need perl; then perl -c "$ROOT/count_stream.pl" || bad=1; perl -c "$ROOT/supervise.pl" || bad=1; else unknown PERL_UNAVAILABLE;return 3;fi
+  for f in common.sh profile.sh net.sh report.sh recovery.sh run.sh; do /bin/bash -n "$ROOT/$f" || bad=1; done
+  if need perl; then perl -c "$ROOT/count_stream.pl" || bad=1; perl -c "$ROOT/supervise.pl" || bad=1; perl -c "$ROOT/recovery_ram.pl" || bad=1; perl -c "$ROOT/recovery_file.pl" || bad=1; else unknown PERL_UNAVAILABLE;return 3;fi
   if [ -f "$ROOT/manifest.tsv" ]; then
     while read -r sha size name; do
-      case "$name" in common.sh|count_stream.pl|fixtures.txt|metal_vram.m|net.sh|profile.sh|ram_native.c|run.sh|storage_file.c|supervise.pl|report.sh) ;;*) bad=1;continue;;esac
+      case "$name" in common.sh|count_stream.pl|fixtures.txt|metal_vram.m|net.sh|profile.sh|ram_native.c|run.sh|storage_file.c|supervise.pl|report.sh|profiles.tsv|recovery.sh|recovery_ram.pl|recovery_file.pl) ;;*) bad=1;continue;;esac
       case "$seen" in *" $name "*) bad=1;;esac
       seen="$seen$name ";count=$((count+1))
       got=$(hash_file "$ROOT/$name") || bad=1
       [ "$got" = "$sha" ] && [ "$(wc -c < "$ROOT/$name" | tr -d ' ')" = "$size" ] || bad=1
     done < "$ROOT/manifest.tsv"
-    [ "$count" -eq 11 ] || bad=1
+    [ "$count" -eq 15 ] || bad=1
   else unknown PACKAGE_MANIFEST_MISSING; return 3; fi
   [ "$bad" = 0 ] || { result FAIL 2 TOOLKIT_SELFTEST_FAILED 'Ошибка файлов комплекта, не диагноз ноутбука.' 'Toolkit file validation failed, not a hardware diagnosis.';return 2; }
   say 'SCOPE=PACKAGE_HASHES_SHELL_PERL_SYNTAX_AND_SHA_KNOWN_ANSWER not_hardware_certification=1'
@@ -27,10 +28,12 @@ selftest_main(){
 ram_main(){
   local mode mib cap total rc bin hold rounds
   mode=$1
-  intel_full || { unknown NATIVE_RAM_REQUIRES_SUPPORTED_FULL_INTEL_MACOS;return 3; }
+  if [ "${RAM_BACKEND:-unavailable}" = perl_screen ];then recovery_ram_main "$mode";return $?;fi
+  profile_validate && [ "${RAM_BACKEND:-unavailable}" = native_candidate ] || { unknown NATIVE_RAM_RUNTIME_UNAVAILABLE;return 3; }
   total=$((RAM_BYTES/1048576));cap=$((total*3/4))
   case "$mode" in full) mib=49152;hold=1;rounds=1;;map) mib=8192;hold=3;rounds=2;;*) mib=8192;hold=1;rounds=1;;esac
   [ "$mib" -le "$cap" ] || mib=$cap
+  mib=$(native_budget "$mib") || { unknown MEMORY_BUDGET_UNAVAILABLE_OR_LOW;return 3; }
   mib=$((mib/32*32)); [ "$mib" -ge 32 ] || { unknown RAM_SIZE_INVALID;return 3; }
   say "RAM_PLAN mode=$mode target_mib=$mib installed_mib=$total reserve_mib=$((total-mib))"
   say 'RU: Требуется закрепление mlock. При отказе тест не нагружает память; повторите с нужными правами после закрытия приложений.'
@@ -57,12 +60,13 @@ cpu_worker(){
   [ "$out" = a6d72ac7690f53be6ae46ba88506bd97302a093f7108472bd9efc3cefda06484 ] || return 2
 }
 cpu_stress(){
-  local round w pid rc workers bad=0 incomplete=0
+  local round w pid rc workers rounds=4 bad=0 incomplete=0
   local -a pids
   workers=$(sysctl -n hw.logicalcpu);valid_uint "$workers" 1 256 || return 3
   [ "$workers" -le 16 ] || workers=16
-  say "CPU_PLAN workers=$workers rounds=4 bytes_per_worker=268435456 cache_isolation=NOT_CLAIMED"
-  for round in 1 2 3 4; do
+  if [ "$ENVIRONMENT" != full ];then rounds=1;[ "$workers" -le 2 ] || workers=2;fi
+  say "CPU_PLAN workers=$workers rounds=$rounds bytes_per_worker=268435456 cache_isolation=NOT_CLAIMED"
+  for ((round=1;round<=rounds;round++)); do
     pids=()
     for ((w=0;w<workers;w++));do cpu_worker "$round-$w" "$STEP_DIR" & pids[${#pids[@]}]=$!;done
     for pid in "${pids[@]}";do wait "$pid";rc=$?;case "$rc" in 0);;2)bad=1;;*)incomplete=1;;esac;done
@@ -74,7 +78,7 @@ cpu_stress(){
 }
 cpu_main(){
   local rc
-  intel_full && need perl && select_hash || { unknown CPU_PREREQUISITES_MISSING;return 3; }
+  [ "${CPU_BACKEND:-unavailable}" = sha_path ] && need perl && select_hash || { unknown CPU_PREREQUISITES_MISSING;return 3; }
   capture 1800 /bin/bash "$ROOT/run.sh" --engine cpu "$STEP_DIR";rc=$?
   case "$rc" in 129|130|143) return "$rc";;esac
   case "$rc" in 0) grep -qx 'ENGINE_COMPLETE=CPU_PASS' "$STEP_DIR/engine.log" || { unknown CPU_COMPLETION_MISSING;return 3; };passed CPU_HASH_EXECUTION_PATH;;2)fault CPU_RAM_EXECUTION_PATH_MISMATCH;;*)unknown CPU_PROCESS_OR_RESOURCE_LIMIT;;esac
@@ -94,10 +98,12 @@ gpu_main(){
 file_main(){
   local mode path mib bin rc location
   mode=$1
-  intel_full || { unknown FILE_TEST_REQUIRES_FULL_INTEL_MACOS;return 3; }
+  if [ "$mode" = storage ] && [ "${FILE_BACKEND:-}" = perl_file_screen ];then recovery_file_main;return $?;fi
+  profile_validate && [ "${FILE_BACKEND:-unavailable}" = native_candidate ] || { unknown FILE_RUNTIME_UNAVAILABLE;return 3; }
   if [ "$mode" = bridge ];then
     path=${BRIDGE_TARGET:-/Volumes/RESCUE};mib=40960
     [ "$RAM_BYTES" -ge 68719476736 ] || { unknown BRIDGE_REQUIRES_64GIB_RAM;return 3; }
+    [ "$(native_budget 40960)" = 40960 ] || { unknown BRIDGE_MEMORY_BUDGET_TOO_LOW;return 3; }
     location=$(diskutil info "$path" 2>/dev/null | awk -F: '/^[ \t]*Device Location:/{gsub(/^[ \t]+|[ \t]+$/,"",$2);print $2;exit}')
     [ "$location" = External ] || { unknown EXTERNAL_TARGET_NOT_CONFIRMED;return 3; }
   else path=${FILE_TARGET:-};mib=1024;fi
@@ -119,16 +125,17 @@ snapshot_main(){
   profile_show
   for tool in 'hardware' 'power';do
     case "$tool" in
-      hardware) if need system_profiler; then supervise 60 system_profiler SPHardwareDataType SPDisplaysDataType; case $? in 129|130|143) return 130;;esac;fi;;
+      hardware) if [ "${CAP_SUPERVISOR:-no}" = yes ] && need system_profiler; then supervise 60 system_profiler SPHardwareDataType SPDisplaysDataType; case $? in 129|130|143) return 130;;esac;fi;;
       power) need pmset && pmset -g batt || :;;
     esac
   done
+  if [ "${CAP_DISKUTIL:-no}" = yes ];then pf_probe 8 diskutil list;fi
   result OBSERVED 5 INVENTORY_ONLY 'Сведения собраны; это не тест исправности.' 'Inventory collected; this is not a health test.'
 }
 power_main(){
   need pmset && pmset -g batt || :
   need pmset && pmset -g therm || :
-  if need powermetrics;then supervise 15 powermetrics -n 3 -i 1000; case $? in 129|130|143) return 130;;esac;fi
+  if [ "${CAP_SUPERVISOR:-no}" = yes ] && need powermetrics;then supervise 15 powermetrics -n 3 -i 1000; case $? in 129|130|143) return 130;;esac;fi
   result OBSERVED 5 POWER_OBSERVATION_ONLY 'Наблюдение не доказывает исправность питания и не заменяет измерения платы.' 'Observations do not certify power circuitry or replace board measurements.'
 }
 manual_main(){
@@ -137,8 +144,13 @@ manual_main(){
 }
 raw_blocked(){ result BLOCKED 7 LEGACY_RAW_QUARANTINED 'Старый разрушительный движок сохранён, но отключён до отдельного аудита. Для приёмки используйте файловый тест 17.' 'Legacy destructive engine is retained but quarantined pending its own audit. Use file test 17 for acceptance.'; }
 consent_files(){
-  printf 'RU: Каталог для отдельного тестового файла 1 ГиБ (Enter = домашний; 0 = пропустить).\nEN: Directory for a new 1 GiB test file (Enter = home; 0 = skip).\n> '
-  read_reply || return 3; [ "$REPLY" != 0 ] || return 3;FILE_TARGET=${REPLY:-$HOME}
+  say "FILE_BACKEND=${FILE_BACKEND:-unavailable} NATIVE_MIB=1024 FALLBACK_MIB=256"
+  printf 'RU: Каталог для отдельного тестового файла (native 1 ГиБ; Perl 256 МиБ) (Enter = домашний; 0 = пропустить).\nEN: Directory for a new test file (native 1 GiB; Perl 256 MiB) (Enter = home; 0 = skip).\n> '
+  read_reply || return 3; [ "$REPLY" != 0 ] || return 3
+  if [ "$ENVIRONMENT" != full ] && [ -z "$REPLY" ];then
+    say 'RU: В Recovery укажите существующий каталог /Volumes/ИМЯ; новый том не создаётся. EN: Recovery needs an existing /Volumes/NAME directory.';return 3
+  fi
+  FILE_TARGET=${REPLY:-$HOME}
   printf 'TARGET=%s\nRU: Будут созданы и проверены только временные тестовые файлы. Введите TEST-FILES.\nEN: Only new temporary test files will be created and verified. Type TEST-FILES.\n> ' "$FILE_TARGET"
   read_reply && [ "$REPLY" = TEST-FILES ] || return 3
   FILE_CONSENT=TEST-FILES
@@ -146,6 +158,7 @@ consent_files(){
 acceptance_main(){
   local kind state
   kind=$1
+  if [ "$ENVIRONMENT" != full ] || [ "${RAM_BACKEND:-}" = perl_screen ];then recovery_suite "$kind";return $?;fi
   printf '%s\n' TOOLKIT HARDWARE POWER RAM_QUICK > "$SESSION/plan.txt" || return 3
   [ "$kind" = safe ] || printf '%s\n' RAM_FULL >> "$SESSION/plan.txt" || return 3
   printf '%s\n' CPU GPU NETWORK DOWNLOAD >> "$SESSION/plan.txt" || return 3
@@ -191,16 +204,12 @@ menu(){
   while :;do
     profile_show
     printf '\nMac Hardware Diagnostics %s — единая версия / unified build\n' "$DIAG_VERSION"
-    if intel_full;then
-      say 'RU: Нативные тесты требуют Command Line Tools и ресурсов. EN: Native tests require toolchain and resources.'
-    else
-      say 'RU: Ограниченная среда: нативные RAM/CPU/GPU/SSD тесты недоступны.'
-      say 'EN: Limited environment: native RAM/CPU/GPU/storage tests are unavailable.'
-    fi
+    say "RU: Сценарии выбраны по возможностям. EN: Scenarios follow detected capabilities."
+    say "RAM=$RAM_BACKEND CPU=$CPU_BACKEND FILE=$FILE_BACKEND GPU=$GPU_BACKEND"
     cat <<'MENU'
  1  SSD RAW / Стирание всего диска — ЗАБЛОКИРОВАНО / BLOCKED
- 2  RAM QUICK / Быстрая память — до 8 ГиБ / up to 8 GiB
- 3  RAM FULL / Полная память — до 48 ГиБ, 134 шаблона / patterns
+ 2  RAM QUICK / Память: native до 8 ГиБ / Perl-screen до 256 МиБ
+ 3  RAM EXTENDED / Расширенная: native до 48 ГиБ / Perl-screen до 1 ГиБ
  4  RAM MAP / Карта несовпадений, НЕ адреса чипов / NOT chip addresses
  5  CPU / Проверка вычислений SHA / SHA execution test
  6  GPU / Видеопамять: 256 МиБ на устройство / per device, experimental
@@ -214,8 +223,9 @@ menu(){
 14  SELFTEST / Проверка самого комплекта, НЕ железа / toolkit only
 15  MODEL / OS / Выбор модели и ЗАГРУЖЕННОЙ ОС / running OS
 16  POST-REPAIR / Приёмка после ремонта, БЕЗ стирания / NO erase
-17  STORAGE FILE / Новый тестовый файл 1 ГиБ / new 1 GiB file
+17  STORAGE FILE / Новый файл: native 1 ГиБ / Perl-screen 256 МиБ
 18  RAM -> RESCUE / Отдельный тест 40 ГиБ / separate 40 GiB test
+19  SUPPORT / Пакет обратной связи, ТОЛЬКО локально / NO upload
  0  EXIT / Выход (также Enter / also Enter)
 RU: Во время теста Ctrl+C останавливает запуск. Отчёт сохраняется отдельно.
 EN: Ctrl+C stops the run. The report is stored separately.
@@ -225,8 +235,8 @@ MENU
     case "$REPLY" in
       0|'') MODE=exit;return 0;;1|13)MODE=raw;;2)MODE=ramquick;;3)MODE=ramfull;;4)MODE=rammap;;5)MODE=cpu;;6)MODE=gpu;;7)MODE=display;;8)MODE=network;;9)MODE=download;;10)MODE=power;;11)MODE=snapshot;;12)MODE=safe;;14)MODE=selftest;;
       15) if ! profile_choose;then say 'RU: Выбор отклонён; прежний профиль сохранён. EN: Selection rejected; previous profile retained.';fi;continue;;
-      16)MODE=acceptance;;17)MODE=storage;;18)MODE=bridge;;
-      *)say 'UNKNOWN_SELECTION / Неизвестный пункт: введите число 0–18.';continue;;
+      16)MODE=acceptance;;17)MODE=storage;;18)MODE=bridge;;19)MODE=support;;
+      *)say 'UNKNOWN_SELECTION / Неизвестный пункт: введите число 0–19.';continue;;
     esac
     return 0
   done
@@ -234,12 +244,14 @@ MENU
 # Long transfers get the same process-group cancellation as native workloads.
 network_supervised(){
   local rc
+  if [ "${CAP_SUPERVISOR:-no}" != yes ];then network_main;return $?;fi
   capture 500 /bin/bash "$ROOT/run.sh" --engine network "$STEP_DIR"; rc=$?
   case "$rc" in 0|2|3) [ -f "$STEP_DIR/result.tsv" ] || { unknown NETWORK_RESULT_MISSING;return 3; };;129|130|143)return "$rc";;*)unknown NETWORK_ENGINE_INTERRUPTED;return 3;;esac
   return "$rc"
 }
 download_supervised(){
   local rc
+  [ "${CAP_SUPERVISOR:-no}" = yes ] || { unknown DOWNLOAD_SUPERVISOR_UNAVAILABLE;return 3; }
   capture 14400 /bin/bash "$ROOT/run.sh" --engine download "$STEP_DIR"; rc=$?
   case "$rc" in 0|2|3) [ -f "$STEP_DIR/result.tsv" ] || { unknown DOWNLOAD_RESULT_MISSING;return 3; };;129|130|143)return "$rc";;*)unknown DOWNLOAD_ENGINE_INTERRUPTED;return 3;;esac
   return "$rc"
@@ -251,17 +263,16 @@ engine_main(){
   profile_detect
   [ "$KERNEL" = Darwin ] || return 3
   case "$mode" in
-    cpu) intel_full && need perl && select_hash || return 3; cpu_stress;;
+    cpu) [ "${CPU_BACKEND:-unavailable}" = sha_path ] && need perl && select_hash || return 3; cpu_stress;;
     network) network_main;; download) download_main;; *) return 3;;
   esac
 }
 main(){
   local base rc state
   case "${1:-}" in --version) say "VERSION=$DIAG_VERSION";return 0;;--engine) shift;engine_main "$@";return $?;;esac
+  if [ -n "${MACDIAG_RELEASE_VERSION:-}" ] && [ "$MACDIAG_RELEASE_VERSION" != "$DIAG_VERSION" ];then say 'RESULT=INCONCLUSIVE RELEASE_VERSION_MISMATCH';return 3;fi
   profile_detect;profile_validate || { say 'RESULT=INCONCLUSIVE PROFILE_MISMATCH';return 3; }
   MODE=${1:-menu}
-  if [ "$MODE" = menu ];then menu || return 3;fi
-  [ "$MODE" != exit ] || return 0
   base=/tmp
   if [ -n "${MACDIAG_REPORT_DIR:-}" ];then
     [ -d "$MACDIAG_REPORT_DIR" ] && [ -w "$MACDIAG_REPORT_DIR" ] || { say "REPORT_DIRECTORY_UNAVAILABLE";return 3; }
@@ -273,15 +284,30 @@ main(){
   STEP_DIR=$SESSION;export SESSION STEP_DIR
   SESSION_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   trap 'session_exit $?' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
   : > "$SESSION/summary.tsv" || return 3
   printf 'RUNNING\n' > "$SESSION/session.state" || return 3
   profile_show > "$SESSION/profile.txt" || return 3
+  if [ -n "${PF_LOG:-}" ] && [ -f "$PF_LOG" ];then cp "$PF_LOG" "$SESSION/probes.log" || return 3;fi
+  environment_record > "$SESSION/environment.tsv" || return 3
+  printf '%b' "${CAP_ROWS:-}" > "$SESSION/capabilities.tsv" || return 3
+  if [ -n "${MACDIAG_BOOT_LOG:-}" ] && [ -f "$MACDIAG_BOOT_LOG" ];then cp "$MACDIAG_BOOT_LOG" "$SESSION/bootstrap.log" || return 3;fi
+  profile_show
+  say "PROFILE_LOGS=$SESSION"
+  case "$ENVIRONMENT:$base" in full:*) ;;*:/tmp) say 'RU: Журнал в /tmp исчезнет после перезагрузки Recovery. Скопируйте его на внешний том. EN: Recovery /tmp is volatile; preserve it on an external volume.';;esac
+  if [ "$MODE" = menu ];then menu || return 3;fi
+  profile_show > "$SESSION/profile.txt" || return 3
+  environment_record > "$SESSION/environment.tsv" || return 3
+  [ "$MODE" != exit ] || { SESSION_FINAL_STATE=OBSERVED;return 0; }
   say "SESSION_LOGS=$SESSION CODE_REF=${MACDIAG_CODE_REF:-LOCAL_UNPINNED}"
   trap 'exit 130' INT
   trap 'exit 143' TERM
   trap 'exit 129' HUP
   if [ "$KERNEL" != Darwin ] && [ "$MODE" != selftest ];then unknown NON_MACOS_ENVIRONMENT;return 3;fi
   case "$MODE" in
+    support)run_step SUPPORT support_main;;
     raw)run_step RAW raw_blocked;;
     selftest)run_step TOOLKIT selftest_main;;
     ramquick)run_step RAM_QUICK ram_main quick;;ramfull)run_step RAM_FULL ram_main full;;rammap)run_step RAM_MAP ram_main map;;
