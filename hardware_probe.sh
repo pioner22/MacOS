@@ -1,37 +1,21 @@
 #!/bin/bash
-# Non-destructive hardware/firmware snapshot for macOS and Internet Recovery.
-set +u
-export LC_ALL=C
-LOG='/tmp/hardware-probe.log'
-: > "$LOG"
-run(){ echo "===== $* =====" | tee -a "$LOG"; "$@" 2>&1 | tee -a "$LOG"; }
-echo 'MODE=HARDWARE_FIRMWARE_SNAPSHOT_V1' | tee -a "$LOG"
-run uname -a
-command -v sw_vers >/dev/null 2>&1 && run sw_vers
-command -v sysctl >/dev/null 2>&1 && {
-  run sysctl hw.model
-  run sysctl hw.memsize
-  run sysctl hw.ncpu
-  run sysctl hw.logicalcpu
+# Compatibility entry; never execute a partial/unverified download.
+diag_entry(){
+  local tmp got
+  umask 077
+  tmp=$(mktemp /tmp/macdiag-entry.XXXXXX) || return 3
+  MACDIAG_ENTRY_TMP=$tmp
+  trap 'rm -f "$MACDIAG_ENTRY_TMP"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM HUP
+  curl -q -fsSL --retry 0 --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 120 --max-filesize 1048576 \
+    'https://raw.githubusercontent.com/pioner22/MacOS/64f8c220bbf6d88a0c0dd1d000127d96e31d494b/st.sh' -o "$tmp" || return 3
+  if command -v sha256sum >/dev/null 2>&1;then got=$(sha256sum "$tmp") || return 3
+  elif command -v shasum >/dev/null 2>&1;then got=$(shasum -a 256 "$tmp") || return 3
+  else return 3;fi
+  [ "${got%% *}" = 087654eae1cb42e5fb7deb12ddce8102902f0b0f175fb123845fd6d29e3e9f92 ] || { echo 'RESULT=INCONCLUSIVE BOOTSTRAP_HASH_FAILED';return 3; }
+  /bin/bash -n "$tmp" || return 3
+  /bin/bash "$tmp" "$1"
 }
-if command -v system_profiler >/dev/null 2>&1; then
-  run system_profiler SPHardwareDataType
-  system_profiler SPiBridgeDataType >/dev/null 2>&1 && run system_profiler SPiBridgeDataType
-  system_profiler SPDisplaysDataType >/dev/null 2>&1 && run system_profiler SPDisplaysDataType
-  system_profiler SPPowerDataType >/dev/null 2>&1 && run system_profiler SPPowerDataType
-fi
-command -v diskutil >/dev/null 2>&1 && {
-  run diskutil list
-  [ -e /dev/disk0 ] && run diskutil info /dev/disk0
-}
-command -v pmset >/dev/null 2>&1 && run pmset -g batt
-if command -v ioreg >/dev/null 2>&1; then
-  echo '===== IOREG GPU / T2 / POWER HINTS =====' | tee -a "$LOG"
-  ioreg -l 2>/dev/null | grep -Ei 'APPLE SSD|AMD|Radeon|AppleIntel|framebuffer|display|bridge|T2|AppleSmartBattery|panic' | head -n 400 | tee -a "$LOG"
-fi
-if [ -d /Volumes/RESCUE ] && [ -w /Volumes/RESCUE ]; then
-  TS=$(date +%Y%m%d-%H%M%S 2>/dev/null || echo unknown)
-  cp "$LOG" "/Volumes/RESCUE/HARDWARE-PROBE-$TS.log" 2>/dev/null || true
-  echo "LOG_SAVED=/Volumes/RESCUE/HARDWARE-PROBE-$TS.log"
-fi
-echo 'FINAL=SNAPSHOT_COMPLETE'
+diag_entry snapshot
+exit $?

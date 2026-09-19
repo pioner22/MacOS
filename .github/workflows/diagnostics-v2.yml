@@ -1,0 +1,27 @@
+name: Diagnostics v2 software regression
+on:
+  pull_request:
+    paths: ['diagnostics_v2/**', 'tests/diagnostics_v2/**', 'tools/build_diagnostics_v2*', '*.sh', '.github/workflows/diagnostics-v2.yml']
+  push:
+    branches: [main]
+    paths: ['diagnostics_v2/**', 'tests/diagnostics_v2/**', 'tools/build_diagnostics_v2*', '*.sh', '.github/workflows/diagnostics-v2.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression-linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact source commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" > source.tar.gz
+          tar -xzf source.tar.gz --strip-components=1
+      - name: Run software regressions, not Mac hardware validation
+        run: |
+          set -euo pipefail
+          ulimit -l
+          python3 -m unittest discover -s tests/diagnostics_v2 -v

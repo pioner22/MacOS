@@ -1,29 +1,21 @@
 #!/bin/bash
-# Standalone maximum RAM diagnostic launcher.
-# Does not intentionally write to the internal SSD.
-set +u
-BASE='https://raw.githubusercontent.com/pioner22/MacOS/main'
-TMP="/tmp/ram-test-$$.sh"
-URL="$BASE/ram_triage.sh?t=$(date +%s 2>/dev/null || echo 0)"
-rm -f "$TMP"
-
-echo 'DIAGNOSTIC=RAM_MAX_TORTURE'
-echo 'INTERNAL_SSD_WRITE=NONE'
-echo 'Fetching RAM diagnostic...'
-
-curl -fL --retry 2 --connect-timeout 20 -H 'Cache-Control: no-cache' "$URL" -o "$TMP" || {
-  echo 'STOP: failed to fetch ram_triage.sh' >&2
-  rm -f "$TMP"
-  exit 1
+# Compatibility entry; never execute a partial/unverified download.
+diag_entry(){
+  local tmp got
+  umask 077
+  tmp=$(mktemp /tmp/macdiag-entry.XXXXXX) || return 3
+  MACDIAG_ENTRY_TMP=$tmp
+  trap 'rm -f "$MACDIAG_ENTRY_TMP"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM HUP
+  curl -q -fsSL --retry 0 --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 120 --max-filesize 1048576 \
+    'https://raw.githubusercontent.com/pioner22/MacOS/64f8c220bbf6d88a0c0dd1d000127d96e31d494b/st.sh' -o "$tmp" || return 3
+  if command -v sha256sum >/dev/null 2>&1;then got=$(sha256sum "$tmp") || return 3
+  elif command -v shasum >/dev/null 2>&1;then got=$(shasum -a 256 "$tmp") || return 3
+  else return 3;fi
+  [ "${got%% *}" = 087654eae1cb42e5fb7deb12ddce8102902f0b0f175fb123845fd6d29e3e9f92 ] || { echo 'RESULT=INCONCLUSIVE BOOTSTRAP_HASH_FAILED';return 3; }
+  /bin/bash -n "$tmp" || return 3
+  /bin/bash "$tmp" "$1"
 }
-/bin/bash -n "$TMP" || {
-  echo 'STOP: RAM diagnostic failed syntax validation' >&2
-  rm -f "$TMP"
-  exit 1
-}
-
-echo 'ASSEMBLY=PASS'
-/bin/bash "$TMP"
-RC=$?
-rm -f "$TMP"
-exit "$RC"
+diag_entry ramfull
+exit $?
