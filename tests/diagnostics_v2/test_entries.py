@@ -30,6 +30,7 @@ from pathlib import Path
 args=sys.argv[1:];out=Path(args[args.index('-o')+1]);url=next(x for x in args if x.startswith('https://'))
 name=urlsplit(url).path.rsplit('/',1)[1];root=Path(os.environ['QA_ROOT']);source=root/name if name in ('st.sh','diagnostics-release.tsv') else root/'diagnostics_v2'/name
 shutil.copyfile(source,out)
+if '-w' in args:print('200',end='')
 if os.environ.get('QA_TAMPER') and name=='st.sh':out.write_bytes(out.read_bytes()+b'bad')
 ''');curl.chmod(0o755)
             env=dict(os.environ,QA_ROOT=str(BASE),PATH=d+os.pathsep+os.environ['PATH'])

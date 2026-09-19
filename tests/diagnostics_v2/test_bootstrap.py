@@ -19,6 +19,7 @@ if name==os.environ.get('MOCK_MISSING'):sys.exit(22)
 root=Path(os.environ['PACKAGE_DIR']); source=root.parent/name if name=='diagnostics-release.tsv' else root/name
 if not source.is_file():sys.exit(22)
 shutil.copyfile(source,out)
+if '-w' in args:print('200',end='')
 if name==os.environ.get('MOCK_CORRUPT'):out.write_bytes(out.read_bytes()+b'bad')
 ''');c.chmod(0o755)
         self.env=dict(os.environ,PATH=str(self.d)+os.pathsep+os.environ['PATH'],PACKAGE_DIR=str(BASE/'diagnostics_v2'))
