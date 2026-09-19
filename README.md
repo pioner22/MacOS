@@ -47,42 +47,23 @@ https://yagodka.org/desktop-updates/mac/
 
 Перед публичным signed release нужны Apple signing/notarization secrets. Они не хранятся в репозитории.
 
-## MacBook Hardware Diagnostics
+## MacBook Hardware Diagnostics — 0.3.0-rc1
 
-В репозитории сохранён автономный двуязычный диагностический набор для Intel Mac / macOS Internet Recovery и полноценной macOS.
-
-Постоянная команда запуска:
+Исправленный экспериментальный диагностический пакет RU/EN для приёмки Intel Mac после ремонта. Нативные тесты требуют полной macOS и установленных Command Line Tools; Recovery поддерживается ограниченно. Реальная macOS/Metal в текущей проверке не подтверждена.
 
 ```bash
-curl -L https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh|bash
+curl -fL https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh | bash
 ```
 
-Меню включает:
+**Пункт 16 — приёмка после ремонта.** Пункт 15 — модель и загруженная ОС. Пакет загружается по закреплённому commit с проверкой размера/SHA-256 всех модулей.
 
-- чистый destructive SSD/HDD full-LBA test;
-- RAM Quick 8 GiB;
-- RAM Full Hardcore;
-- RAM Map;
-- CPU/Cache;
-- GPU/VRAM + Metal verifier;
-- Video/Display;
-- Network DNS/TCP/TLS/HTTP;
-- Download Integrity + HTTP Range/resume;
-- Power/Thermal;
-- Hardware Snapshot;
-- Safe Full Suite;
-- Full Complex с dependency gates;
-- Toolkit Selftest для проверки самих диагностических файлов.
+**Внимание к изменению поведения:** активные SSD/HDD и Full Suite больше не используют разрушительный RAW-движок. Вместо этого создаётся отдельный новый тестовый файл с явным подтверждением. Это не проверка всего SSD. Старые `mhdd_v2.part*` не вызываются новыми точками входа и не объявлены проверенными.
 
-Результаты различаются как `PASS`, `FAIL`, `INCONCLUSIVE` и `REBOOT_REQUIRED`. Для каждого режима выводятся RU/EN объяснение и следующий шаг. `REBOOT_REQUIRED` у многоэтапного SSD-теста не является полным PASS.
+RAM Quick/Full/Map используют новый нативный C-тестер, Full включает 134 шаблона и адаптивный объём. RAM, файловый I/O, GPU, сеть и скачивание имеют отдельные результаты. Неполный тест, ошибка среды или отсутствие Release-эталонов не превращаются в общий PASS. Автоматическая приёмка требует отдельного ручного списка и повторного запуска после выключения.
 
-### GitHub network fixtures
+Проверено локально: **79 регрессионных тестов**, C AddressSanitizer/UndefinedBehaviorSanitizer на малых объёмах. Это не аппаратный PASS Mac. GitHub CI запускался, но jobs завершились до выполнения steps: подробности в [CI_STATUS.md](docs/diagnostics/CI_STATUS.md).
 
-Для проверки сети подготовлен детерминированный набор файлов 1/8/32/128/512 MiB. Генератор: `tools/generate_network_fixtures.py`; эталоны: `network-fixtures.sha256` и `network-fixtures.tsv`; публикация: `.github/workflows/network-fixtures.yml` или `publish_network_fixtures.sh` в Release `diagnostic-fixtures-v1`.
-
-`DOWNLOAD TEST` выполняет full-stream SHA-256 и, когда dedicated Release доступен, дополнительно проверяет HTTP Range на известном 16 MiB диапазоне внутри 512 MiB объекта. Если Release недоступен, тест автоматически переключается на публичные GitHub Release assets PowerShell/LLVM с опубликованными SHA-256.
-
-Подробное описание, ограничения, коды состояний и dependency-логика: [`DIAGNOSTICS.md`](DIAGNOSTICS.md).
+[Руководство](DIAGNOSTICS.md) · [Приёмка RU/EN](docs/diagnostics/POST_REPAIR_RU_EN.md) · [Состояния](RESULT_STATES_RU_EN.md) · [Фактическая проверка](docs/diagnostics/QA_RESULTS_0_3.md).
 
 ## License
 
