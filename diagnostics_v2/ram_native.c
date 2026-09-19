@@ -72,7 +72,11 @@ int main(int argc,char **argv) {
     uint64_t events=0,checks=0;int rc=0,mapmode=!strcmp(argv[3],"map");
     for(unsigned r=0;r<rounds&&!stopped;r++) for(unsigned p=0;p<pats&&!stopped;p++) {
         printf("RAM_FILL round=%u pattern=%u\n",r+1,p);
-        for(size_t i=0;i<words;i++) {if(!(i&131071u)&&stopped) break;mem[i]=value(p,i,r);}
+        for(size_t i=0;i<words;i++) {
+            if(!(i&131071u)&&stopped) break;
+            mem[i]=value(p,i,r);
+            if((i&33554431u)==33554431u)printf("RAM_PROGRESS phase=fill bytes_done=%zu total=%zu\n",(i+1)*8,bytes);
+        }
         if(stopped) break;
 #ifdef DIAG_TESTING
         if(getenv("MACDIAG_TEST_INJECT")&&r==0&&p==0) {mem[words/2]^=1;puts("TEST_ONLY_INJECTED_FAULT=1");}
@@ -81,6 +85,7 @@ int main(int argc,char **argv) {
         for(size_t step=0;step<words&&!stopped;step++) {
             size_t i=(r&1u)?words-1-step:step;
             uint64_t actual=mem[i],expected=value(p,i,r);checks++;
+            if((step&33554431u)==33554431u)printf("RAM_PROGRESS phase=verify bytes_done=%zu total=%zu\n",(step+1)*8,bytes);
             if(actual!=expected) {
                 events++;rc=2;
                 if(events<=64) {

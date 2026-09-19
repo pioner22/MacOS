@@ -3,7 +3,8 @@
 # Bash 3.2. No eval, sudo, device writes or automatic repairs.
 export LC_ALL=C
 umask 077
-DIAG_VERSION=2.0.0-rc1
+COMMON_ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || return 3
+DIAG_VERSION=2.0.0-rc2
 say(){ printf '%s\n' "$*"; }
 valid_uint(){ case "$1" in ''|*[!0-9]*) return 1;; esac; [ "${#1}" -le 9 ] && [ "$1" -ge "$2" ] && [ "$1" -le "$3" ]; }
 result(){
@@ -13,6 +14,9 @@ result(){
   if [ -n "${STEP_DIR:-}" ]; then
     printf '%s\t%s\t%s\n' "$state" "$code" "$reason" > "$STEP_DIR/result.tmp" &&
       mv "$STEP_DIR/result.tmp" "$STEP_DIR/result.tsv" || return 3
+  fi
+  if [ -n "${STEP_DIR:-}" ]; then
+    printf 'RU: %s\nEN: %s\n' "$ru" "$en" > "$STEP_DIR/explanation.txt" || return 3
   fi
   return "$code"
 }
@@ -38,40 +42,13 @@ read_reply(){
   elif [ -t 0 ]; then IFS= read -r REPLY
   else return 1; fi
 }
-# Kill only descendants of a child we started. The parent is not reaped until done.
-kill_children(){
-  local parent sig child
-  parent=$1; sig=$2
-  for child in $(ps -axo pid=,ppid= | awk -v p="$parent" '$2==p{print $1}'); do
-    kill_children "$child" "$sig"
-  done
-  kill -"$sig" "$parent" 2>/dev/null || :
-}
+# Supervisor owns a private process group and does not remove caller traps.
 supervise(){
-  local seconds pid watcher rc
+  local seconds logfile
   seconds=$1; shift
-  rm -f "$STEP_DIR/timed-out"
-  "$@" & pid=$!
-  (
-    local n=0
-    while [ "$n" -lt "$seconds" ]; do
-      kill -0 "$pid" 2>/dev/null || exit 0
-      sleep 1; n=$((n+1))
-      [ $((n%10)) -ne 0 ] || sync
-    done
-    : > "$STEP_DIR/timed-out"
-    kill_children "$pid" TERM
-    sleep 3
-    kill_children "$pid" KILL
-  ) & watcher=$!
-  trap 'kill_children "$pid" TERM; kill_children "$watcher" TERM; wait "$pid" 2>/dev/null; return 130' INT
-  trap 'kill_children "$pid" TERM; kill_children "$watcher" TERM; wait "$pid" 2>/dev/null; return 143' TERM HUP
-  wait "$pid"; rc=$?
-  kill_children "$watcher" TERM
-  wait "$watcher" 2>/dev/null || :
-  trap - INT TERM HUP
-  [ ! -e "$STEP_DIR/timed-out" ] || return 124
-  return "$rc"
+  need perl || return 3
+  logfile=$(mktemp "$STEP_DIR/supervisor.XXXXXX") || return 3
+  perl "$COMMON_ROOT/supervise.pl" "$seconds" "$logfile" "$@"
 }
 compile_c(){
   local source out compiler
@@ -91,11 +68,17 @@ compile_c(){
 run_step(){
   local name dir rc state declared reason extra ps
   name=$1; shift
+  case "$name" in ''|*[!A-Z0-9_]*) return 3;;esac
   dir=$(mktemp -d "$SESSION/${name}.XXXXXX") || return 3
-  printf '%s\tRUNNING\n' "$name" > "$SESSION/current-stage.tsv"
+  printf '%s\tRUNNING\n' "$name" > "$SESSION/current-stage.tsv" || return 3
   sync
   say "STEP_START=$name LOG=$dir/output.log"
-  ( STEP_DIR=$dir; export STEP_DIR; "$@" ) 2>&1 | tee "$dir/output.log"
+  ( STEP_DIR=$dir; export STEP_DIR
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'exit 129' HUP
+    "$@"
+  ) 2>&1 | tee "$dir/output.log"
   ps=("${PIPESTATUS[@]}"); rc=${ps[0]:-3}
   state=INCONCLUSIVE; reason=MISSING_RESULT; declared=3; extra=''
   if [ -f "$dir/result.tsv" ] && [ "$(wc -l < "$dir/result.tsv" | tr -d ' ')" = 1 ]; then
@@ -107,13 +90,15 @@ run_step(){
   [ -z "${extra:-}" ] || { state=INCONCLUSIVE; reason=EXTRA_RESULT_FIELDS; }
   if [ "$rc" -ne "$declared" ]; then state=INCONCLUSIVE; reason=PROCESS_EXIT_WITHOUT_MATCHING_RESULT; fi
   if [ "${ps[1]:-1}" -ne 0 ]; then state=INCONCLUSIVE; reason=LOG_WRITE_FAILED; fi
-  case "$rc" in 130|143) state=INCONCLUSIVE; reason=INTERRUPTED;; esac
+  case "$rc" in 129|130|143) state=INCONCLUSIVE; reason=INTERRUPTED;; esac
   printf '%s\t%s\t%s\t%s\n' "$name" "$state" "$reason" "$dir" >> "$SESSION/summary.tsv" || return 3
-  printf '%s\t%s\n' "$name" "$state" > "$SESSION/current-stage.tsv"
+  printf '%s\t%s\n' "$name" "$state" > "$SESSION/current-stage.tsv" || return 3
   sync
   LAST_STATE=$state; LAST_REASON=$reason
   say "STEP_END=$name STATE=$state REASON=$reason"
-  case "$rc" in 130|143) return "$rc";; esac
+  if declare -F report_render >/dev/null;then report_render RUNNING || return 3;fi
+  if declare -F next_step >/dev/null;then next_step "$reason";fi
+  case "$rc" in 129|130|143) return "$rc";; esac
   return 0
 }
 suite_state(){
@@ -128,9 +113,8 @@ suite_state(){
 }
 
 capture(){
-  local -a capture_status
-  supervise "$@" 2>&1 | tee "$STEP_DIR/engine.log"
-  capture_status=("${PIPESTATUS[@]}")
-  [ "${capture_status[1]:-1}" -eq 0 ] || return 3
-  return "${capture_status[0]:-3}"
+  local seconds
+  seconds=$1;shift
+  need perl || return 3
+  perl "$COMMON_ROOT/supervise.pl" "$seconds" "$STEP_DIR/engine.log" "$@"
 }

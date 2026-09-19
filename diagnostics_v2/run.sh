@@ -4,20 +4,21 @@ ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || exit 3
 . "$ROOT/common.sh"
 . "$ROOT/profile.sh"
 . "$ROOT/net.sh"
+. "$ROOT/report.sh"
 selftest_main(){
   local f got size sha name bad=0 count=0 seen=" "
   select_hash || { unknown SHA256_KNOWN_ANSWER_FAILED; return 3; }
-  for f in common.sh profile.sh net.sh run.sh; do /bin/bash -n "$ROOT/$f" || bad=1; done
-  if need perl; then perl -c "$ROOT/count_stream.pl" || bad=1; else unknown PERL_UNAVAILABLE;return 3;fi
+  for f in common.sh profile.sh net.sh report.sh run.sh; do /bin/bash -n "$ROOT/$f" || bad=1; done
+  if need perl; then perl -c "$ROOT/count_stream.pl" || bad=1; perl -c "$ROOT/supervise.pl" || bad=1; else unknown PERL_UNAVAILABLE;return 3;fi
   if [ -f "$ROOT/manifest.tsv" ]; then
     while read -r sha size name; do
-      case "$name" in common.sh|count_stream.pl|fixtures.txt|metal_vram.m|net.sh|profile.sh|ram_native.c|run.sh|storage_file.c) ;;*) bad=1;continue;;esac
+      case "$name" in common.sh|count_stream.pl|fixtures.txt|metal_vram.m|net.sh|profile.sh|ram_native.c|run.sh|storage_file.c|supervise.pl|report.sh) ;;*) bad=1;continue;;esac
       case "$seen" in *" $name "*) bad=1;;esac
       seen="$seen$name ";count=$((count+1))
       got=$(hash_file "$ROOT/$name") || bad=1
       [ "$got" = "$sha" ] && [ "$(wc -c < "$ROOT/$name" | tr -d ' ')" = "$size" ] || bad=1
     done < "$ROOT/manifest.tsv"
-    [ "$count" -eq 9 ] || bad=1
+    [ "$count" -eq 11 ] || bad=1
   else unknown PACKAGE_MANIFEST_MISSING; return 3; fi
   [ "$bad" = 0 ] || { result FAIL 2 TOOLKIT_SELFTEST_FAILED 'Ошибка файлов комплекта, не диагноз ноутбука.' 'Toolkit file validation failed, not a hardware diagnosis.';return 2; }
   say 'SCOPE=PACKAGE_HASHES_SHELL_PERL_SYNTAX_AND_SHA_KNOWN_ANSWER not_hardware_certification=1'
@@ -38,7 +39,7 @@ ram_main(){
   compile_c "$ROOT/ram_native.c" "$bin" || { unknown NATIVE_COMPILER_UNAVAILABLE_OR_FAILED;return 3; }
   "$bin" --selftest || { unknown NATIVE_SELFTEST_FAILED;return 3; }
   capture 14410 "$bin" "$mib" "$rounds" "$mode" "$hold" 14400;rc=$?
-  case "$rc" in 130|143) return "$rc";;esac
+  case "$rc" in 129|130|143) return "$rc";;esac
   case "$rc" in
     0) grep -qx 'ENGINE_COMPLETE=RAM_PASS' "$STEP_DIR/engine.log" || { unknown RAM_COMPLETION_MISSING;return 3; };passed RAM_ALLOCATION_VERIFIED;;
     2) fault RAM_DATA_PATH_MISMATCH_INDEPENDENT_CONFIRMATION_REQUIRED;;
@@ -74,8 +75,8 @@ cpu_stress(){
 cpu_main(){
   local rc
   intel_full && need perl && select_hash || { unknown CPU_PREREQUISITES_MISSING;return 3; }
-  capture 1800 cpu_stress;rc=$?
-  case "$rc" in 130|143) return "$rc";;esac
+  capture 1800 /bin/bash "$ROOT/run.sh" --engine cpu "$STEP_DIR";rc=$?
+  case "$rc" in 129|130|143) return "$rc";;esac
   case "$rc" in 0) grep -qx 'ENGINE_COMPLETE=CPU_PASS' "$STEP_DIR/engine.log" || { unknown CPU_COMPLETION_MISSING;return 3; };passed CPU_HASH_EXECUTION_PATH;;2)fault CPU_RAM_EXECUTION_PATH_MISMATCH;;*)unknown CPU_PROCESS_OR_RESOURCE_LIMIT;;esac
 }
 gpu_main(){
@@ -87,7 +88,7 @@ gpu_main(){
   rc=$?;cat "$STEP_DIR/compile.log"
   [ "$rc" -eq 0 ] && [ -x "$bin" ] || { rm -f "$bin";unknown GPU_CURRENT_BUILD_FAILED;return 3; }
   capture 1810 "$bin" 256;rc=$?
-  case "$rc" in 130|143) return "$rc";;esac
+  case "$rc" in 129|130|143) return "$rc";;esac
   case "$rc" in 0) grep -qx 'ENGINE_COMPLETE=GPU_PASS' "$STEP_DIR/engine.log" || { unknown GPU_COMPLETION_MISSING;return 3; };passed GPU_256MIB_PER_DEVICE_PATH_CHECK;;2)fault GPU_DRIVER_VRAM_RAM_PATH_FAILURE;;*)unknown GPU_INCOMPLETE_OR_TIMEOUT;;esac
 }
 file_main(){
@@ -106,7 +107,7 @@ file_main(){
   diskutil info "$path" 2>/dev/null || :
   bin="$STEP_DIR/storage_file";compile_c "$ROOT/storage_file.c" "$bin" || { unknown FILE_ENGINE_BUILD_FAILED;return 3; }
   capture 14410 "$bin" "$mode" "$mib" 2 "$path" 14400;rc=$?
-  case "$rc" in 130|143) return "$rc";;esac
+  case "$rc" in 129|130|143) return "$rc";;esac
   case "$rc" in
     0) grep -qx 'ENGINE_COMPLETE=FILE_BYTES_VERIFIED' "$STEP_DIR/engine.log" && grep -qx 'MEDIA_CACHE_CONTROLS=APPLIED' "$STEP_DIR/engine.log" || { unknown FILE_COMPLETION_MISSING;return 3; };passed FILE_WRITE_AND_TWO_READBACKS;;
     2) fault FILE_OR_RAM_IO_PATH_FAILURE_NOT_COMPONENT_DIAGNOSIS;;
@@ -118,7 +119,7 @@ snapshot_main(){
   profile_show
   for tool in 'hardware' 'power';do
     case "$tool" in
-      hardware) need system_profiler && supervise 60 system_profiler SPHardwareDataType SPDisplaysDataType || :;;
+      hardware) if need system_profiler; then supervise 60 system_profiler SPHardwareDataType SPDisplaysDataType; case $? in 129|130|143) return 130;;esac;fi;;
       power) need pmset && pmset -g batt || :;;
     esac
   done
@@ -127,7 +128,7 @@ snapshot_main(){
 power_main(){
   need pmset && pmset -g batt || :
   need pmset && pmset -g therm || :
-  if need powermetrics;then supervise 15 powermetrics -n 3 -i 1000 || :;fi
+  if need powermetrics;then supervise 15 powermetrics -n 3 -i 1000; case $? in 129|130|143) return 130;;esac;fi
   result OBSERVED 5 POWER_OBSERVATION_ONLY 'Наблюдение не доказывает исправность питания и не заменяет измерения платы.' 'Observations do not certify power circuitry or replace board measurements.'
 }
 manual_main(){
@@ -136,8 +137,8 @@ manual_main(){
 }
 raw_blocked(){ result BLOCKED 7 LEGACY_RAW_QUARANTINED 'Старый разрушительный движок сохранён, но отключён до отдельного аудита. Для приёмки используйте файловый тест 17.' 'Legacy destructive engine is retained but quarantined pending its own audit. Use file test 17 for acceptance.'; }
 consent_files(){
-  printf 'RU: Каталог для отдельного тестового файла 1 ГиБ (Enter = домашний).\nEN: Directory for a new 1 GiB test file (Enter = home).\n> '
-  read_reply || return 3;FILE_TARGET=${REPLY:-$HOME}
+  printf 'RU: Каталог для отдельного тестового файла 1 ГиБ (Enter = домашний; 0 = пропустить).\nEN: Directory for a new 1 GiB test file (Enter = home; 0 = skip).\n> '
+  read_reply || return 3; [ "$REPLY" != 0 ] || return 3;FILE_TARGET=${REPLY:-$HOME}
   printf 'TARGET=%s\nRU: Будут созданы и проверены только временные тестовые файлы. Введите TEST-FILES.\nEN: Only new temporary test files will be created and verified. Type TEST-FILES.\n> ' "$FILE_TARGET"
   read_reply && [ "$REPLY" = TEST-FILES ] || return 3
   FILE_CONSENT=TEST-FILES
@@ -145,6 +146,11 @@ consent_files(){
 acceptance_main(){
   local kind state
   kind=$1
+  printf '%s\n' TOOLKIT HARDWARE POWER RAM_QUICK > "$SESSION/plan.txt" || return 3
+  [ "$kind" = safe ] || printf '%s\n' RAM_FULL >> "$SESSION/plan.txt" || return 3
+  printf '%s\n' CPU GPU NETWORK DOWNLOAD >> "$SESSION/plan.txt" || return 3
+  [ "$kind" = safe ] || printf '%s\n' STORAGE_FILE >> "$SESSION/plan.txt" || return 3
+  printf '%s\n' MANUAL >> "$SESSION/plan.txt" || return 3
   run_step TOOLKIT selftest_main || return $?
   [ "$LAST_STATE" = PASS ] || { unknown TOOLKIT_GATE;return 3; }
   run_step HARDWARE snapshot_main || return $?
@@ -160,8 +166,8 @@ acceptance_main(){
   run_step GPU gpu_main || return $?
   # Don't put sustained load on a machine with an observed GPU path failure.
   if [ "$LAST_STATE" = FAIL ];then finish_suite;return $?;fi
-  run_step NETWORK network_main || return $?
-  run_step DOWNLOAD download_main || return $?
+  run_step NETWORK network_supervised || return $?
+  run_step DOWNLOAD download_supervised || return $?
   if [ "$kind" != safe ];then
     if consent_files;then run_step STORAGE_FILE file_main storage || return $?
     else run_step STORAGE_FILE unknown FILE_STAGE_NOT_AUTHORIZED || return $?;fi
@@ -172,6 +178,7 @@ acceptance_main(){
 finish_suite(){
   local state
   state=$(suite_state "$SESSION/summary.tsv")
+  SESSION_FINAL_STATE=$state
   say '--- SUMMARY / СВОДКА ---';cat "$SESSION/summary.tsv"
   case "$state" in
     FAIL) fault ACCEPTANCE_STAGE_FAILED;;
@@ -183,58 +190,103 @@ finish_suite(){
 menu(){
   while :;do
     profile_show
+    printf '\nMac Hardware Diagnostics %s — единая версия / unified build\n' "$DIAG_VERSION"
+    if intel_full;then
+      say 'RU: Нативные тесты требуют Command Line Tools и ресурсов. EN: Native tests require toolchain and resources.'
+    else
+      say 'RU: Ограниченная среда: нативные RAM/CPU/GPU/SSD тесты недоступны.'
+      say 'EN: Limited environment: native RAM/CPU/GPU/storage tests are unavailable.'
+    fi
     cat <<'MENU'
- 1  SSD raw (заблокирован / quarantined)
- 2  RAM QUICK (native C, mlock)
- 3  RAM FULL (134 patterns)
- 4  RAM MAP (allocation offsets, NOT physical chips)
- 5  CPU execution path
- 6  GPU / VRAM (experimental Metal path, 256 MiB/device)
- 7  DISPLAY / Ручная проверка экрана
- 8  NETWORK / HTTPS
- 9  DOWNLOAD / SHA-256 and Range
-10  POWER / Наблюдение
-11  HARDWARE / Сведения
-12  SAFE SUITE / Быстрый комплекс без записи тестового файла
-13  LEGACY RAW COMPLEX (заблокирован / quarantined)
-14  TOOLKIT SELFTEST / Проверка комплекта
-15  MODEL / RUNNING OS / Профиль
-16  POST-REPAIR / Приёмка после ремонта, БЕЗ стирания
-17  STORAGE FILE / Проверка нового файла, БЕЗ стирания
-18  RAM -> external RESCUE / 40 GiB, отдельный тест
- 0  EXIT / Выход
+ 1  SSD RAW / Стирание всего диска — ЗАБЛОКИРОВАНО / BLOCKED
+ 2  RAM QUICK / Быстрая память — до 8 ГиБ / up to 8 GiB
+ 3  RAM FULL / Полная память — до 48 ГиБ, 134 шаблона / patterns
+ 4  RAM MAP / Карта несовпадений, НЕ адреса чипов / NOT chip addresses
+ 5  CPU / Проверка вычислений SHA / SHA execution test
+ 6  GPU / Видеопамять: 256 МиБ на устройство / per device, experimental
+ 7  DISPLAY / Экран — ручная проверка / manual checklist
+ 8  NETWORK / Соединение HTTPS, DNS, TLS / connectivity
+ 9  DOWNLOAD / Скачивание, размер, SHA-256, Range / integrity
+10  POWER / Питание: только наблюдение / observation only
+11  HARDWARE / Сведения об оборудовании / inventory
+12  SAFE SUITE / Короткий комплекс, без файлового SSD-теста / short suite
+13  LEGACY RAW / Старый разрушающий комплекс — BLOCKED
+14  SELFTEST / Проверка самого комплекта, НЕ железа / toolkit only
+15  MODEL / OS / Выбор модели и ЗАГРУЖЕННОЙ ОС / running OS
+16  POST-REPAIR / Приёмка после ремонта, БЕЗ стирания / NO erase
+17  STORAGE FILE / Новый тестовый файл 1 ГиБ / new 1 GiB file
+18  RAM -> RESCUE / Отдельный тест 40 ГиБ / separate 40 GiB test
+ 0  EXIT / Выход (также Enter / also Enter)
+RU: Во время теста Ctrl+C останавливает запуск. Отчёт сохраняется отдельно.
+EN: Ctrl+C stops the run. The report is stored separately.
 MENU
-    printf '> ';read_reply || return 3
+    printf '> '
+    read_reply || { say 'NO_INTERACTIVE_INPUT / Нет интерактивного ввода';return 3; }
     case "$REPLY" in
-      0|'')MODE=exit;return 0;;1|13)MODE=raw;;2)MODE=ramquick;;3)MODE=ramfull;;4)MODE=rammap;;5)MODE=cpu;;6)MODE=gpu;;7)MODE=display;;8)MODE=network;;9)MODE=download;;10)MODE=power;;11)MODE=snapshot;;12)MODE=safe;;14)MODE=selftest;;15)profile_choose;continue;;16)MODE=acceptance;;17)MODE=storage;;18)MODE=bridge;;*)continue;;esac
+      0|'') MODE=exit;return 0;;1|13)MODE=raw;;2)MODE=ramquick;;3)MODE=ramfull;;4)MODE=rammap;;5)MODE=cpu;;6)MODE=gpu;;7)MODE=display;;8)MODE=network;;9)MODE=download;;10)MODE=power;;11)MODE=snapshot;;12)MODE=safe;;14)MODE=selftest;;
+      15) if ! profile_choose;then say 'RU: Выбор отклонён; прежний профиль сохранён. EN: Selection rejected; previous profile retained.';fi;continue;;
+      16)MODE=acceptance;;17)MODE=storage;;18)MODE=bridge;;
+      *)say 'UNKNOWN_SELECTION / Неизвестный пункт: введите число 0–18.';continue;;
+    esac
     return 0
   done
 }
+# Long transfers get the same process-group cancellation as native workloads.
+network_supervised(){
+  local rc
+  capture 500 /bin/bash "$ROOT/run.sh" --engine network "$STEP_DIR"; rc=$?
+  case "$rc" in 0|2|3) [ -f "$STEP_DIR/result.tsv" ] || { unknown NETWORK_RESULT_MISSING;return 3; };;129|130|143)return "$rc";;*)unknown NETWORK_ENGINE_INTERRUPTED;return 3;;esac
+  return "$rc"
+}
+download_supervised(){
+  local rc
+  capture 14400 /bin/bash "$ROOT/run.sh" --engine download "$STEP_DIR"; rc=$?
+  case "$rc" in 0|2|3) [ -f "$STEP_DIR/result.tsv" ] || { unknown DOWNLOAD_RESULT_MISSING;return 3; };;129|130|143)return "$rc";;*)unknown DOWNLOAD_ENGINE_INTERRUPTED;return 3;;esac
+  return "$rc"
+}
+engine_main(){
+  local mode=$1
+  STEP_DIR=$2; export STEP_DIR
+  [ -d "$STEP_DIR" ] && [ -w "$STEP_DIR" ] || return 3
+  profile_detect
+  [ "$KERNEL" = Darwin ] || return 3
+  case "$mode" in
+    cpu) intel_full && need perl && select_hash || return 3; cpu_stress;;
+    network) network_main;; download) download_main;; *) return 3;;
+  esac
+}
 main(){
   local base rc state
+  case "${1:-}" in --version) say "VERSION=$DIAG_VERSION";return 0;;--engine) shift;engine_main "$@";return $?;;esac
   profile_detect;profile_validate || { say 'RESULT=INCONCLUSIVE PROFILE_MISMATCH';return 3; }
   MODE=${1:-menu}
   if [ "$MODE" = menu ];then menu || return 3;fi
   [ "$MODE" != exit ] || return 0
   base=/tmp
-  if [ "$ENVIRONMENT" = full ] && [ -n "${HOME:-}" ] && [ -d "$HOME" ];then
+  if [ -n "${MACDIAG_REPORT_DIR:-}" ];then
+    [ -d "$MACDIAG_REPORT_DIR" ] && [ -w "$MACDIAG_REPORT_DIR" ] || { say "REPORT_DIRECTORY_UNAVAILABLE";return 3; }
+    base=$MACDIAG_REPORT_DIR
+  elif [ "$ENVIRONMENT" = full ] && [ -n "${HOME:-}" ] && [ -d "$HOME" ];then
     base="$HOME/Library/Logs/MacHardwareDiagnostics";mkdir -p "$base" || base=/tmp
   elif [ -d /Volumes/RESCUE ] && [ -w /Volumes/RESCUE ];then base=/Volumes/RESCUE;fi
   SESSION=$(mktemp -d "$base/macdiag-v2.XXXXXX") || return 3
   STEP_DIR=$SESSION;export SESSION STEP_DIR
-  trap 'rc=$?; if [ -f "$SESSION/session.state" ] && [ "$(cat "$SESSION/session.state")" = RUNNING ];then printf "INCOMPLETE %s\n" "$rc" > "$SESSION/session.state";fi' EXIT
-  : > "$SESSION/summary.tsv";printf 'RUNNING\n' > "$SESSION/session.state"
-  profile_show > "$SESSION/profile.txt"
+  SESSION_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  trap 'session_exit $?' EXIT
+  : > "$SESSION/summary.tsv" || return 3
+  printf 'RUNNING\n' > "$SESSION/session.state" || return 3
+  profile_show > "$SESSION/profile.txt" || return 3
   say "SESSION_LOGS=$SESSION CODE_REF=${MACDIAG_CODE_REF:-LOCAL_UNPINNED}"
-  trap 'printf "INTERRUPTED\n" > "$SESSION/session.state"; exit 130' INT
-  trap 'printf "INTERRUPTED\n" > "$SESSION/session.state"; exit 143' TERM HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
   if [ "$KERNEL" != Darwin ] && [ "$MODE" != selftest ];then unknown NON_MACOS_ENVIRONMENT;return 3;fi
   case "$MODE" in
     raw)run_step RAW raw_blocked;;
     selftest)run_step TOOLKIT selftest_main;;
     ramquick)run_step RAM_QUICK ram_main quick;;ramfull)run_step RAM_FULL ram_main full;;rammap)run_step RAM_MAP ram_main map;;
     cpu)run_step CPU cpu_main;;gpu)run_step GPU gpu_main;;
-    network)run_step NETWORK network_main;;download)run_step DOWNLOAD download_main;;
+    network)run_step NETWORK network_supervised;;download)run_step DOWNLOAD download_supervised;;
     power)run_step POWER power_main;;snapshot)run_step HARDWARE snapshot_main;;display)run_step MANUAL manual_main;;
     storage)
       if consent_files;then run_step FILE file_main storage
@@ -247,11 +299,11 @@ main(){
       if ! read_reply || [ "$REPLY" != RAM-BRIDGE ];then unknown BRIDGE_NOT_AUTHORIZED;return 3;fi
       FILE_CONSENT=TEST-FILES
       run_step FILE file_main bridge;;
-    acceptance|safe)acceptance_main "$MODE";rc=$?;printf 'FINISHED %s\n' "$rc" > "$SESSION/session.state";return "$rc";;
+    acceptance|safe)acceptance_main "$MODE";rc=$?;return "$rc";;
     *)unknown UNKNOWN_MODE;return 3;;
   esac
   rc=$?;[ "$rc" -eq 0 ] || { printf 'INTERRUPTED\n' > "$SESSION/session.state";return "$rc"; }
-  printf 'FINISHED %s\n' "$LAST_STATE" > "$SESSION/session.state"
+  SESSION_FINAL_STATE=$LAST_STATE
   case "$LAST_STATE" in PASS)rc=0;;FAIL)rc=2;;OBSERVED)rc=5;;PENDING_MANUAL)rc=6;;BLOCKED)rc=7;;*)rc=3;;esac
   say "FINAL_STATE=$LAST_STATE LOGS=$SESSION";return "$rc"
 }
