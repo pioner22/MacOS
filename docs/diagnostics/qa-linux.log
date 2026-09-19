@@ -1,0 +1,52 @@
+test_native_cancel (test_audit.NativeTests.test_native_cancel) ... ok
+test_native_detects_injected_bit (test_audit.NativeTests.test_native_detects_injected_bit) ... ok
+test_native_full_walking_bits (test_audit.NativeTests.test_native_full_walking_bits) ... ok
+test_native_invalid_arguments (test_audit.NativeTests.test_native_invalid_arguments) ... ok
+test_native_invalid_mode (test_audit.NativeTests.test_native_invalid_mode) ... ok
+test_native_map_rounds (test_audit.NativeTests.test_native_map_rounds) ... ok
+test_native_quick (test_audit.NativeTests.test_native_quick) ... ok
+test_native_selftest (test_audit.NativeTests.test_native_selftest) ... ok
+test_production_ignores_injection_env (test_audit.NativeTests.test_production_ignores_injection_env) ... ok
+test_storage_detects_fault_preserves_evidence (test_audit.NativeTests.test_storage_detects_fault_preserves_evidence) ... ok
+test_storage_refuses_device_tree (test_audit.NativeTests.test_storage_refuses_device_tree) ... ok
+test_storage_rejects_bad_size (test_audit.NativeTests.test_storage_rejects_bad_size) ... ok
+test_storage_rejects_file_as_directory (test_audit.NativeTests.test_storage_rejects_file_as_directory) ... ok
+test_storage_roundtrip_and_cleanup (test_audit.NativeTests.test_storage_roundtrip_and_cleanup) ... ok
+test_bash_syntax_active_package (test_audit.ShellTests.test_bash_syntax_active_package) ... ok
+test_boot_epoch_not_microseconds (test_audit.ShellTests.test_boot_epoch_not_microseconds) ... ok
+test_cancel_not_hardware_fail (test_audit.ShellTests.test_cancel_not_hardware_fail) ... ok
+test_checked_package_manifest (test_audit.ShellTests.test_checked_package_manifest) ... ok
+test_cpu_constant_recomputed (test_audit.ShellTests.test_cpu_constant_recomputed) ... ok
+test_empty_manifest_never_passes (test_audit.ShellTests.test_empty_manifest_never_passes) ... ok
+test_empty_plan_inconclusive (test_audit.ShellTests.test_empty_plan_inconclusive) ... ok
+test_empty_target_cannot_write (test_audit.ShellTests.test_empty_target_cannot_write) ... ok
+test_legacy_scope_bug_reproduced (test_audit.ShellTests.test_legacy_scope_bug_reproduced) ... ok
+test_log_name_rejects_path_traversal (test_audit.ShellTests.test_log_name_rejects_path_traversal) ... ok
+test_logging_failure_never_pass (test_audit.ShellTests.test_logging_failure_never_pass) ... ok
+test_manifest_source_all_five_recomputed (test_audit.ShellTests.test_manifest_source_all_five_recomputed) ... ok
+test_missing_manifest_never_passes (test_audit.ShellTests.test_missing_manifest_never_passes) ... ok
+test_missing_marker_never_pass (test_audit.ShellTests.test_missing_marker_never_pass) ... ok
+test_new_plan_does_not_clobber_filename_or_hash (test_audit.ShellTests.test_new_plan_does_not_clobber_filename_or_hash) ... ok
+test_no_retries_in_stream (test_audit.ShellTests.test_no_retries_in_stream) ... ok
+test_no_terminal_no_consent (test_audit.ShellTests.test_no_terminal_no_consent) ... ok
+test_perl_fault_injection_test_copy_only (test_audit.ShellTests.test_perl_fault_injection_test_copy_only) ... ok
+test_perl_full_patterns (test_audit.ShellTests.test_perl_full_patterns) ... ok
+test_perl_invalid_budget (test_audit.ShellTests.test_perl_invalid_budget) ... ok
+test_perl_quick (test_audit.ShellTests.test_perl_quick) ... ok
+test_perl_syntax (test_audit.ShellTests.test_perl_syntax) ... ok
+test_range_hash_recomputed (test_audit.ShellTests.test_range_hash_recomputed) ... ok
+test_selftest_is_bounded_and_runs (test_audit.ShellTests.test_selftest_is_bounded_and_runs) ... ok
+test_https_corruption_detected (test_audit.TLSTests.test_https_corruption_detected) ... ok
+test_https_valid (test_audit.TLSTests.test_https_valid) ... ok
+test_legacy_retry_concatenates_partial_payload (test_audit.TLSTests.test_legacy_retry_concatenates_partial_payload) ... ok
+test_missing_fixture_not_hardware_fail (test_audit.TLSTests.test_missing_fixture_not_hardware_fail) ... ok
+test_range_ignored_not_ram_fault (test_audit.TLSTests.test_range_ignored_not_ram_fault) ... ok
+test_range_valid (test_audit.TLSTests.test_range_valid) ... ok
+test_range_wrong_header (test_audit.TLSTests.test_range_wrong_header) ... ok
+test_short_body_detected (test_audit.TLSTests.test_short_body_detected) ... ok
+test_truncation_detected (test_audit.TLSTests.test_truncation_detected) ... ok
+
+----------------------------------------------------------------------
+Ran 47 tests in 5.701s
+
+OK
