@@ -1,31 +1,21 @@
 #!/bin/bash
-# Non-destructive power/thermal observation test.
-set +u
-export LC_ALL=C
-LOG='/tmp/power-thermal.log'
-: > "$LOG"
-say(){ printf '%s\n' "$*" | tee -a "$LOG"; }
-say '============================================================'
-say 'MODE=POWER_THERMAL_DIAGNOSTIC_V1'
-say '============================================================'
-command -v pmset >/dev/null 2>&1 && { say 'PMSET_BATTERY'; pmset -g batt 2>&1 | tee -a "$LOG"; say 'PMSET_SETTINGS'; pmset -g 2>&1 | tee -a "$LOG"; }
-if command -v system_profiler >/dev/null 2>&1; then
-  say 'POWER_PROFILE'; system_profiler SPPowerDataType 2>&1 | tee -a "$LOG"
-fi
-if command -v ioreg >/dev/null 2>&1; then
-  say 'SMART_BATTERY_IOREG'; ioreg -r -c AppleSmartBattery -l 2>&1 | head -n 300 | tee -a "$LOG"
-fi
-if command -v powermetrics >/dev/null 2>&1; then
-  say 'POWERMETRICS_START samples=5 interval_ms=1000'
-  powermetrics -n 5 -i 1000 2>&1 | tee -a "$LOG"
-  PRC=${PIPESTATUS[0]:-99}
-  say "POWERMETRICS_EXIT=$PRC"
-else
-  say 'POWERMETRICS=UNAVAILABLE_IN_THIS_ENVIRONMENT'
-fi
-if [ -d /Volumes/RESCUE ] && [ -w /Volumes/RESCUE ]; then
-  TS=$(date +%Y%m%d-%H%M%S 2>/dev/null || echo unknown)
-  cp "$LOG" "/Volumes/RESCUE/POWER-THERMAL-$TS.log" 2>/dev/null || true
-  say "LOG_SAVED=/Volumes/RESCUE/POWER-THERMAL-$TS.log"
-fi
-say 'FINAL=POWER_THERMAL_OBSERVATION_COMPLETE'
+# Compatibility entry; never execute a partial/unverified download.
+diag_entry(){
+  local tmp got
+  umask 077
+  tmp=$(mktemp /tmp/macdiag-entry.XXXXXX) || return 3
+  MACDIAG_ENTRY_TMP=$tmp
+  trap 'rm -f "$MACDIAG_ENTRY_TMP"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM HUP
+  curl -q -fsSL --retry 0 --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 120 --max-filesize 1048576 \
+    'https://raw.githubusercontent.com/pioner22/MacOS/64f8c220bbf6d88a0c0dd1d000127d96e31d494b/st.sh' -o "$tmp" || return 3
+  if command -v sha256sum >/dev/null 2>&1;then got=$(sha256sum "$tmp") || return 3
+  elif command -v shasum >/dev/null 2>&1;then got=$(shasum -a 256 "$tmp") || return 3
+  else return 3;fi
+  [ "${got%% *}" = 087654eae1cb42e5fb7deb12ddce8102902f0b0f175fb123845fd6d29e3e9f92 ] || { echo 'RESULT=INCONCLUSIVE BOOTSTRAP_HASH_FAILED';return 3; }
+  /bin/bash -n "$tmp" || return 3
+  /bin/bash "$tmp" "$1"
+}
+diag_entry power
+exit $?
