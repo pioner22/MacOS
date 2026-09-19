@@ -1,217 +1,74 @@
-# MacBook Hardware Diagnostics Toolkit
+# MacDiag 0.3.0-rc1 — диагностика после ремонта
 
-Автономный набор аппаратной диагностики для Intel Mac, macOS Internet Recovery и полноценной macOS.  
-Standalone hardware-diagnostic toolkit for Intel Macs, macOS Internet Recovery and full macOS.
+Экспериментальная исправленная версия. Код протестирован на Linux; реальная macOS, Recovery, Metal и ноутбук пользователя ещё требуют проверки. Это не сертификат ремонта и не гарантия исправности всех компонентов.
 
-## Быстрый запуск / Quick start
-
-```bash
-curl -L https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh|bash
-```
-
-`st.sh` включает `caffeinate`, загружает актуальное меню и передаёт терминал выбранному тесту.  
-`st.sh` enables `caffeinate`, fetches the current menu and hands the terminal to the selected test.
-
-> **ВНИМАНИЕ / WARNING:** пункт `SSD/HDD TEST` разрушительный и может полностью перезаписать внутренний накопитель. / `SSD/HDD TEST` is destructive and may overwrite the entire internal drive.
-
-## Состояния / Result states
-
-| Код | Состояние | Значение |
-|---|---|---|
-| `0` | `PASS` / stage complete | Выполненный этап не обнаружил подтверждённой ошибки. Для многоэтапного теста смотрите его собственный final marker. |
-| `2` | `FAIL` | Зафиксировано фактическое data/I-O/computation mismatch. |
-| `3` | `INCONCLUSIVE` | Среда/инструменты/прерывание не позволяют получить достоверный аппаратный вывод. |
-| `4` | `REBOOT_REQUIRED` | Нормальный checkpoint многоэтапного SSD-теста; полный PASS ещё не получен. |
-
-`OOM`, kill, зависание или reboot **без** `expected != actual` сами по себе не считаются доказательством плохой RAM.  
-OOM/kill/hang/reboot **without** a data mismatch is not by itself proof of faulty RAM.
-
-## Меню / Menu
-
-### 1. SSD/HDD TEST / Накопитель
-
-Чистый MHDD-подобный full-LBA тест внутреннего Apple SSD, без встроенного RAM-preflight.
-
-Проверяет:
-
-- physical/internal Apple SSD safety gates;
-- последовательное RAW-чтение всего logical LBA space;
-- random 4 KiB reads;
-- два LBA-зависимых destructive pattern A/B;
-- SHA-256 каждого 64 MiB диапазона;
-- локализацию mismatch до 4 KiB LBA;
-- cold persistence verify после реальной перезагрузки;
-- повторную проверку latency-outlier участка;
-- финальное восстановление GPT/APFS и `diskutil verify`.
-
-Критические маркеры:
-
-```text
-READ_IO_ERROR
-WRITE_ERROR
-VERIFY_READ_ERROR
-VERIFY_HASH_MISMATCH
-BAD_LBA4K
-PROBE_HASH_MISMATCH
-```
-
-После Pattern A/B тест возвращает `4 / REBOOT_REQUIRED`; это **не PASS**. Полный PASS появляется только после `FINAL=PASS_FULL_DEVICE_LBA_WRITE_READ_PERSISTENCE`.
-
-### 2. RAM QUICK / Быстрая RAM
-
-На системах с достаточным объёмом проверяет **8 GiB** RAM простыми и адресозависимыми шаблонами. 8 GiB выбраны намеренно: ранее наблюдаемая ошибка находилась глубже первых 4 GiB allocation-relative диапазона.
-
-Шаблоны: `ONES`, `ZERO`, `AA55`, `ADDR`. При mismatch выводится первый плохой byte: expected/actual/XOR.
-
-### 3. RAM FULL HARDCORE / Полная RAM
-
-Большие allocation phases до примерно 75% установленной памяти (на 64 GiB — до ~48 GiB), шаблоны:
-
-- `ONES`, `ZERO`;
-- `AA55`, `55AA`;
-- walking ones / walking zeros;
-- `ADDRA`, `ADDRB`;
-- retention holds;
-- многократные reread повреждённых страниц.
-
-Опционально выполняется 40 GiB `RAM -> /Volumes/RESCUE -> sync/remount -> SHA-256 reread` bridge. Ошибка этого **внешнего bridge при чистых RAM-only фазах не маркируется как DRAM FAIL** — тогда подозреваются RESCUE/кабель/порт/I-O path.
-
-### 4. RAM MAP / Карта RAM
-
-8 GiB mapping-test продолжает работу после ошибок и собирает:
-
-- pattern/cycle;
-- chunk/page;
-- byte offset;
-- expected/actual;
-- XOR mask;
-- число ошибочных битов;
-- hot chunks и bit statistics.
-
-`logical_test_page` является allocation-relative, а не физическим адресом DRAM. Нельзя напрямую объявлять конкретный BGA-чип только по этому номеру.
-
-### 5. CPU/CACHE
-
-До 16 логических CPU одновременно считают известный SHA-256 256 MiB zero-stream в нескольких раундах. Проверяет execution/cache/memory path, но при плохой RAM не локализует неисправность на CPU.
-
-### 6. GPU/VRAM
-
-В Recovery выполняется inventory/probe. В полной macOS при наличии `clang` выполняется Metal verifier:
-
-- перечисление Metal devices;
-- private Metal buffers;
-- GPU compute fill;
-- retention pause;
-- blit readback;
-- word-by-word expected/actual/XOR compare.
-
-Для дискретной AMD это преимущественно VRAM/device-local path; Intel iGPU использует shared system memory, поэтому его mismatch может быть следствием системной RAM.
-
-### 7. VIDEO/DISPLAY
-
-Собирает framebuffer/GPU/display logs и генерирует детерминированный визуальный pattern. Физическую матрицу нельзя полностью проверить программно без внешнего эталона.
-
-Практическое разделение:
-
-- артефакт присутствует и в screenshot -> GPU/framebuffer/VRAM/RAM path;
-- глазами артефакт есть, screenshot чистый -> panel/eDP/TCON/display path.
-
-### 8. NETWORK
-
-Отдельный connectivity test без крупных загрузок:
-
-- interface/route state;
-- DNS/TCP/TLS/HTTP;
-- GitHub endpoint;
-- Apple `swcdn.apple.com` endpoint;
-- HTTP 4xx/5xx считаются probe failure;
-- отсутствие ICMP ping само по себе FAIL не создаёт.
-
-### 9. DOWNLOAD / Integrity
-
-Поток идёт напрямую `HTTPS -> SHA-256`; внутренний SSD не участвует.
-
-Предпочтительный собственный GitHub Release `diagnostic-fixtures-v1` содержит детерминированные объекты:
-
-- 1 MiB × 5;
-- 8 MiB × 4;
-- 32 MiB × 3;
-- 128 MiB × 2;
-- 512 MiB × 2.
-
-Итого около 1.4 GiB проверенного трафика. Для каждого файла SHA-256 versioned в `network-fixtures.sha256`. Если dedicated Release недоступен, тест использует публичные GitHub Release assets PowerShell/LLVM с опубликованными ground-truth SHA-256.
-
-Генератор: `tools/generate_network_fixtures.py`.  
-Ручная публикация release assets:
+## Запуск
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pioner22/MacOS/main/publish_network_fixtures.sh | bash
+curl -fL https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh | bash
 ```
 
-На stock macOS publisher использует `shasum -a 256`, на Linux — `sha256sum`.
+Загрузчик получает один закреплённый commit, сверяет SHA-256 манифеста и размер/SHA-256 каждого модуля до выполнения. SHA-256 и HTTPS не заменяют цифровую подпись. В меню пункт **16 — POST-REPAIR / Приёмка после ремонта**. Пункт 15 — профиль модели и загруженной ОС, а не выбор установщика.
 
-### 10. POWER/THERMAL
+Для локального пакета:
 
-Observation-test: `pmset`, battery/AC, `AppleSmartBattery`, `SPPowerDataType`, `powermetrics` если доступен. Отсутствие telemetry не превращается автоматически в hardware FAIL.
-
-### 11. HARDWARE SNAPSHOT
-
-Сохраняет baseline CPU/RAM/T2/GPU/storage/power/ioreg. При наличии writable `/Volumes/RESCUE` копирует лог туда.
-
-### 12. SAFE FULL SUITE
-
-Недеструктивный dependency-aware комплекс:
-
-```text
-TOOLKIT SELFTEST
- -> HARDWARE + POWER snapshot
- -> RAM QUICK
- -> если RAM PASS: CPU/GPU/DISPLAY/NETWORK/DOWNLOAD
- -> если RAM FAIL/INCONCLUSIVE: dependent tests SKIPPED
+```bash
+bash st.sh --offline
 ```
 
-Это важно: неисправная RAM способна испортить SHA, GPU readback, curl/TLS buffers и создать ложную вторичную диагностику.
+Офлайн означает запуск локальных исходников с проверкой манифеста; сетевые тесты всё равно требуют сети. Нативные модули компилируются на проверяемом Mac. Нужны полная macOS Intel и установленные Command Line Tools; отсутствующий компилятор означает INCONCLUSIVE, не аппаратный FAIL.
 
-### 13. FULL COMPLEX
+## Меню и совместимость со старыми ссылками
 
-Полная dependency-aware последовательность:
+| Пункт | Режим |
+|---|---|
+| 1 | Новый файловый тест SSD/HDD, БЕЗ стирания и RAW-записи |
+| 2 | RAM Quick, обычно 2 ГиБ, ограничено доступной памятью |
+| 3 | RAM Full, 134 шаблона, адаптивный объём до 48 ГиБ |
+| 4 | RAM Map, события в виртуальной аллокации, не адреса DRAM-чипов |
+| 5 | CPU: параллельная сверка SHA-256, не сертификация всех инструкций/кэшей |
+| 6 | GPU/VRAM: ограниченная проверка Metal-буферов и readback |
+| 7 | Экран: сведения и ручная проверка |
+| 8 | Малые HTTPS-запросы к GitHub и Apple, не проверка образа установщика |
+| 9 | Скачивание: HTTP, реальные байты, SHA-256, отдельный Range GET |
+| 10–11 | Наблюдения питания и сведения об оборудовании |
+| 12 | Комплекс без файлового SSD-теста и полного RAM |
+| 13, 16 | Приёмка: RAM Quick/Full, CPU, GPU, сеть, скачивание, файловый SSD и ручной список |
+| 14–15 | Самопроверка пакета и выбор профиля |
 
-```text
-TOOLKIT SELFTEST
- -> HARDWARE / POWER
- -> RAM QUICK
- -> RAM FULL
- -> RAM MAP
- -> CPU/CACHE
- -> GPU/VRAM
- -> DISPLAY
- -> NETWORK
- -> DOWNLOAD
- -> SSD/HDD destructive, только после RAM PASS и CPU PASS
+**Изменение безопасности:** старые точки входа перенаправлены в новый пакет. `ssd_test.sh` больше не собирает разрушительный MHDD-движок, а `full_all_suite.sh` больше не стирает диск. Старые `mhdd_v2.part*` оставлены как legacy-исходники и НЕ запускаются активным меню. Их полная корректность этим изменением не заявляется.
+
+## Что исправлено
+
+Локальные параметры загрузки не конфликтуют между функциями. Каждая передача запускается с `curl --retry 0`; новый повтор получает новый хэшер. Ошибка предыдущего повтора не исчезает после успеха. Проверяются фактическая длина, статусы всех процессов, HTTP 206 и точный Content-Range. Range не называется полноценной докачкой файла.
+
+RAM и файловый I/O разделены: больше нет общего PASS, скрывающего ошибку RAM→диск. Независимый C-тестер использует mmap/guard pages, volatile, учитывает результат mlock и реально перебирает walking bits. При отсутствии нативного движка ограниченный Perl-скрининг Recovery не считается завершённой приёмкой. Никакие виртуальные адреса не интерпретируются как номера чипов или каналов.
+
+GPU использует уникальный путь сборки и проверяет код текущего компилятора; старый бинарник не запускается. Для дискретной графики предусмотрена синхронизация managed readback. Metal на реальном Mac ещё не проверен.
+
+Есть supervisor с ограничением времени и завершением дочерней группы процессов, отдельные состояния и результаты по этапам. Отсутствие completion marker, аварийный выход или потеря журнала не дают PASS.
+
+## Файловый SSD-тест
+
+Нужен явно выбранный существующий каталог и подтверждение `WRITE-TEST-FILE`. По умолчанию создаётся 4 ГиБ нового файла в уникальном подкаталоге; существующие файлы не перезаписываются. Программа проверяет свободное место, запрещает устройства `/dev`, использует exclusive/no-follow открытие. Запись закрывается и дважды перечитывается с проверкой каждого слова. Фиксируются попытки F_NOCACHE/F_FULLFSYNC; это не доказательство сохранности при потере питания. При ошибке новый файл сохраняется как свидетельство, при успехе удаляется.
+
+Пример настройки перед запуском:
+
+```bash
+export MACDIAG_STORAGE_DIR="$HOME"
+export MACDIAG_FILE_MIB=4096
 ```
 
-При RAM FAIL выполняется RAM MAP для доказательств, после чего integrity-dependent стадии блокируются. Если SSD достигает cold-verify checkpoint, комплекс возвращает `4 / REBOOT_REQUIRED`; после reboot продолжайте пунктом `1) SSD/HDD TEST`.
+Это проверка выделенного файла, НЕ всего логического объёма SSD. Физические запасные NAND-ячейки не тестируются. Полный 40-ГиБ RAM→диск bridge в этот релиз не включён: RAM и диск проверяются раздельно.
 
-### 14. TOOLKIT SELFTEST
+## Результаты
 
-Проверяет **сами диагностические файлы**, а не железо Mac:
+`PASS (0)` — выполнен объявленный объём конкретного теста. `FAIL (2)` — наблюдалась ошибка данных, передачи или I/O, без автоматического назначения виновной микросхемы. `INCONCLUSIVE (3)` — проверка не завершена или недостаточно условий. `OBSERVATION (5)` — только сведения. `CANCELLED (130)` — отмена.
 
-- все menu scripts доступны;
-- `bash -n` каждого shell script;
-- сборка частей SSD engine и `bash -n` assembled script;
-- fixture manifest hashes;
-- локальный SHA-256 sanity check.
+**Даже если все автоматические этапы приёмки прошли, итог остаётся `INCONCLUSIVE / AUTO_PASSED_MANUAL_REVIEW_REQUIRED`:** нужен ручной список, независимый тест и повтор после выключения. Это не означает, что ремонт провален.
 
-`TOOLKIT SELFTEST PASS` означает только то, что комплект собран согласованно.
+Недоступность собственных Release-файлов не подменяется полным PASS: результаты резервных загрузок сохраняются, покрытие обозначается неполным. Публикация `diagnostic-fixtures-v1` остаётся отдельной задачей; этот код не объявляет assets опубликованными.
 
-## Логи / Logs
+Журналы: заданный `MACDIAG_REPORT_DIR`, иначе доступный `/Volumes/RESCUE`, иначе `~/MacDiag-Reports`, иначе `/tmp`. В каждом запуске уникальный каталог; комплекс создаёт `results.tsv` и `MANUAL_REVIEW_RU_EN.md`. Имя RESCUE не доказывает внешний диск. Журнал пишется во время теста, но его сохранность при внезапном обесточивании не гарантируется. Проверьте персональные данные перед публикацией.
 
-Тесты по возможности сохраняют логи на writable `/Volumes/RESCUE`. Для интермиттирующего дефекта полезны несколько логов после независимых cold boots.
-
-## Ограничения / Limitations
-
-- Userspace RAM test не видит стабильный physical DRAM address и не определяет конкретный BGA-чип автоматически.
-- T2/FTL скрывает spare NAND; SSD-test покрывает весь **экспонированный logical LBA space**, а не скрытый резерв NAND.
-- Metal test требует полноценную macOS/compiler toolchain; в Internet Recovery GPU test может быть `INCONCLUSIVE`.
-- Network FAIL на одном конкретном Apple endpoint может означать устаревший/недоступный endpoint, поэтому его нужно сравнивать с GitHub и другой сетью.
-- `PASS` уменьшает вероятность дефекта, но не является математической гарантией отсутствия редкой интермиттирующей неисправности.
+Подробности: [приёмка RU/EN](docs/diagnostics/POST_REPAIR_RU_EN.md), [состояния](RESULT_STATES_RU_EN.md), [фактические проверки](docs/diagnostics/QA_RESULTS_0_3.md).

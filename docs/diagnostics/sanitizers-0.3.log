@@ -1,0 +1,39 @@
+NATIVE_SELFTEST=PASS
+RAM_ENGINE=NATIVE_C tested_bytes=16777216 page_size=4096 mlock=1 lock_errno=0
+RAM_SCOPE=USERSPACE_ALLOCATION physical_chip=UNKNOWN cache_bypass=NOT_GUARANTEED
+RAM_FILL round=1 pattern=0
+RAM_PATTERN_COMPLETE round=1 pattern=0 mismatch_words=0
+RAM_FILL round=1 pattern=1
+RAM_PATTERN_COMPLETE round=1 pattern=1 mismatch_words=0
+RAM_FILL round=1 pattern=2
+RAM_PATTERN_COMPLETE round=1 pattern=2 mismatch_words=0
+RAM_FILL round=1 pattern=3
+RAM_PATTERN_COMPLETE round=1 pattern=3 mismatch_words=0
+RAM_FILL round=1 pattern=4
+RAM_PATTERN_COMPLETE round=1 pattern=4 mismatch_words=0
+RAM_FILL round=1 pattern=5
+RAM_PATTERN_COMPLETE round=1 pattern=5 mismatch_words=0
+RAM_FILL round=2 pattern=0
+RAM_PATTERN_COMPLETE round=2 pattern=0 mismatch_words=0
+RAM_FILL round=2 pattern=1
+RAM_PATTERN_COMPLETE round=2 pattern=1 mismatch_words=0
+RAM_FILL round=2 pattern=2
+RAM_PATTERN_COMPLETE round=2 pattern=2 mismatch_words=0
+RAM_FILL round=2 pattern=3
+RAM_PATTERN_COMPLETE round=2 pattern=3 mismatch_words=0
+RAM_FILL round=2 pattern=4
+RAM_PATTERN_COMPLETE round=2 pattern=4 mismatch_words=0
+RAM_FILL round=2 pattern=5
+RAM_PATTERN_COMPLETE round=2 pattern=5 mismatch_words=0
+RAM_SUMMARY mismatch_words=0 comparisons=25165824 patterns_completed=12 planned=12
+ENGINE_COMPLETE=RAM_PASS
+RAM_SANITIZER_EXIT=0
+STORAGE_SCOPE=ALLOCATED_FILE bytes=16777216 path=/mnt/data/macdiag-fix/evidence/macdiag-file-3860-0/payload.bin cache_bypass=0
+RAW_DEVICE_WRITE=DISABLED FULL_DISK_COVERAGE=NO
+STORAGE_WRITE bytes=1048576/16777216
+STORAGE_FLUSH fsync=1 fullfsync=0 power_loss_durability=UNPROVEN
+STORAGE_READBACK_PASS=1 bytes=16777216
+STORAGE_READBACK_PASS=2 bytes=16777216
+CACHE_BYPASS=0
+ENGINE_COMPLETE=STORAGE_FILE_PASS
+STORAGE_SANITIZER_EXIT=0

@@ -1,69 +1,30 @@
 #!/usr/bin/env python3
-"""Entry-point regression tests with fake profile responses; never runs disk I/O."""
-import os
+"""Updated wiring contract after replacing legacy launchers with frozen v2 payloads.
+Functional profile, cancellation and transport tests live in diagnostics_v2.
+The old tests expected direct profile downloads and a destructive SSD backend.
+"""
 from pathlib import Path
 import subprocess
-import tempfile
 import unittest
-from test_diagnostic_profile import DEFAULT, MOCKS, ROOT, BASH
-
+ROOT=Path(__file__).resolve().parents[1]
 class EntryPointTests(unittest.TestCase):
-    def run_entry(self, name, replies, expected, **changes):
-        with tempfile.TemporaryDirectory(prefix='profile-integration-') as temp:
-            tmp=Path(temp)
-            state=tmp/'replies'
-            state.write_text('\n'.join(replies)+'\n')
-            # This mocked dependency is injected by fake curl; production code is unchanged.
-            payload=(ROOT/'diagnostic_profile.sh').read_text()+ '\n' + MOCKS + r'''
-dp_read_reply(){
-  [ -s "$T_REPLIES" ] || return 1
-  IFS= read -r DP_REPLY < "$T_REPLIES" || return 1
-  sed '1d' "$T_REPLIES" > "$T_REPLIES.next"
-  mv "$T_REPLIES.next" "$T_REPLIES"
-  return 0
-}
-'''
-            (tmp/'payload').write_text(payload)
-            (tmp/'curl').write_text('''#!/bin/bash
-printf '%s\\n' "$*" >> "$T_FETCHES"
-out=''; url=''
-while [ "$#" -gt 0 ]; do
- case "$1" in -o) out=$2; shift 2;; https://*) url=$1; shift;; *) shift;; esac
-done
-case "$url" in */diagnostic_profile.sh) cp "$T_PAYLOAD" "$out";; *) echo 'UNEXPECTED_DOWNLOAD' >&2; exit 88;; esac
-''')
-            (tmp/'curl').chmod(0o755)
-            env=dict(os.environ, **DEFAULT)
-            env.update(changes)
-            env.update(PATH=str(tmp)+os.pathsep+os.environ['PATH'], T_PAYLOAD=str(tmp/'payload'),
-                       T_FETCHES=str(tmp/'fetches'), T_REPLIES=str(state))
-            run=subprocess.run([BASH, str(ROOT/name)], env=env, text=True, capture_output=True, timeout=10)
-            self.assertEqual(run.returncode, expected, run.stdout+run.stderr)
-            calls=(tmp/'fetches').read_text()
-            self.assertEqual(calls.count('https://'),1, calls)
-            self.assertNotIn('UNEXPECTED_DOWNLOAD', run.stderr)
-            return run.stdout
-    def test_menu_exit_launches_no_test(self):
-        self.run_entry('current.sh',['0'],0)
-    def test_manual_profile_roundtrip_then_exit(self):
-        out=self.run_entry('current.sh',['15','1','1','1','0'],0)
-        self.assertIn('MODEL_PROFILE=a2141 OS_PROFILE=catalina ENV_PROFILE=recovery',out)
-    def test_manual_os_mismatch_launches_no_test(self):
-        out=self.run_entry('current.sh',['15','1','7','1'],3)
-        self.assertIn('OS_VERSION_MISMATCH',out)
-    def test_menu_ssd_on_full_os_blocked_before_fetch(self):
-        self.run_entry('current.sh',['1'],3,T_ENV='full')
-    def test_menu_whole_suite_wrong_model_blocked(self):
-        self.run_entry('current.sh',['13'],3,T_MODEL='MacBookPro15,1')
-    def test_direct_ssd_no_consent(self):
-        out=self.run_entry('ssd_test.sh',['no'],3)
-        self.assertIn('no_erase_consent',out)
-    def test_direct_ssd_full_os_blocked(self):
-        self.run_entry('ssd_test.sh',['ERASE-INTERNAL-SSD'],3,T_ENV='full')
-    def test_direct_ssd_wrong_model_blocked(self):
-        self.run_entry('ssd_test.sh',['ERASE-INTERNAL-SSD'],3,T_MODEL='MacBookPro15,1')
-    def test_direct_ssd_eof_blocked(self):
-        self.run_entry('ssd_test.sh',[],3)
-
-if __name__=='__main__':
-    unittest.main(verbosity=2)
+    def test_every_compatibility_entry_uses_bootstrap(self):
+        names=('current','ram_quick_test','ram_full_test','ram_map','ram_triage','ram_test','ssd_test','gpu_test','cpu_test','network_test','download_test','display_video_test','hardware_probe','power_thermal_test','full_safe_suite','full_all_suite','toolkit_selftest','post_repair_test')
+        for name in names:
+            text=(ROOT/(name+'.sh')).read_text()
+            self.assertIn('MacOS/main/st.sh',text)
+            self.assertEqual(subprocess.run(['/bin/bash','-n',str(ROOT/(name+'.sh'))],capture_output=True).returncode,0)
+    def test_storage_entry_no_legacy_raw_backend(self):
+        text=(ROOT/'ssd_test.sh').read_text()
+        self.assertIn('--run storage',text)
+        self.assertNotIn('mhdd_v2.part',text)
+        self.assertNotIn('eraseDisk',text)
+    def test_full_entry_routes_acceptance(self):
+        self.assertIn('--run acceptance',(ROOT/'full_all_suite.sh').read_text())
+        self.assertIn('--run acceptance',(ROOT/'post_repair_test.sh').read_text())
+    def test_menu_has_profile_and_post_repair(self):
+        text=(ROOT/'diagnostics/v2/menu.sh').read_text()
+        self.assertIn('15) MODEL/OS',text)
+        self.assertIn('16) POST-REPAIR',text)
+        self.assertNotIn('ERASE-INTERNAL-SSD',text)
+if __name__=='__main__':unittest.main(verbosity=2)

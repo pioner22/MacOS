@@ -1,0 +1,56 @@
+name: Diagnostics v2 regression
+on:
+  push:
+    paths:
+      - 'diagnostics/v2/**'
+      - 'tests/diagnostics_v2/**'
+      - 'tests/test_profile_entrypoints.py'
+      - 'st.sh'
+      - '.github/workflows/diagnostics-v2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Fetch exact public commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --depth 1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Record environment and run regression suite
+        shell: bash
+        env:
+          TEST_BASH: /bin/bash
+        run: |
+          set -euo pipefail
+          /bin/bash --version
+          perl -v
+          python3 --version
+          python3 -m unittest discover -s tests/diagnostics_v2 -v
+          python3 -m unittest discover -s tests -p test_profile_entrypoints.py -v
+      - name: Compile Metal (not a GPU hardware test)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun clang -fobjc-arc -mmacosx-version-min=10.15 -framework Foundation -framework Metal diagnostics/v2/metal_vram.m -o /tmp/macdiag-metal-check
+      - name: C sanitizers on small test allocations
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer diagnostics/v2/ram_native.c -o /tmp/ram-asan
+          cc -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -DDIAG_TESTING diagnostics/v2/storage_file.c -o /tmp/storage-asan
+          /tmp/ram-asan 16 2 quick 0
+          /tmp/storage-asan "$RUNNER_TEMP" 16

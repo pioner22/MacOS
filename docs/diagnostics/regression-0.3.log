@@ -1,0 +1,89 @@
+test_bootstrap_syntax (test_bootstrap.Bootstrap.test_bootstrap_syntax) ... ok
+test_complete_snapshot_executes_selftest (test_bootstrap.Bootstrap.test_complete_snapshot_executes_selftest) ... ok
+test_damaged_offline_module (test_bootstrap.Bootstrap.test_damaged_offline_module) ... ok
+test_failed_fetch_cleans_private_package (test_bootstrap.Bootstrap.test_failed_fetch_cleans_private_package) ... ok
+test_manifest_fetch_failure_no_execution (test_bootstrap.Bootstrap.test_manifest_fetch_failure_no_execution) ... ok
+test_manifest_tampering_rejected (test_bootstrap.Bootstrap.test_manifest_tampering_rejected) ... ok
+test_offline_selftest (test_bootstrap.Bootstrap.test_offline_selftest) ... ok
+test_partial_failed_fetch_not_executed (test_bootstrap.Bootstrap.test_partial_failed_fetch_not_executed) ... ok
+test_truncated_module_no_execution (test_bootstrap.Bootstrap.test_truncated_module_no_execution) ... ok
+test_aggregate_cancel (test_v2.Core.test_aggregate_cancel) ... ok
+test_aggregate_empty_not_pass (test_v2.Core.test_aggregate_empty_not_pass) ... ok
+test_aggregate_failure_sticky (test_v2.Core.test_aggregate_failure_sticky) ... ok
+test_aggregate_incomplete_not_pass (test_v2.Core.test_aggregate_incomplete_not_pass) ... ok
+test_aggregate_observation_not_pass (test_v2.Core.test_aggregate_observation_not_pass) ... ok
+test_boot_sec_not_usec (test_v2.Core.test_boot_sec_not_usec) ... ok
+test_compile_failure_cannot_reuse_binary (test_v2.Core.test_compile_failure_cannot_reuse_binary) ... ok
+test_completion_plus_crash_not_pass (test_v2.Core.test_completion_plus_crash_not_pass) ... ok
+test_consent_eof_not_accepted (test_v2.Core.test_consent_eof_not_accepted) ... ok
+test_log_failure_cannot_be_pass (test_v2.Core.test_log_failure_cannot_be_pass) ... ok
+test_memory_budget_cap (test_v2.Core.test_memory_budget_cap) ... ok
+test_memory_request_too_large (test_v2.Core.test_memory_request_too_large) ... ok
+test_network_failure_not_erased_by_later_success (test_v2.Core.test_network_failure_not_erased_by_later_success) ... ok
+test_profile_arm_not_intel (test_v2.Core.test_profile_arm_not_intel) ... ok
+test_profile_cannot_promote_unknown (test_v2.Core.test_profile_cannot_promote_unknown) ... ok
+test_profile_full_intel_allows_acceptance (test_v2.Core.test_profile_full_intel_allows_acceptance) ... ok
+test_profile_mismatch (test_v2.Core.test_profile_mismatch) ... ok
+test_profile_recovery_blocks_acceptance (test_v2.Core.test_profile_recovery_blocks_acceptance) ... ok
+test_ram_gate_stops_dependents (test_v2.Core.test_ram_gate_stops_dependents) ... ok
+test_real_compile_failure (test_v2.Core.test_real_compile_failure) ... ok
+test_sha (test_v2.Core.test_sha) ... ok
+test_suite_all_auto_pass_still_needs_manual_review (test_v2.Core.test_suite_all_auto_pass_still_needs_manual_review) ... ok
+test_suite_storage_failure_not_hidden (test_v2.Core.test_suite_storage_failure_not_hidden) ... ok
+test_uint_validation (test_v2.Core.test_uint_validation) ... ok
+test_zero_without_completion (test_v2.Core.test_zero_without_completion) ... ok
+test_production_ram_has_no_injection (test_v2.Native.test_production_ram_has_no_injection) ... ok
+test_ram_full_134_patterns (test_v2.Native.test_ram_full_134_patterns) ... ok
+test_ram_injected_fault (test_v2.Native.test_ram_injected_fault) ... ok
+test_ram_invalid_args (test_v2.Native.test_ram_invalid_args) ... ok
+test_ram_map_failure_stays (test_v2.Native.test_ram_map_failure_stays) ... ok
+test_ram_quick (test_v2.Native.test_ram_quick) ... ok
+test_ram_selfcheck (test_v2.Native.test_ram_selfcheck) ... ok
+test_ram_signal_no_pass (test_v2.Native.test_ram_signal_no_pass) ... ok
+test_storage_injected_corruption_retained (test_v2.Native.test_storage_injected_corruption_retained) ... ok
+test_storage_invalid_size (test_v2.Native.test_storage_invalid_size) ... ok
+test_storage_rejects_device (test_v2.Native.test_storage_rejects_device) ... ok
+test_storage_rejects_regular_file_directory (test_v2.Native.test_storage_rejects_regular_file_directory) ... ok
+test_storage_rejects_symlink_to_device (test_v2.Native.test_storage_rejects_symlink_to_device) ... ok
+test_storage_roundtrip_preserves_user_file (test_v2.Native.test_storage_roundtrip_preserves_user_file) ... ok
+test_storage_truncation (test_v2.Native.test_storage_truncation) ... ok
+test_actual_tls_payload (test_v2.Network.test_actual_tls_payload) ... ok
+test_certificate_validation_not_disabled (test_v2.Network.test_certificate_validation_not_disabled) ... ok
+test_long_body (test_v2.Network.test_long_body) ... ok
+test_missing_fixture_not_hardware_fail (test_v2.Network.test_missing_fixture_not_hardware_fail) ... ok
+test_plain_http_rejected (test_v2.Network.test_plain_http_rejected) ... ok
+test_plan_failed_attempt_not_hidden (test_v2.Network.test_plan_failed_attempt_not_hidden) ... ok
+test_plan_preserves_filename_and_sha_all_repeats (test_v2.Network.test_plan_preserves_filename_and_sha_all_repeats) ... ok
+test_range_206_exact (test_v2.Network.test_range_206_exact) ... ok
+test_range_ignored (test_v2.Network.test_range_ignored) ... ok
+test_sha_process_failure_is_inconclusive (test_v2.Network.test_sha_process_failure_is_inconclusive) ... ok
+test_short_body (test_v2.Network.test_short_body) ... ok
+test_timeout_then_fresh_attempt (test_v2.Network.test_timeout_then_fresh_attempt) ... ok
+test_unknown_encoding (test_v2.Network.test_unknown_encoding) ... ok
+test_wrong_content_range (test_v2.Network.test_wrong_content_range) ... ok
+test_wrong_sha (test_v2.Network.test_wrong_sha) ... ok
+test_all_bash_syntax (test_v2.Package.test_all_bash_syntax) ... ok
+test_all_perl_syntax (test_v2.Package.test_all_perl_syntax) ... ok
+test_cpu_reference_independently (test_v2.Package.test_cpu_reference_independently) ... ok
+test_hash_constants_independently (test_v2.Package.test_hash_constants_independently) ... ok
+test_modified_package_is_rejected (test_v2.Package.test_modified_package_is_rejected) ... ok
+test_no_raw_write_in_active_code (test_v2.Package.test_no_raw_write_in_active_code) ... ok
+test_package_manifest (test_v2.Package.test_package_manifest) ... ok
+test_nonzero_preserved (test_v2.Supervisor.test_nonzero_preserved) ... ok
+test_normal_exit (test_v2.Supervisor.test_normal_exit) ... ok
+test_signal_and_child_group (test_v2.Supervisor.test_signal_and_child_group) ... ok
+test_timeout (test_v2.Supervisor.test_timeout) ... ok
+
+----------------------------------------------------------------------
+Ran 75 tests in 6.830s
+
+OK
+test_every_compatibility_entry_uses_bootstrap (test_profile_entrypoints.EntryPointTests.test_every_compatibility_entry_uses_bootstrap) ... ok
+test_full_entry_routes_acceptance (test_profile_entrypoints.EntryPointTests.test_full_entry_routes_acceptance) ... ok
+test_menu_has_profile_and_post_repair (test_profile_entrypoints.EntryPointTests.test_menu_has_profile_and_post_repair) ... ok
+test_storage_entry_no_legacy_raw_backend (test_profile_entrypoints.EntryPointTests.test_storage_entry_no_legacy_raw_backend) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.023s
+
+OK
