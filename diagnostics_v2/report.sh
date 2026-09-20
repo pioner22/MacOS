@@ -147,25 +147,38 @@ record_not_run(){
   done < "$SESSION/plan.txt"
 }
 session_exit(){
-  local code final
-  code=$1
+  local code original_code final report_ok=0 meta_ok=1
+  code=$1; original_code=$1
   trap - EXIT INT TERM HUP
   [ -n "${SESSION:-}" ] || return "$code"
   record_unfinished_stage "$code" || { say 'STAGE_FINALIZATION_FAILED';code=3; }
   record_not_run || { say 'PLAN_FINALIZATION_FAILED';code=3; }
   SESSION_EXECUTION_STATE=FINISHED
-  case "$code" in 129|130|143) SESSION_EXECUTION_STATE=INTERRUPTED;;esac
+  case "$original_code" in 129|130|143) SESSION_EXECUTION_STATE=INTERRUPTED;;esac
   final=${SESSION_FINAL_STATE:-INCONCLUSIVE}
-  case "$code" in 129|130|143) final=INTERRUPTED;;esac
-  # A known failure remains visible even when subsequent work was interrupted.
-  if [ -f "$SESSION/summary.tsv" ] && grep -q $'\tFAIL\t' "$SESSION/summary.tsv";then
-    final=FAIL
+  case "$original_code" in 129|130|143) final=INTERRUPTED;;esac
+  # Stale success must not survive a failure in post-processing.
+  if [ "$code" -ne 0 ] && [ "$final" = PASS ];then final=INCONCLUSIVE;fi
+  if [ -f "$SESSION/summary.tsv" ] && grep -q $'\tFAIL\t' "$SESSION/summary.tsv";then final=FAIL;fi
+  printf 'execution\t%s\nexit_code\t%s\noriginal_exit_code\t%s\n' "$SESSION_EXECUTION_STATE" "$code" "$original_code" > "$SESSION/execution.tsv" || meta_ok=0
+  printf 'FINISHED\t%s\t%s\n' "$final" "$code" > "$SESSION/session.state" || meta_ok=0
+  if [ "$meta_ok" -eq 1 ] && report_render "$final";then
+    report_ok=1
+  else
+    # Do not leave PASS/0 in status files while exiting with a report failure.
+    code=3
+    [ "$final" = FAIL ] || final=INCONCLUSIVE
+    say 'REPORT_WRITE_FAILED / Не удалось завершить сохранение отчёта'
+    printf 'execution\t%s\nexit_code\t3\noriginal_exit_code\t%s\nreport_state\tERROR\n' "$SESSION_EXECUTION_STATE" "$original_code" > "$SESSION/execution.tsv" || :
+    printf 'FINISHED\t%s\t3\n' "$final" > "$SESSION/session.state" || :
+    # A partial or earlier RUNNING report must never masquerade as the final one.
+    if [ -f "$SESSION/REPORT_RU_EN.md" ];then
+      mv "$SESSION/REPORT_RU_EN.md" "$SESSION/REPORT_INCOMPLETE_RU_EN.md" || :
+    fi
   fi
-  printf 'execution\t%s\nexit_code\t%s\n' "$SESSION_EXECUTION_STATE" "$code" > "$SESSION/execution.tsv" || code=3
-  printf 'FINISHED\t%s\t%s\n' "$final" "$code" > "$SESSION/session.state" || code=3
-  report_render "$final" || { say 'REPORT_WRITE_FAILED / Не удалось сохранить отчёт';code=3; }
   say "FINAL_STATE=$final EXIT_CODE=$code"
-  say "REPORT=$SESSION/REPORT_RU_EN.md"
+  if [ "$report_ok" -eq 1 ];then say "REPORT=$SESSION/REPORT_RU_EN.md"
+  else say "REPORT=UNAVAILABLE EVIDENCE_DIRECTORY=$SESSION";fi
   say 'RU: Храните полный каталог локально. Для передачи используйте очищенный SUPPORT; полные логи могут раскрыть личные сведения.'
   say 'EN: Keep the full directory private. Share reviewed SUPPORT output; raw logs may contain private identifiers.'
   exit "$code"

@@ -81,6 +81,10 @@ download_main(){
       for ((i=1;i<=repeats;i++)); do
         net_check "$base/$file" "$sha" "$size"; rc=$?
         done_count=$((done_count+1))
+        if [ "$rc" -eq 2 ];then
+          say "DOWNLOAD_STOP reason=$NET_REASON completed_attempts=$done_count"
+          fault DOWNLOAD_PATH_FAILURE;return 2
+        fi
         case "$rc" in 0) ;;2) failures=$((failures+1));;*) incomplete=$((incomplete+1));;esac
       done
     done < "$ROOT/fixtures.txt"
@@ -93,7 +97,12 @@ download_main(){
     incomplete=$((incomplete+1))
     base='https://github.com/PowerShell/PowerShell/releases/download/v7.6.6'
     net_check "$base/PowerShell-7.6.6-win-fxdependent.zip" ea3c73ac3bf7afa07432c65b8d9f16b8945befa216cec38a51b6e213dc8fa709 23012318
-    rc=$?;case "$rc" in 0) ;;2) failures=$((failures+1));;*) incomplete=$((incomplete+1));;esac
+    rc=$?
+    if [ "$rc" -eq 2 ];then
+      say "DOWNLOAD_STOP reason=$NET_REASON completed_attempts=1"
+      fault DOWNLOAD_PATH_FAILURE;return 2
+    fi
+    case "$rc" in 0) ;;*) incomplete=$((incomplete+1));;esac
     net_check "$base/powershell-7.6.6-osx-x64.pkg" 68fd85010f02e5e16634f811da8d72a5ee58e01c24b353df5bf4acd3a645f56e 75026625
     rc=$?;case "$rc" in 0) ;;2) failures=$((failures+1));;*) incomplete=$((incomplete+1));;esac
     done_count=2

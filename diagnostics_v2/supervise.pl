@@ -29,6 +29,7 @@ if(!$pid){
 close $w;eval {POSIX::setpgid($pid,$pid);};
 my $sel=IO::Select->new($r);
 my ($ended,$status,$term,$leftover)=(0,0,undef,0);
+my $ended_at;
 my $start=clocknow();my $next=$start+15;
 while(!$ended || $sel->count){
  my $now=clocknow();
@@ -45,8 +46,10 @@ while(!$ended || $sel->count){
   }elsif(defined($n)){ $sel->remove($fh);close $fh; }
   elsif(!$!{EINTR}){ $badlog=1;$sel->remove($fh);close $fh; }
  }
- if(!$ended){my $p=waitpid($pid,WNOHANG);if($p==$pid){$status=$?;$ended=1;}elsif($p<0){$badlog=1;$ended=1;}}
- if($ended && $sel->count && !defined $term){$leftover=1;kill 'TERM',-$pid;$term=clocknow();}
+ if(!$ended){my $p=waitpid($pid,WNOHANG);if($p==$pid){$status=$?;$ended=1;$ended_at=clocknow();}elsif($p<0){$badlog=1;$ended=1;$ended_at=clocknow();}}
+ # Reaping the child and draining EOF are independent events. Buffered stdout
+ # is not an unfinished descendant; allow it to drain before classifying it.
+ if($ended && $sel->count && !defined $term && $now-$ended_at>=1){$leftover=1;kill 'TERM',-$pid;$term=clocknow();}
  if($now >= $next && !$ended){
   my $msg='HEARTBEAT elapsed_seconds='.int($now-$start)." process_running=1\n";
   $badlog=1 unless print $out $msg;$badlog=1 unless print STDOUT $msg;
@@ -58,6 +61,12 @@ while(!$ended || $sel->count){
  }
 }
 # Any still-running descendants share this stage's group, not the user's shell.
+if(kill 0,-$pid){
+ $leftover=1;
+ my $event="UNFINISHED_DESCENDANTS=1\n";
+ $badlog=1 unless print $out $event;
+ $badlog=1 unless print STDOUT $event;
+}
 kill 'TERM',-$pid;
 if(kill 0,-$pid){select undef,undef,undef,0.2;kill 'KILL',-$pid;}
 my $rc=$badlog?3:$cancel?$cancel:$timeout?124:$leftover?3:($status&127)?128+($status&127):($status>>8);
