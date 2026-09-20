@@ -8,6 +8,12 @@ next_step(){
     return 0
   fi
   case "$1" in
+    STORAGE_RO_NOT_AUTHORIZED|STORAGE_RO_DISK_NOT_SELECTED)
+      say 'RU: Чтение не запускалось. Нужен целый физический диск и явное READ diskN; стирание не предусмотрено.'
+      say 'EN: Reading did not start. Select a whole physical disk and confirm READ diskN; no erasure is implemented.';;
+    STORAGE_RO_*)
+      say 'RU: См. engine.log и read-coverage.tsv. При ошибке или щелчках сначала защита данных, затем проверка кабеля/питания. Не повторяйте полный скан повреждённого диска.'
+      say 'EN: See engine.log and read-coverage.tsv. On errors or clicking, protect data first, then check cable/power. Do not repeatedly scan a failing drive.';;
     *COVERAGE*|*BUDGET*|RAM_MAP_REQUIRES_NATIVE)
       say 'RU: См. coverage.tsv: исходный план не выполнен либо карта недоступна. Уменьшенный объём не даёт RAM PASS.'
       say 'EN: See coverage.tsv: the original plan is incomplete or mapping unavailable. Reduced coverage cannot pass the RAM plan.';;
@@ -90,7 +96,20 @@ report_render(){
         cat "$location/coverage.tsv";printf '```\n'
       fi
     done < "$SESSION/summary.tsv"
-    printf '\n## Действия / Next steps\n\n'
+    while IFS=$'\t' read -r stage state reason location;do
+      if [ -f "$location/read-coverage.tsv" ];then
+        printf '\n## Чтение HDD/SSD без записи / Read-only disk scan\n\n```text\n'
+        cat "$location/read-coverage.tsv"
+        if declare -F ro_read_bytes >/dev/null && [ -f "$location/engine.log" ];then
+          printf 'last_reported_read_bytes=%s\n' "$(ro_read_bytes "$location/engine.log")"
+        fi
+        printf '```\nФайлы и их содержимое не сверялись с эталоном. Медленное чтение не является доказательством плохого сектора.\n'
+        printf 'File contents were not checked against a reference. Slow reads alone do not prove bad sectors.\n'
+        printf 'После прерывания счётчик может отставать от реального чтения; журнал не гарантирует сохранность при потере питания.\n'
+        printf 'After interruption the counter can lag actual reads; power-loss log durability is not guaranteed.\n'
+      fi
+    done < "$SESSION/summary.tsv"
+    printf '\n## Действия / Next steps\n\n' 
     while IFS=$'\t' read -r stage state reason location;do
       [ -n "$stage" ] && [ "$state" != NOT_RUN ] || continue
       printf '\n### %s — %s\n\n' "$stage" "$state"
@@ -132,6 +151,7 @@ record_unfinished_stage(){
   printf '%s\t%s\n' "$name" "$state" > "$SESSION/current-stage.tsv" || return 3
   printf '%s\n' "STAGE_TERMINATION_CODE=$code" > "$dir/termination.txt" || return 3
   if declare -F record_leftover_file >/dev/null;then record_leftover_file "$dir";fi
+  if declare -F ro_finalize_coverage >/dev/null;then ro_finalize_coverage "$dir" || return 3;fi
   say "STEP_END=$name STATE=$state REASON=$reason"
   next_step "$reason" "$state"
   ACTIVE_STAGE_NAME=;ACTIVE_STAGE_DIR=

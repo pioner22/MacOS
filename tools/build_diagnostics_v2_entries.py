@@ -3,8 +3,8 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REF = '9fcc84f97a8c842fd3f885cd8523aba34905540d'
-SHA = 'f760f1828eefffe80307d5a5f21e333cf9b78e6cd1258002f1a224d0a9774b64'
+REF = '66ba6f126c724edf471ab76da05f08ec7aad1c85'
+SHA = 'b71085578f1a2fe858f80b9aff10da9ecee8d16055ff5cf7588c701cabf5d2ed'
 MODES = {
     'current.sh': 'menu', 'ram_quick_test.sh': 'ramquick',
     'ram_full_test.sh': 'ramfull', 'ram_test.sh': 'ramfull',
@@ -15,6 +15,7 @@ MODES = {
     'hardware_probe.sh': 'snapshot', 'full_safe_suite.sh': 'safe',
     'toolkit_selftest.sh': 'selftest', 'post_repair_test.sh': 'acceptance',
     'storage_file_test.sh': 'storage', 'ram_bridge_test.sh': 'bridge',
+    'hdd_readonly_test.sh': 'readonly',
 }
 TEMPLATE = '''#!/bin/bash
 # Compatibility entry; never execute a partial/unverified download.
