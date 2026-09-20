@@ -1,17 +1,21 @@
-# Mac Hardware Diagnostics — 2.0.0-rc6 / Bootstrap 1.3
+# Mac Hardware Diagnostics — 2.0.0-rc7 / Bootstrap 1.4
+
+## Русский
+
+Постоянная команда:
 
 ```bash
 curl -fL https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh | bash
 ```
 
-Сначала определяются оборудование, загруженная среда и доступные инструменты, затем профиль и меню. Пункт 14 SELFTEST проверяет ПО, не железо.
+Один проверенный immutable-пакет → наблюдение фактической среды → реестр и пробы инструментов → профиль и доступность → меню. Новый пункт **21 COMPATIBILITY** сохраняет паспорт/план без аппаратных тестов. **14 SELFTEST** проверяет комплект, не железо. **15** редактирует ограничивающий профиль и возвращается в меню. Остальные пункты выполняют один сеанс, сохраняют отчёт и завершаются; автоматического повторения нагрузки нет.
 
-**Новый пункт 20 — HDD/SSD READ ONLY, без записи тестовых данных:** явный выбор целого физического диска, выборочное или полное чтение, подтверждение `READ diskN`. Работает через Perl/diskutil без компилятора, при выполненных требованиях среды. Выборочный чистый результат остаётся INCONCLUSIVE; полный PASS означает только чтение указанного логического объёма без ошибок, не проверку записи и не сертификат исправности. Перед чтением повреждённого диска сохраните важные данные. ОС и файлы журналов могут писать отдельно; это не блокировка всех записей.
+**20 READ ONLY** — чтение HDD/SSD без записи тестовых данных. **17** создаёт отдельный тестовый файл после согласия. **18** — отдельно разрешаемый 40-GiB bridge. **1/13** остаются BLOCKED. **16 POST-REPAIR** не является единственным основанием аппаратной приёмки. Recovery без компилятора имеет только доступные ограниченные сценарии; готовые проверенные нативные Recovery-бинарники ещё не поставляются.
 
-Пункты 1/13 с разрушительным RAW заблокированы. 16 — комплекс без стирания разделов (может предлагать запись нового файла), 17 — отдельный новый тестовый файл после согласия, 18 — 40-GiB RAM→внешний RESCUE, 19 — локальный очищенный SUPPORT. Пункт 20 не включён в комплексы автоматически. Для задачи «только чтение» выбирайте именно 20.
+Реестр содержит 13 документальных записей устройств (11 идентификаторов), 9 приоритетных шаблонов и 12 контрактов возможностей. Это не исчерпывающая база всех Mac/ОС. Год не определяет Bash; неоднозначные правила не открывают нагрузку. На целевой машине для реестра не нужны Python/jq/JSON::PP. Память, том, права и согласие перепроверяются при запуске этапа.
 
-[Режим 20, ограничения и 241 программная проверка](docs/diagnostics/RC6_READONLY_HDD.md) · [Архитектура Recovery](docs/diagnostics/RECOVERY_PRODUCT_RU.md) · [Сохранённые исправления rc5](docs/diagnostics/RC5_SECOND_AUDIT.md)
+[Реестр и ограничения](docs/diagnostics/RC7_REGISTRY_RU.md) · [300 программных проверок](docs/diagnostics/RC7_QA.md) · [Read-only режим](docs/diagnostics/RC6_READONLY_HDD.md)
 
 ## English
 
-Start with option 14 (toolkit only), then option 20 for a separately confirmed read-only scan. No compiler is needed; compatible Darwin/Perl/diskutil/device permissions are still required. Sample completion is incomplete coverage; a full PASS proves only reported-capacity readability. No formatting, repair or test-data writes; OS and log writes remain possible independently. Legacy destructive modes stay blocked, file-write checks remain separate. The 241 Linux software regressions do not validate real macOS/Recovery or physical HDD/SSD hardware. Offline package selftest: `bash st.sh --offline selftest`.
+The stable launcher selects one verified release. Live facts and capability probes feed the integrated registry before the menu. Option 21 records compatibility only; 14 checks software; 15 edits the profile and returns to the menu. One test/suite selection ends in a report and exit. No new heavy workload, automatic upload or destructive RAW mode is enabled. Native Recovery binary distribution and actual Mac validation remain pending. [Registry](docs/diagnostics/RC7_REGISTRY_EN.md) · [Validation](docs/diagnostics/RC7_QA.md).

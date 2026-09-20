@@ -1,15 +1,13 @@
-> Текущая версия: rc4. Приоритет изменений и критериев: [RC4_REVIEW_FIXES](docs/diagnostics/RC4_REVIEW_FIXES.md). / Current rc4 semantics take precedence.
+# Профили и совместимость / Profiles and compatibility — rc7
 
-# Профили оборудования и среды — rc3
+Активный runtime: diagnostics_v2/profile.sh + registry.sh и четыре registry_*.tsv. Авторский источник: registry/diagnostics.json; генерация: tools/build_diagnostics_registry.py. Старый profiles.tsv сохранён для изолированных legacy-unit сценариев, не является основным правилом нового публичного запуска.
 
-Основной реестр: `diagnostics_v2/profiles.tsv`; выбор и пробы: `diagnostics_v2/profile.sh`. Девять шаблонов A2141/Intel/Apple Recovery/full, safe, ambiguous installer/recovery и unknown дополняются версией ОС, архитектурой процесса и типом консоли. Это составной профиль, а не сотни копий одного shell-скрипта.
+Профиль учитывает фактические CPU/process architecture/Rosetta, Model Identifier, ОС/build, Recovery/full/safe/unknown, текущий и системный Bash, права/консоль и необходимые возможности инструментов. Ручной выбор может ограничить, но не подменить наблюдения. Год устройства — документальный справочник, а не способ определения Bash. Равный приоритет подходящих правил приводит к ограничению, не произвольному выбору.
 
-Порядок: minimal preflight → hardware/OS/environment → фактически работающие инструменты → backend policy → журнал профиля → меню. Присутствующая команда и успешно проверенная команда имеют разные состояния. Пробы ограничены временем. Root UID не равен Recovery; x86_64 процесса не равен Intel CPU при Rosetta; ОС установщика не равна загруженной ОС.
+В этом выпуске 13 документальных строк для 11 идентификаторов, 9 шаблонов, 12 capability-контрактов. Статус всех аппаратных сочетаний: реальные испытания впереди. Присутствие записи не означает испытание этой модели/ОС. Компилятор CANDIDATE ещё должен успешно собрать конкретный движок; READY — только предварительная готовность. Объём памяти, mlock, целевой диск и согласие не отменяются реестром.
 
-В Recovery без toolchain выбирается ограниченный Perl screen, если его зависимости работают. Без них тест помечается недоступным. Native сохраняет обязательный mlock и бюджет памяти. Неизвестная среда не получает право на большую нагрузку. Ручной профиль может ограничить запуск, но не подменить факты. Все профили пока SOFTWARE_TESTED_REAL_HARDWARE_PENDING.
+Пункт 21 или локально `bash st.sh --offline profile` создаёт паспорт/план и OBSERVED/5. Пункт 15 возвращает к меню. Файлы плана сохраняются до меню и после изменений профиля, в финальном отчёте отделены от результатов тестов. Полные журналы приватны; автоматической отправки нет.
 
-Пункт 15 меняет подтверждённый профиль, не устанавливает ОС. RAW-пункты 1/13 заблокированы для любой модели. Файловая запись требует отдельного согласия. Пункт 19 сохраняет локальный минимальный экспорт без автоматической отправки.
+Отдельный macdiag_core и его CLI не изменены. Устройства импортированы из зафиксированного catalog.json как данные, без обязательного JSON-парсера на Recovery. Подробности: [RU](docs/diagnostics/RC7_REGISTRY_RU.md), [EN](docs/diagnostics/RC7_REGISTRY_EN.md), [QA](docs/diagnostics/RC7_QA.md).
 
-[Подробная архитектура RU](docs/diagnostics/RECOVERY_PRODUCT_RU.md) · [English](docs/diagnostics/RECOVERY_PRODUCT_EN.md) · [QA rc3](docs/diagnostics/RC3_QA.md)
-
-Historical rc1/rc2 documents describe their own revisions. The current profiles are software-tested scenarios, not proof that every listed Mac/Recovery version has been exercised on real hardware.
+English: The active diagnostic launcher now uses declarative compatibility rules and live capability probes. The separate core CLI is not replaced. Documentary device references, software-tested profiles, executed probes and actual hardware validation are different evidence levels. No automatic load, repair or upload follows from a profile match. See the linked release documentation.

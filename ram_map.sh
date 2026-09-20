@@ -9,11 +9,11 @@ diag_entry(){
   trap 'exit 130' INT
   trap 'exit 143' TERM HUP
   curl -q -fsSL --retry 0 --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 120 --max-filesize 1048576 \
-    'https://raw.githubusercontent.com/pioner22/MacOS/c6e14dda36146cf697d89f4b7d8cc93af633005d/st.sh' -o "$tmp" || return 3
+    'https://raw.githubusercontent.com/pioner22/MacOS/7a2ac61cf15943f3d1d4fda2c9cf9d6cf5f811c6/st.sh' -o "$tmp" || return 3
   if command -v sha256sum >/dev/null 2>&1;then got=$(sha256sum "$tmp") || return 3
   elif command -v shasum >/dev/null 2>&1;then got=$(shasum -a 256 "$tmp") || return 3
   else return 3;fi
-  [ "${got%% *}" = 51dd36c157995df9737fdcc55d613843564f430ae3a2a9c7ad4194713cd3b72c ] || { echo 'RESULT=INCONCLUSIVE BOOTSTRAP_HASH_FAILED';return 3; }
+  [ "${got%% *}" = 98e4067b5e209c497bdec137a00eeb43bc5995a2cff834f8c0b2d146d3200afc ] || { echo 'RESULT=INCONCLUSIVE BOOTSTRAP_HASH_FAILED';return 3; }
   /bin/bash -n "$tmp" || return 3
   /bin/bash "$tmp" "$1"
 }

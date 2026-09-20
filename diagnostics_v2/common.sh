@@ -4,7 +4,7 @@
 export LC_ALL=C
 umask 077
 COMMON_ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || return 3
-DIAG_VERSION=2.0.0-rc6
+DIAG_VERSION=2.0.0-rc7
 say(){ printf '%s\n' "$*"; }
 valid_uint(){ case "$1" in ''|*[!0-9]*|0[0-9]*) return 1;; esac; [ "${#1}" -le 9 ] && [ "$1" -ge "$2" ] && [ "$1" -le "$3" ]; }
 result(){
@@ -25,6 +25,10 @@ fault(){ result FAIL 2 "$1" 'Обнаружена ошибка проверяе�
 passed(){ result PASS 0 "$1" 'Проверенный этап завершён без обнаруженных ошибок. Это не гарантия исправности всего ноутбука.' 'The tested stage completed without detected errors, not a whole-machine guarantee.'; }
 need(){ command -v "$1" >/dev/null 2>&1; }
 select_hash(){
+  if [ -n "${REGISTRY_STATUS:-}" ] && declare -F rg_has >/dev/null && [ "$REGISTRY_STATUS" = VALID ];then
+    rg_has sha256 || return 1
+    SHA_CMD=("${DIAG_SHA_CMD[@]}");return 0
+  fi
   local tool got
   SHA_CMD=()
   for tool in sha256sum shasum openssl; do
@@ -48,7 +52,7 @@ supervise(){
   seconds=$1; shift
   need perl || return 3
   logfile=$(mktemp "$STEP_DIR/supervisor.XXXXXX") || return 3
-  perl "$COMMON_ROOT/supervise.pl" "$seconds" "$logfile" "$@"
+  "${DIAG_PERL:-perl}" "$COMMON_ROOT/supervise.pl" "$seconds" "$logfile" "$@"
 }
 compile_c(){
   local source out compiler
@@ -82,7 +86,9 @@ run_step(){
     trap 'exit 130' INT
     trap 'exit 143' TERM
     trap 'exit 129' HUP
-    "$@"
+    if declare -F registry_gate >/dev/null;then
+      registry_gate "$name" && "$@"
+    else "$@";fi
   ) 2>&1 | tee -i "$dir/output.log"
   ps=("${PIPESTATUS[@]}"); rc=${ps[0]:-3}
   state=INCONCLUSIVE; reason=MISSING_RESULT; declared=3; extra=''
@@ -126,5 +132,5 @@ capture(){
   local seconds
   seconds=$1;shift
   need perl || return 3
-  perl "$COMMON_ROOT/supervise.pl" "$seconds" "$STEP_DIR/engine.log" "$@"
+  "${DIAG_PERL:-perl}" "$COMMON_ROOT/supervise.pl" "$seconds" "$STEP_DIR/engine.log" "$@"
 }

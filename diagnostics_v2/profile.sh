@@ -84,6 +84,7 @@ profile_detect(){
   fi
   MODEL_PROFILE=${MODEL_PROFILE:-auto};OS_PROFILE=${OS_PROFILE:-auto};ENV_PROFILE=${ENV_PROFILE:-auto}
   profile_capabilities
+  if declare -F registry_collect >/dev/null;then registry_collect || :;fi
   profile_resolve
 }
 profile_capabilities(){
@@ -115,6 +116,7 @@ profile_capabilities(){
   pf_path /System/Library/Frameworks/Metal.framework && CAP_METAL=present
 }
 profile_resolve(){
+  if [ -n "${REGISTRY_STATUS:-}" ] && declare -F registry_resolve >/dev/null;then registry_resolve;return $?;fi
   local table id hw env policy
   PROFILE_TEMPLATE=unknown;PROFILE_POLICY=observe
   table="${ROOT:-$COMMON_ROOT}/profiles.tsv"
@@ -155,6 +157,7 @@ profile_show(){
   printf 'SHELL=Bash-%s CONSOLE=%s PRIVILEGE=%s ROSETTA=%s PAGE_SIZE=%s\n' "$BASH_VERSION" "${CONSOLE:-unknown}" "${PRIVILEGE:-unknown}" "${ROSETTA:-unknown}" "${PAGE_SIZE:-unknown}"
   printf 'TOOLS perl=%s supervisor=%s sha256=%s curl=%s compiler=%s\n' "${CAP_PERL:-no}" "${CAP_SUPERVISOR:-no}" "${CAP_SHA:-no}" "${CAP_CURL:-no}" "${CAP_NATIVE:-no}"
   printf 'BACKENDS ram=%s cpu=%s file=%s gpu=%s\n' "${RAM_BACKEND:-unavailable}" "${CPU_BACKEND:-unavailable}" "${FILE_BACKEND:-unavailable}" "${GPU_BACKEND:-inventory}"
+  if [ -n "${REGISTRY_STATUS:-}" ] && declare -F registry_show >/dev/null;then registry_show;fi
   say 'RU: Профиль выбран по наблюдениям. Recovery не требует установленной ОС. Ограниченный скрининг не подтверждает всю RAM/SSD.'
   say 'EN: Profile selected from observations. Recovery needs no installed OS. Limited screening does not certify all RAM/storage.'
   say 'RU: Internet/local Recovery не различаются достоверно. Отсутствие инструмента — ограничение, не поломка.'

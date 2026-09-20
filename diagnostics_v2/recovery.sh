@@ -76,7 +76,7 @@ recovery_ram_main(){
   # Hard cap remains 1 GiB; Perl virtual allocations are not equivalent to wired DRAM.
   say "RECOVERY_RAM_PLAN mode=$mode mib=$mib backend=perl_screen"
   coverage_record "$mib" "$mib" 0 "$total" SCREEN_PENDING || return 3
-  capture 1810 perl "$ROOT/recovery_ram.pl" "$mib" 1;rc=$?
+  capture 1810 "${DIAG_PERL:-perl}" "$ROOT/recovery_ram.pl" "$mib" 1;rc=$?
   case "$rc" in
     0) grep -qx 'ENGINE_COMPLETE=RAM_SCREEN_CLEAN' "$STEP_DIR/engine.log" || { unknown RECOVERY_SCREEN_INCOMPLETE;return 3; }
       coverage_record "$mib" "$mib" "$mib" "$total" SCREEN_ONLY || return 3
@@ -94,13 +94,26 @@ recovery_file_main(){
   free=$(awk 'NR==2 {print $4}' "$STEP_DIR/target-df.txt")
   case "$free" in ''|*[!0-9]*)unknown FREE_SPACE_UNKNOWN;return 3;;esac
   [ "$free" -ge 1310720 ] || { unknown INSUFFICIENT_FREE_SPACE;return 3; }
-  MACDIAG_STOP_GRACE=30 capture 945 perl "$ROOT/recovery_file.pl" "$path" 256;rc=$?
+  MACDIAG_STOP_GRACE=30 capture 945 "${DIAG_PERL:-perl}" "$ROOT/recovery_file.pl" "$path" 256;rc=$?
   [ "$rc" = 0 ] || record_leftover_file "$STEP_DIR"
   case "$rc" in
     0) grep -qx 'ENGINE_COMPLETE=FILE_SCREEN_CLEAN' "$STEP_DIR/engine.log" || { unknown FILE_COMPLETION_MISSING;return 3; }
       result INCONCLUSIVE 3 FILE_SCREEN_CLEAN_CACHE_UNPROVEN '256 МиБ записаны и дважды сверены. Исключение дискового кэша и проверка всего SSD не выполнены.' '256 MiB written and verified twice. Cache exclusion and whole-device verification are not established.';;
     2)fault FILE_OR_RAM_IO_PATH_FAILURE_NOT_COMPONENT_DIAGNOSIS;;
     129|130|143)return "$rc";;*)unknown FILE_RESOURCES_CACHE_CONTROLS_OR_INTERRUPTION;;
+  esac
+}
+# Only an actually clean limited screen may substitute for native PASS in the
+# limited suite. A missing/failed/aborted engine never authorizes escalation.
+recovery_ram_gate(){
+  case "${LAST_STATE:-}:${RAM_BACKEND:-}:${LAST_REASON:-}" in
+    PASS:*) return 0;;
+    INCONCLUSIVE:perl_screen:RAM_SCREEN_CLEAN_NATIVE_PENDING)
+      say 'RAM_BASELINE=LIMITED_SCREEN_ONLY'
+      return 0;;
+    *)
+      say "DEPENDENCY_STOP=RAM_BASELINE_UNAVAILABLE STATE=${LAST_STATE:-unknown} REASON=${LAST_REASON:-unknown}"
+      return 3;;
   esac
 }
 recovery_suite(){
@@ -115,15 +128,15 @@ recovery_suite(){
   run_step HARDWARE snapshot_main || return $?
   run_step POWER power_main || return $?
   run_step RAM_SCREEN ram_main quick || return $?
-  [ "$LAST_STATE" != FAIL ] || { finish_suite;return $?; }
+  recovery_ram_gate || { finish_suite;return $?; }
   if [ "$kind" != safe ];then
     run_step RAM_EXTENDED ram_main full || return $?
-    [ "$LAST_STATE" != FAIL ] || { finish_suite;return $?; }
+    recovery_ram_gate || { finish_suite;return $?; }
   fi
   # Limited/missing RAM verification does NOT authorize destructive work or hardware verdicts.
   say 'DEPENDENT_RESULT_ATTRIBUTION=UNCONFIRMED_RAM_BASELINE'
   run_step CPU cpu_main || return $?
-  [ "$LAST_STATE" != FAIL ] || { finish_suite;return $?; }
+  [ "$LAST_STATE" = PASS ] || { finish_suite;return $?; }
   run_step NETWORK network_supervised || return $?
   run_step DOWNLOAD download_supervised || return $?
   [ "$LAST_STATE" != FAIL ] || { finish_suite;return $?; }

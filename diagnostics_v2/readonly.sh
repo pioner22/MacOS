@@ -6,7 +6,7 @@ readonly_preflight(){
   disk=$1
   case "$disk" in disk0|disk[1-9]*) ;;*)unknown READONLY_DEVICE_INVALID;return 3;;esac
   [[ "$disk" =~ ^disk(0|[1-9][0-9]{0,3})$ ]] || { unknown READONLY_DEVICE_INVALID;return 3; }
-  xml=$(pf_read 12 diskutil info -plist "/dev/$disk") || { unknown READONLY_METADATA_UNAVAILABLE;return 3; }
+  xml=$(pf_read 12 "${DIAG_DISKUTIL:-diskutil}" info -plist "/dev/$disk") || { unknown READONLY_METADATA_UNAVAILABLE;return 3; }
   printf '%s\n' "$xml" > "$STEP_DIR/read-target.plist" || return 3
   contract=$(perl "$ROOT/storage_readonly.pl" --metadata "$disk" < "$STEP_DIR/read-target.plist") || {
     unknown READONLY_PHYSICAL_WHOLE_DISK_NOT_CONFIRMED;return 3;
@@ -21,11 +21,12 @@ readonly_main(){
   [ "$KERNEL" = Darwin ] && [ "${PROFILE_POLICY:-observe}" != observe ] && profile_validate || { unknown READONLY_PROFILE_UNAVAILABLE;return 3; }
   [ "${CAP_PERL:-no}" = yes ] && [ "${CAP_SUPERVISOR:-no}" = yes ] && need diskutil || { unknown READONLY_TOOLS_UNAVAILABLE;return 3; }
   pf_probe 5 perl -MFcntl=O_RDONLY,O_NOFOLLOW,SEEK_SET,S_ISCHR -MConfig -MErrno -e 'exit($Config{ivsize}>=8?0:3)' || { unknown READONLY_PERL_CAPABILITY_UNAVAILABLE;return 3; }
-  listing=$(pf_read 12 diskutil list) || { unknown READONLY_DEVICE_LIST_UNAVAILABLE;return 3; }
+  listing=$(pf_read 12 "${DIAG_DISKUTIL:-diskutil}" list) || { unknown READONLY_DEVICE_LIST_UNAVAILABLE;return 3; }
   printf '%s\n' "$listing" | tee "$STEP_DIR/read-disk-list.txt"
   say 'RU: Выберите целый физический диск: disk0, disk1 и т.д. Номер не угадывайте. Enter — отмена.'
   say 'EN: Select a whole physical disk (disk0, disk1, etc.). Do not guess its number. Enter cancels.'
   printf '> ';read_reply || { unknown READONLY_NOT_AUTHORIZED;return 3; };disk=$REPLY
+  [ -n "$disk" ] || { unknown READONLY_NOT_AUTHORIZED;return 3; }
   readonly_preflight "$disk" || return 3
   original=$RO_CONTRACT
   cp "$STEP_DIR/read-target.plist" "$STEP_DIR/read-target.initial.plist" || return 3
@@ -46,7 +47,7 @@ readonly_main(){
   say "READONLY_PLAN mode=$mode disk=$disk bytes=$RO_BYTES sector=$RO_BLOCK logs=$STEP_DIR"
   say 'RU: Остановка при первой ошибке чтения. Медленные блоки — наблюдения, а не доказанные bad sectors. Ctrl+C — остановить.'
   say 'EN: Stop on the first read error. Slow blocks are observations, not proven bad sectors. Ctrl+C stops.'
-  capture "$budget" perl "$ROOT/storage_readonly.pl" --device "/dev/r$disk" "$RO_BYTES" "$RO_BLOCK" "$mode" "$budget";rc=$?
+  capture "$budget" "${DIAG_PERL:-perl}" "$ROOT/storage_readonly.pl" --device "/dev/r$disk" "$RO_BYTES" "$RO_BLOCK" "$mode" "$budget";rc=$?
   case "$rc" in 129|130|143)return "$rc";;esac
   case "$rc" in
     0)
