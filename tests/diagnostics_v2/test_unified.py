@@ -11,6 +11,7 @@ import pexpect
 
 BASE=Path(__file__).resolve().parents[2]
 ROOT=BASE/'diagnostics_v2'
+RELEASE_VERSION=(BASE/'diagnostics-release.tsv').read_text().split('\t')[0]
 MOCK='''profile_detect(){ KERNEL=Darwin;CPU=intel;ARCH=x86_64;MODEL=MacBookPro16,1;RAM_BYTES=68719476736;OS_KEY=catalina;OS_VERSION=10.15.7;OS_BUILD=QA;ENVIRONMENT=full;MODEL_PROFILE=auto;OS_PROFILE=auto;ENV_PROFILE=auto; }
 '''
 class UnifiedTests(unittest.TestCase):
@@ -25,7 +26,7 @@ class UnifiedTests(unittest.TestCase):
     def interactive(self,script):
         return pexpect.spawn('/bin/bash',['-c',self.prefix+script],encoding='utf-8',timeout=10)
     def test_version(self):
-        p=self.shell('main --version');self.assertEqual(p.returncode,0);self.assertIn('2.0.0-rc4',p.stdout)
+        p=self.shell('main --version');self.assertEqual(p.returncode,0);self.assertIn('VERSION='+RELEASE_VERSION,p.stdout)
     def test_menu_exit_keeps_profile_without_test(self):
         p=self.interactive('main menu');p.expect('> ');p.sendline('0');p.expect(pexpect.EOF);p.close()
         self.assertEqual(p.exitstatus,0);self.assertTrue(list(self.d.glob('macdiag-v2.*/environment.tsv')));self.assertFalse(list(self.d.glob('macdiag-v2.*/*/engine.log')))
@@ -82,7 +83,7 @@ class UnifiedTests(unittest.TestCase):
         s=(ROOT/'metal_vram.m').read_text();self.assertIn('MTLResourceStorageModeManaged',s);self.assertIn('synchronizeResource:readback',s)
     def test_offline_latest_descriptor_selftest(self):
         p=subprocess.run(['/bin/bash',str(BASE/'st.sh'),'--offline','selftest'],capture_output=True,text=True,timeout=10,env=dict(os.environ,MACDIAG_REPORT_DIR=str(self.d)))
-        self.assertEqual(p.returncode,0,p.stdout+p.stderr);self.assertIn('RELEASE_VERSION=2.0.0-rc4',p.stdout);self.assertIn('REPORT=',p.stdout)
+        self.assertEqual(p.returncode,0,p.stdout+p.stderr);self.assertIn('RELEASE_VERSION='+RELEASE_VERSION,p.stdout);self.assertIn('REPORT=',p.stdout)
     def test_offline_corrupted_package_stops(self):
         import shutil
         copy=self.d/'package';shutil.copytree(BASE,copy);(copy/'diagnostics_v2'/'run.sh').write_text('echo SHOULD_NOT_RUN\n')

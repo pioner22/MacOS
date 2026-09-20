@@ -25,6 +25,13 @@ pf_probe() (
   if [ -n "${PF_LOG:-}" ];then printf 'PROBE command=%s rc=%s limit_seconds=%s\n' "$*" "$rc" "$seconds" >> "$PF_LOG";fi
   exit "$rc"
 )
+# stdout from a failed/terminated command is evidence, never an observed fact.
+pf_read(){
+  local value rc
+  value=$(pf_probe "$@"); rc=$?
+  [ "$rc" -eq 0 ] || return "$rc"
+  printf '%s\n' "$value"
+}
 pf_os_key(){
   case "$1" in
     10.13|10.13.*) printf high_sierra;;10.14|10.14.*)printf mojave;;10.15|10.15.*)printf catalina;;
@@ -44,34 +51,34 @@ profile_detect(){
   elif [ -t 0 ];then CONSOLE=tty;fi
   # Only the type of console is recorded, never SSH_CONNECTION or environment dumps.
   if [ "$KERNEL" = Darwin ];then
-    MODEL=$(pf_probe 3 sysctl -n hw.model 2>/dev/null);[ -n "$MODEL" ] || MODEL=unknown
+    MODEL=$(pf_read 3 sysctl -n hw.model 2>/dev/null);[ -n "$MODEL" ] || MODEL=unknown
     case "$MODEL" in *[!A-Za-z0-9,._-]*)MODEL=unknown;;esac
-    RAM_BYTES=$(pf_probe 3 sysctl -n hw.memsize 2>/dev/null)
+    RAM_BYTES=$(pf_read 3 sysctl -n hw.memsize 2>/dev/null)
     case "$RAM_BYTES" in ''|*[!0-9]*) RAM_BYTES=0;;esac
     [ "${#RAM_BYTES}" -le 13 ] || RAM_BYTES=0
-    ROSETTA=$(pf_probe 3 sysctl -n sysctl.proc_translated 2>/dev/null)
+    ROSETTA=$(pf_read 3 sysctl -n sysctl.proc_translated 2>/dev/null)
     case "$ROSETTA" in 0|1);;*)ROSETTA=unknown;;esac
-    arm=$(pf_probe 3 sysctl -n hw.optional.arm64 2>/dev/null)
-    vendor=$(pf_probe 3 sysctl -n machdep.cpu.vendor 2>/dev/null)
+    arm=$(pf_read 3 sysctl -n hw.optional.arm64 2>/dev/null)
+    vendor=$(pf_read 3 sysctl -n machdep.cpu.vendor 2>/dev/null)
     if [ "$ARCH" = arm64 ] || [ "$arm" = 1 ] || [ "$ROSETTA" = 1 ];then CPU=apple_silicon;HW_PROFILE=apple_silicon
     elif [ "$ARCH" = x86_64 ] && [ "$vendor" = GenuineIntel ];then
       CPU=intel;HW_PROFILE=intel_generic
       case "$MODEL" in MacBookPro16,1|MacBookPro16,4)HW_PROFILE=a2141;T2_STATUS=model_expected_not_measured;;esac
     fi
-    CPU_NAME=$(pf_probe 3 sysctl -n machdep.cpu.brand_string 2>/dev/null);[ -n "$CPU_NAME" ] || CPU_NAME=$CPU
-    PAGE_SIZE=$(pf_probe 3 sysctl -n hw.pagesize 2>/dev/null)
+    CPU_NAME=$(pf_read 3 sysctl -n machdep.cpu.brand_string 2>/dev/null);[ -n "$CPU_NAME" ] || CPU_NAME=$CPU
+    PAGE_SIZE=$(pf_read 3 sysctl -n hw.pagesize 2>/dev/null)
     case "$PAGE_SIZE" in ''|*[!0-9]*)PAGE_SIZE=unknown;;esac
-    OS_VERSION=$(pf_probe 3 sw_vers -productVersion 2>/dev/null);[ -n "$OS_VERSION" ] || OS_VERSION=unknown
-    OS_BUILD=$(pf_probe 3 sw_vers -buildVersion 2>/dev/null);[ -n "$OS_BUILD" ] || OS_BUILD=unknown
+    OS_VERSION=$(pf_read 3 sw_vers -productVersion 2>/dev/null);[ -n "$OS_VERSION" ] || OS_VERSION=unknown
+    OS_BUILD=$(pf_read 3 sw_vers -buildVersion 2>/dev/null);[ -n "$OS_BUILD" ] || OS_BUILD=unknown
     OS_KEY=$(pf_os_key "$OS_VERSION")
-    rootinfo=$(pf_probe 8 diskutil info / 2>/dev/null)
+    rootinfo=$(pf_read 8 diskutil info / 2>/dev/null)
     # CDIS alone is insufficient, and root UID never implies Recovery.
     if pf_path /System/Installation/CDIS;then
       case "$rootinfo" in *'Base System'*)ENVIRONMENT=recovery;ENV_EVIDENCE=cdis_and_base_system;;
         *)ENVIRONMENT=installer_or_recovery;ENV_EVIDENCE=cdis_without_root_confirmation;;esac
     elif pf_path /System/Library/CoreServices/Finder.app && pf_path /var/db/.AppleSetupDone;then
       ENVIRONMENT=full;ENV_EVIDENCE=finder_and_setup_marker
-      safe=$(pf_probe 3 sysctl -n kern.safeboot 2>/dev/null)
+      safe=$(pf_read 3 sysctl -n kern.safeboot 2>/dev/null)
       if [ "$safe" = 1 ];then ENVIRONMENT=safe;ENV_EVIDENCE=kern_safeboot;fi
     fi
   fi
@@ -100,7 +107,7 @@ profile_capabilities(){
   if declare -F select_hash >/dev/null && select_hash;then CAP_SHA=yes;fi
   # Discover a real installed toolchain, never invoke an install stub or download one.
   if [ "$KERNEL" = Darwin ] && pf_has xcode-select && pf_probe 3 xcode-select -p >/dev/null 2>&1;then
-    compiler=$(pf_probe 5 xcrun -f clang 2>/dev/null)
+    compiler=$(pf_read 5 xcrun -f clang 2>/dev/null)
     if [ -n "$compiler" ] && [ -x "$compiler" ] && pf_probe 5 "$compiler" --version >/dev/null 2>&1;then
       CAP_CLANG=$compiler;CAP_NATIVE=candidate
     fi

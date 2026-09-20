@@ -14,6 +14,12 @@ selftest_main(){
   local f got size sha name bad=0 count=0 seen=" "
   select_hash || { unknown SHA256_KNOWN_ANSWER_FAILED; return 3; }
   for f in common.sh profile.sh net.sh report.sh recovery.sh run.sh; do /bin/bash -n "$ROOT/$f" || bad=1; done
+  if need perl;then
+    if ! pf_probe 5 perl -MPOSIX -MIO::Select -MIO::Handle -MFcntl -MFile::Temp -MCwd -MErrno -e 'exit 0' > "$STEP_DIR/perl-prerequisites.log" 2>&1;then
+      cat "$STEP_DIR/perl-prerequisites.log"
+      unknown PERL_SELFTEST_DEPENDENCIES_UNAVAILABLE;return 3
+    fi
+  fi
   if need perl; then perl -c "$ROOT/count_stream.pl" || bad=1; perl -c "$ROOT/supervise.pl" || bad=1; perl -c "$ROOT/recovery_ram.pl" || bad=1; perl -c "$ROOT/recovery_file.pl" || bad=1; else unknown PERL_UNAVAILABLE;return 3;fi
   if [ -f "$ROOT/manifest.tsv" ]; then
     while read -r sha size name; do
@@ -115,12 +121,15 @@ file_main(){
     path=${BRIDGE_TARGET:-/Volumes/RESCUE};mib=40960
     [ "$RAM_BYTES" -ge 68719476736 ] || { unknown BRIDGE_REQUIRES_64GIB_RAM;return 3; }
     [ "$(native_budget 40960)" = 40960 ] || { unknown BRIDGE_MEMORY_BUDGET_TOO_LOW;return 3; }
-    location=$(pf_probe 8 diskutil info "$path" 2>/dev/null | awk -F: '/^[ \t]*Device Location:/{gsub(/^[ \t]+|[ \t]+$/,"",$2);print $2;exit}')
-    [ "$location" = External ] || { unknown EXTERNAL_TARGET_NOT_CONFIRMED;return 3; }
   else path=${FILE_TARGET:-};mib=1024;fi
   [ -n "$path" ] && [ -d "$path" ] && [ -w "$path" ] || { unknown SELECT_WRITABLE_TEST_DIRECTORY;return 3; }
   [ "${FILE_CONSENT:-}" = TEST-FILES ] || { unknown FILE_WRITE_NOT_AUTHORIZED;return 3; }
   target_preflight "$path" || return 3;path=$TARGET_CANONICAL
+  if [ "$mode" = bridge ];then
+    [ "${TARGET_INFO_RC:-3}" -eq 0 ] && [ "${TARGET_DEVICE_LOCATION:-unknown}" = External ] || {
+      unknown EXTERNAL_TARGET_NOT_CONFIRMED;return 3;
+    }
+  fi
   say "FILE_TEST_TARGET=$path TEST_MIB=$mib rounds=2 mode=$mode raw_devices=NEVER"
   cat "$STEP_DIR/target-diskutil.txt"
   bin="$STEP_DIR/storage_file";compile_c "$ROOT/storage_file.c" "$bin" || { unknown FILE_ENGINE_BUILD_FAILED;return 3; }
@@ -195,6 +204,7 @@ acceptance_main(){
   if [ "$LAST_STATE" = FAIL ];then finish_suite;return $?;fi
   run_step NETWORK network_supervised || return $?
   run_step DOWNLOAD download_supervised || return $?
+  [ "$LAST_STATE" != FAIL ] || { finish_suite;return $?; }
   if [ "$kind" != safe ];then
     if consent_files;then run_step STORAGE_FILE file_main storage || return $?
     else run_step STORAGE_FILE unknown FILE_STAGE_NOT_AUTHORIZED || return $?;fi

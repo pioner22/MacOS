@@ -4,7 +4,7 @@
 export LC_ALL=C
 umask 077
 COMMON_ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || return 3
-DIAG_VERSION=2.0.0-rc4
+DIAG_VERSION=2.0.0-rc5
 say(){ printf '%s\n' "$*"; }
 valid_uint(){ case "$1" in ''|*[!0-9]*|0[0-9]*) return 1;; esac; [ "${#1}" -le 9 ] && [ "$1" -ge "$2" ] && [ "$1" -le "$3" ]; }
 result(){

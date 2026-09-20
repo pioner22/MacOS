@@ -49,6 +49,8 @@ target_preflight(){
   printf '%s\n' "$dfout" > "$STEP_DIR/target-df.txt" || return 3
   printf 'canonical_path\t%s\nmount_point\t%s\nmetadata_exit\t%s\n' "$path" "${mount:-unknown}" "$info_rc" > "$STEP_DIR/target.tsv" || return 3
   TARGET_CANONICAL=$path
+  TARGET_INFO_RC=$info_rc
+  TARGET_DEVICE_LOCATION=$(printf '%s\n' "$info" | awk -F: '/^[ \t]*Device Location:/{sub(/^[^:]*:[ \t]*/,"");sub(/[ \t]+$/,"");print;exit}')
   say "TARGET_CANONICAL=$path MOUNT_POINT=${mount:-unknown}"
 }
 # Inspect only the exact name emitted by this engine. Never scan/delete by wildcard.
@@ -124,6 +126,7 @@ recovery_suite(){
   [ "$LAST_STATE" != FAIL ] || { finish_suite;return $?; }
   run_step NETWORK network_supervised || return $?
   run_step DOWNLOAD download_supervised || return $?
+  [ "$LAST_STATE" != FAIL ] || { finish_suite;return $?; }
   if [ "$kind" != safe ];then
     if consent_files;then run_step STORAGE_FILE file_main storage || return $?
     else run_step STORAGE_FILE unknown FILE_STAGE_NOT_AUTHORIZED || return $?;fi
