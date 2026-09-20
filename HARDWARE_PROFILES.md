@@ -1,3 +1,5 @@
+> Текущая версия: rc4. Приоритет изменений и критериев: [RC4_REVIEW_FIXES](docs/diagnostics/RC4_REVIEW_FIXES.md). / Current rc4 semantics take precedence.
+
 # Профили оборудования и среды — rc3
 
 Основной реестр: `diagnostics_v2/profiles.tsv`; выбор и пробы: `diagnostics_v2/profile.sh`. Девять шаблонов A2141/Intel/Apple Recovery/full, safe, ambiguous installer/recovery и unknown дополняются версией ОС, архитектурой процесса и типом консоли. Это составной профиль, а не сотни копий одного shell-скрипта.

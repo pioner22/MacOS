@@ -1,4 +1,9 @@
 #!/bin/bash
+{
+# Prefer system utilities on Darwin, not unqualified Homebrew overrides.
+if [ "$(/usr/bin/uname -s 2>/dev/null)" = Darwin ];then
+  PATH=/usr/bin:/bin:/usr/sbin:/sbin;export PATH
+fi
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Stable entry point. Resolve latest published descriptor once, then pin all files.
 # Trust starts with this bootstrap and HTTPS; hashes are not a vendor signature.
@@ -73,7 +78,7 @@ macdiag_launch(){
   umask 077
   export LC_ALL=C
   MACDIAG_BOOT_LOG=
-  printf 'BOOTSTRAP_VERSION=1.1\n'
+  printf 'BOOTSTRAP_VERSION=1.2\n'
   mode=${1:-menu}
   # Minimal built-in preflight before importing any downloaded module.
   for name in mktemp rm cp mv cat wc tr awk sed grep tee date uname sleep dirname;do
@@ -108,6 +113,13 @@ macdiag_launch(){
     boot_fetch release "https://raw.githubusercontent.com/pioner22/MacOS/main/diagnostics-release.tsv?t=$(date +%s)-$$" "$work/release.tsv" 4096 || return $?
   fi
   [ "$(wc -l < "$work/release.tsv" | tr -d ' ')" = 1 ] || { boot_fail DESCRIPTOR_ROW_COUNT 'Описание выпуска должно содержать одну строку.' 'Release descriptor must contain exactly one line.';return 3; }
+  if ! awk -F '\t' 'NR==1 && NF==3 && $1!="" && $2!="" && $3!="" {ok=1} END{exit (NR==1 && ok)?0:1}' "$work/release.tsv";then
+    boot_fail DESCRIPTOR_FIELDS_INVALID 'Нужны ровно три непустых поля.' 'Exactly three nonempty fields required.';return 3
+  fi
+  local descriptor_text descriptor_bytes
+  descriptor_text=$(cat "$work/release.tsv") || return 3
+  descriptor_bytes=$(wc -c < "$work/release.tsv" | tr -d ' ') || return 3
+  [ "$descriptor_bytes" = "$(( ${#descriptor_text}+1 ))" ] || { boot_fail DESCRIPTOR_TERMINATOR_INVALID 'Недопустимый хвост описания выпуска.' 'Invalid descriptor terminator or trailing data.';return 3; }
   IFS=$'\t' read -r version ref manifest_sha extra < "$work/release.tsv" || { boot_fail DESCRIPTOR_READ_FAILED 'Не прочитано описание выпуска.' 'Cannot read release descriptor.';return 3; }
   case "$version" in ''|*[!A-Za-z0-9._-]*)boot_fail VERSION_INVALID 'Неверная версия в описании выпуска.' 'Invalid release version.';return 3;;esac
   case "$ref:$manifest_sha" in *[!a-f0-9:]*)boot_fail DESCRIPTOR_HASH_FORMAT 'Неверный формат ревизии или хэша.' 'Invalid revision or digest format.';return 3;;esac
@@ -148,3 +160,4 @@ macdiag_launch(){
 }
 macdiag_launch "$@"
 exit $?
+}

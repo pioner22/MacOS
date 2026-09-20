@@ -3,8 +3,8 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REF = '9fb895ad6142e60c10f93f5077345e5c84b899f6'
-SHA = '01434f251e6e5a4d7dae7adfe8aedcd7379d7ff03de94c4713cded919bbd7890'
+REF = '9fcc84f97a8c842fd3f885cd8523aba34905540d'
+SHA = 'f760f1828eefffe80307d5a5f21e333cf9b78e6cd1258002f1a224d0a9774b64'
 MODES = {
     'current.sh': 'menu', 'ram_quick_test.sh': 'ramquick',
     'ram_full_test.sh': 'ramfull', 'ram_test.sh': 'ramfull',

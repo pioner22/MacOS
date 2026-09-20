@@ -4,9 +4,9 @@
 export LC_ALL=C
 umask 077
 COMMON_ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || return 3
-DIAG_VERSION=2.0.0-rc3
+DIAG_VERSION=2.0.0-rc4
 say(){ printf '%s\n' "$*"; }
-valid_uint(){ case "$1" in ''|*[!0-9]*) return 1;; esac; [ "${#1}" -le 9 ] && [ "$1" -ge "$2" ] && [ "$1" -le "$3" ]; }
+valid_uint(){ case "$1" in ''|*[!0-9]*|0[0-9]*) return 1;; esac; [ "${#1}" -le 9 ] && [ "$1" -ge "$2" ] && [ "$1" -le "$3" ]; }
 result(){
   local state code reason ru en
   state=$1; code=$2; reason=$3; ru=$4; en=$5
@@ -59,9 +59,10 @@ compile_c(){
     compiler=${CAP_CLANG:-$(xcrun -f clang 2>/dev/null)}; [ -n "$compiler" ] || return 3
   else compiler=$(command -v cc) || return 3; fi
   rm -f "$out"
-  "$compiler" -std=c11 -O2 -Wall -Wextra -Werror "$source" -o "$out" > "$STEP_DIR/compile.log" 2>&1 || {
+  supervise 120 "$compiler" -std=c11 -O2 -Wall -Wextra "$source" -o "$out" > "$STEP_DIR/compile.log" 2>&1 || {
     cat "$STEP_DIR/compile.log"; rm -f "$out"; return 3;
   }
+  [ ! -s "$STEP_DIR/compile.log" ] || cat "$STEP_DIR/compile.log"
   [ -f "$out" ] && [ -x "$out" ]
 }
 # Emit a checked child result. An unstructured exit 0 can never pass a suite.
@@ -71,17 +72,21 @@ run_step(){
   case "$name" in ''|*[!A-Z0-9_]*) return 3;;esac
   dir=$(mktemp -d "$SESSION/${name}.XXXXXX") || return 3
   printf '%s\tRUNNING\n' "$name" > "$SESSION/current-stage.tsv" || return 3
-  sync
+  # Keep the started stage available to main's EXIT finalizer. A tty trap can
+  # run before the pipeline's post-processing, so it must not become NOT_RUN.
+  ACTIVE_STAGE_NAME=$name; ACTIVE_STAGE_DIR=$dir
+  printf '%s\t%s\n' "$name" "$dir" > "$SESSION/active-stage.tsv" || return 3
+  # No unbounded global sync on a suspect device. Per-engine durability is reported.
   say "STEP_START=$name LOG=$dir/output.log"
-  ( STEP_DIR=$dir; export STEP_DIR
+  ( STEP_DIR=$dir; STAGE_ID=$name; export STEP_DIR STAGE_ID
     trap 'exit 130' INT
     trap 'exit 143' TERM
     trap 'exit 129' HUP
     "$@"
-  ) 2>&1 | tee "$dir/output.log"
+  ) 2>&1 | tee -i "$dir/output.log"
   ps=("${PIPESTATUS[@]}"); rc=${ps[0]:-3}
   state=INCONCLUSIVE; reason=MISSING_RESULT; declared=3; extra=''
-  if [ -f "$dir/result.tsv" ] && [ "$(wc -l < "$dir/result.tsv" | tr -d ' ')" = 1 ]; then
+  if [ -f "$dir/result.tsv" ] && awk -F '\t' 'NR==1 && NF==3 && $1!="" && $2!="" && $3!="" {ok=1} END{exit (NR==1 && ok)?0:1}' "$dir/result.tsv"; then
     IFS=$'\t' read -r state declared reason extra < "$dir/result.tsv"
   fi
   case "$state:$declared" in PASS:0|FAIL:2|INCONCLUSIVE:3|OBSERVED:5|PENDING_MANUAL:6|BLOCKED:7) ;;
@@ -91,13 +96,18 @@ run_step(){
   if [ "$rc" -ne "$declared" ]; then state=INCONCLUSIVE; reason=PROCESS_EXIT_WITHOUT_MATCHING_RESULT; fi
   if [ "${ps[1]:-1}" -ne 0 ]; then state=INCONCLUSIVE; reason=LOG_WRITE_FAILED; fi
   case "$rc" in 129|130|143) state=INCONCLUSIVE; reason=INTERRUPTED;; esac
+  if [ "$state" = INCONCLUSIVE ] && [ -f "$dir/result.tsv" ] && awk -F '\t' 'NR==1 && NF==3 && $1=="FAIL" && $2=="2" && $3~/^[A-Z0-9_]+$/ {ok=1} END{exit (NR==1 && ok)?0:1}' "$dir/result.tsv";then
+    printf 'SECONDARY_REASON=%s PROCESS_EXIT=%s\n' "$reason" "$rc" > "$dir/termination.txt" || return 3
+    state=FAIL;reason=$(awk -F '\t' 'NR==1{print $3}' "$dir/result.tsv")
+  fi
   printf '%s\t%s\t%s\t%s\n' "$name" "$state" "$reason" "$dir" >> "$SESSION/summary.tsv" || return 3
   printf '%s\t%s\n' "$name" "$state" > "$SESSION/current-stage.tsv" || return 3
-  sync
+  # No unbounded global sync on a suspect device. Per-engine durability is reported.
+  ACTIVE_STAGE_NAME=; ACTIVE_STAGE_DIR=
   LAST_STATE=$state; LAST_REASON=$reason
   say "STEP_END=$name STATE=$state REASON=$reason"
   if declare -F report_render >/dev/null;then report_render RUNNING || return 3;fi
-  if declare -F next_step >/dev/null;then next_step "$reason";fi
+  if declare -F next_step >/dev/null;then next_step "$reason" "$state";fi
   case "$rc" in 129|130|143) return "$rc";; esac
   return 0
 }
@@ -105,7 +115,7 @@ suite_state(){
   # FAIL has priority over pending/manual/missing coverage.
   awk -F '\t' '
     $2=="FAIL" {bad=1}
-    $2=="INCONCLUSIVE" || $2=="BLOCKED" {unknown=1}
+    $2=="INCONCLUSIVE" || $2=="BLOCKED" || $2=="NOT_RUN" {unknown=1}
     $2=="PENDING_MANUAL" {manual=1}
     $2=="PASS" {pass++}
     END {if(bad) print "FAIL"; else if(unknown || !pass) print "INCONCLUSIVE"; else if(manual) print "PENDING_MANUAL"; else print "PASS"}

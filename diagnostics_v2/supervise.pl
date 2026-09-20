@@ -14,6 +14,8 @@ $out->autoflush(1);
 my $hires=eval {require Time::HiRes; Time::HiRes::clock_gettime(Time::HiRes::CLOCK_MONOTONIC());1};
 sub clocknow {return $hires ? Time::HiRes::clock_gettime(Time::HiRes::CLOCK_MONOTONIC()) : time;}
 my ($cancel,$badlog,$timeout)=(0,0,0);
+my $grace=$ENV{MACDIAG_STOP_GRACE}//2;
+exit 3 unless $grace =~ /^\d+$/ && $grace>=1 && $grace<=30;
 $SIG{INT}=sub{$cancel=130};$SIG{TERM}=sub{$cancel=143};$SIG{HUP}=sub{$cancel=129};$SIG{PIPE}='IGNORE';
 pipe(my $r,my $w) or exit 3;
 my $pid=fork();exit 3 unless defined $pid;
@@ -34,7 +36,7 @@ while(!$ended || $sel->count){
   $timeout=1 if !$cancel && !$badlog;
   kill 'TERM',-$pid;kill 'TERM',$pid unless $ended;$term=$now;
  }
- if(defined($term) && $now-$term >= 2){kill 'KILL',-$pid;kill 'KILL',$pid unless $ended;}
+ if(defined($term) && $now-$term >= $grace){kill 'KILL',-$pid;kill 'KILL',$pid unless $ended;}
  for my $fh($sel->can_read(0.1)){
   my $buf='';my $n=sysread($fh,$buf,65536);
   if(defined($n) && $n>0){
@@ -50,7 +52,10 @@ while(!$ended || $sel->count){
   $badlog=1 unless print $out $msg;$badlog=1 unless print STDOUT $msg;
   eval {$out->sync;};$next=$now+15;
  }
- last if $ended && defined($term) && clocknow()-$term>4;
+ if(defined($term) && clocknow()-$term>$grace+4){
+  if(!$ended){$leftover=1;print $out "CHILD_STILL_RUNNING=$pid\n";print STDOUT "CHILD_STILL_RUNNING=$pid\n";}
+  last;
+ }
 }
 # Any still-running descendants share this stage's group, not the user's shell.
 kill 'TERM',-$pid;

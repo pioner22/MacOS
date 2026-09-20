@@ -33,18 +33,21 @@ net_attempt(){
   encoding=$(awk '/^HTTP\//{x=""} tolower($1)=="content-encoding:"{sub(/^[^:]*:[ \t]*/,"");sub(/\r$/,"");x=tolower($0)} END{print x}' "$work/headers")
   say "TRANSFER_END curl=$crc counter=$ccr hash_rc=$hrc http=$http bytes=$count sha256=$got"
   NET_CURL=$crc; NET_REASON=UNKNOWN
-  case "$http" in 401|403|404|429) NET_REASON=REMOTE_ASSET_UNAVAILABLE; return 3;;esac
+  case "$http" in
+    408|429|500|502|503|504) NET_REASON="HTTP_TRANSIENT_$http"; return 3;;
+    4??|5??) NET_REASON=REMOTE_ASSET_UNAVAILABLE; return 3;;
+  esac
   if [ -n "$encoding" ] && [ "$encoding" != identity ]; then NET_REASON=UNEXPECTED_CONTENT_ENCODING; return 3;fi
   if [ "$hrc" -ne 0 ] || { [ "$ccr" -ne 0 ] && [ "$ccr" -ne 4 ]; }; then NET_REASON=LOCAL_STREAM_TOOL_ERROR; return 3; fi
   if [ -n "$range" ] && [ "$http" = 200 ]; then NET_REASON=RANGE_NOT_SUPPORTED; return 3; fi
   if [ "$ccr" = 4 ]; then NET_REASON=BODY_TOO_LONG; return 2; fi
   if [ "$crc" -ne 0 ]; then
     case "$crc" in 2|3|4|23|26|27|48) NET_REASON=LOCAL_CURL_OR_TOOL_ERROR; return 3;;
-      *) NET_REASON="TRANSFER_FAILED_CURL_$crc"; return 2;; esac
+      *) NET_REASON="TRANSFER_FAILED_CURL_$crc"; return 3;; esac
   fi
   if [ -n "$range" ]; then
     if [ "$http" != 206 ] || [ "$cr" != "bytes $range/$total" ]; then NET_REASON=CONTENT_RANGE_INVALID; return 2; fi
-  elif [ "$http" != 200 ]; then NET_REASON=HTTP_UNEXPECTED; return 2; fi
+  elif [ "$http" != 200 ]; then NET_REASON=HTTP_UNEXPECTED; return 3; fi
   [ "$count" = "$size" ] || { NET_REASON=SIZE_MISMATCH; return 2; }
   [ "$got" = "$expected" ] || { NET_REASON=SHA256_MISMATCH; return 2; }
   NET_REASON=VERIFIED; return 0
@@ -59,12 +62,14 @@ net_check(){
       if [ "$had_failure" = 1 ]; then NET_REASON=RECOVERED_TRANSFER_NOT_CLEAN; return 3; fi
       return 0
     fi
-    [ "$rc" -eq 2 ] || return "$rc"
-    case "$NET_REASON" in TRANSFER_FAILED_CURL_6|TRANSFER_FAILED_CURL_7|TRANSFER_FAILED_CURL_18|TRANSFER_FAILED_CURL_28|TRANSFER_FAILED_CURL_35|TRANSFER_FAILED_CURL_52|TRANSFER_FAILED_CURL_56)
-      had_failure=1;;
-      *) return 2;; esac
+    [ "$rc" -ne 2 ] || return 2
+    case "$NET_REASON" in
+      HTTP_TRANSIENT_*|TRANSFER_FAILED_CURL_5|TRANSFER_FAILED_CURL_6|TRANSFER_FAILED_CURL_7|TRANSFER_FAILED_CURL_18|TRANSFER_FAILED_CURL_28|TRANSFER_FAILED_CURL_35|TRANSFER_FAILED_CURL_52|TRANSFER_FAILED_CURL_55|TRANSFER_FAILED_CURL_56)
+        had_failure=1; [ "$attempt" = 2 ] || sleep 1;;
+      *) return "$rc";;
+    esac
   done
-  return 2
+  return 3
 }
 download_main(){
   local base size sha file repeats i rc failures=0 incomplete=0 done_count=0 http
@@ -110,6 +115,6 @@ network_main(){
     done
   done
   say 'SCOPE=HTTPS_ENDPOINTS_ONLY Apple_installer_payload=NOT_TESTED WiFi_disconnect_counter=NOT_MEASURED'
-  [ "$failures" -eq 0 ] || { fault HTTPS_REACHABILITY_NOT_HARDWARE_DIAGNOSIS; return 2; }
+  [ "$failures" -eq 0 ] || { unknown HTTPS_REACHABILITY_UNAVAILABLE; return 3; }
   passed HTTPS_ENDPOINT_PROBES
 }
