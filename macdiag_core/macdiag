@@ -1,0 +1,24 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Bash 3.2+ entry point. No sudo, sitecustomize, Python stub or package installation.
+set +x
+set -eu
+set -o pipefail
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+export LC_ALL=C
+unset BASH_ENV ENV CDPATH PERL5OPT PERL5LIB PERLLIB PERL_UNICODE PYTHONPATH PYTHONHOME
+[ -n "${BASH_VERSION:-}" ] || { printf '%s\n' 'ERROR: Bash is required.' >&2; exit 1; }
+root=$(cd -P "$(/usr/bin/dirname "${BASH_SOURCE[0]}")" && pwd -P)
+bash_version=$BASH_VERSION
+origin=$(pwd -P)
+cd /
+if [ ! -x /usr/bin/perl ]; then
+  printf '{"schema":"macdiag.minimal.v1","engine":"UNAVAILABLE","dispatcher_bash":"%s","reason":"SYSTEM_PERL_MISSING","hardware_health":"UNKNOWN"}\n' "$bash_version"
+  exit 2
+fi
+# BEGIN alarm covers compile-time requires. No current-working-directory imports.
+if ! /usr/bin/env -i PATH="$PATH" LC_ALL=C /usr/bin/perl -f -e 'BEGIN { $SIG{ALRM}=sub{exit 2}; alarm 5 } eval { require JSON::PP; require Digest::SHA; require POSIX; require IO::Select; require Time::HiRes; require Fcntl; require Encode; Time::HiRes::clock_gettime(Time::HiRes::CLOCK_MONOTONIC()); Fcntl::O_NOFOLLOW(); 1 } or exit 2; alarm 0;' >/dev/null 2>&1; then
+  printf '{"schema":"macdiag.minimal.v1","engine":"UNAVAILABLE","dispatcher_bash":"%s","reason":"PERL_CORE_CAPABILITY_MISSING","hardware_health":"UNKNOWN"}\n' "$bash_version"
+  exit 2
+fi
+exec /usr/bin/env -i PATH="$PATH" LC_ALL=C /usr/bin/perl -f -I"$root/lib" "$root/bin/macdiag.pl" "$root" "$bash_version" "$origin" "$@"
