@@ -1,0 +1,45 @@
+name: VPN platform smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - vpn-runtime.py
+      - test_vpn_compat.py
+      - .github/workflows/vpn-platform-smoke.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vpn-platform-smoke-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  python-compatibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Fetch exact public commit (no persisted credential)
+        run: |
+          git init source
+          git -C source fetch --depth=1 https://github.com/pioner22/MacOS.git "$GITHUB_SHA"
+          git -C source checkout --detach FETCH_HEAD
+      - name: Python 3 portable smoke
+        working-directory: source
+        run: python3 test_vpn_compat.py
+      - name: Python 2.7 portable smoke (Linux, not macOS)
+        working-directory: source
+        run: docker run --rm --network=none -v "$PWD:/work:ro" -w /work python:2.7.18-slim python -B test_vpn_compat.py
+  macos-native:
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    steps:
+      - name: Fetch exact public commit (no persisted credential)
+        run: |
+          git init source
+          git -C source fetch --depth=1 https://github.com/pioner22/MacOS.git "$GITHUB_SHA"
+          git -C source checkout --detach FETCH_HEAD
+      - name: Isolated native DNS lifecycle and official core schema
+        working-directory: source
+        run: |
+          sw_vers
+          uname -m
+          sudo "$(command -v python3)" -B test_vpn_compat.py --native
