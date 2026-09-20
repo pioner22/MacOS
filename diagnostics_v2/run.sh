@@ -6,6 +6,7 @@ fi
 # SPDX-License-Identifier: GPL-3.0-or-later
 ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || exit 3
 . "$ROOT/common.sh"
+. "$ROOT/registry.sh"
 . "$ROOT/profile.sh"
 . "$ROOT/net.sh"
 . "$ROOT/report.sh"
@@ -14,7 +15,7 @@ ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || exit 3
 selftest_main(){
   local f got size sha name bad=0 count=0 seen=" "
   select_hash || { unknown SHA256_KNOWN_ANSWER_FAILED; return 3; }
-  for f in common.sh profile.sh net.sh report.sh recovery.sh readonly.sh run.sh; do /bin/bash -n "$ROOT/$f" || bad=1; done
+  for f in common.sh profile.sh net.sh report.sh recovery.sh readonly.sh registry.sh run.sh; do /bin/bash -n "$ROOT/$f" || bad=1; done
   if need perl;then
     if ! pf_probe 5 perl -MPOSIX -MIO::Select -MIO::Handle -MFcntl -MFile::Temp -MCwd -MErrno -e 'exit 0' > "$STEP_DIR/perl-prerequisites.log" 2>&1;then
       cat "$STEP_DIR/perl-prerequisites.log"
@@ -24,14 +25,15 @@ selftest_main(){
   if need perl; then perl -c "$ROOT/count_stream.pl" || bad=1; perl -c "$ROOT/supervise.pl" || bad=1; perl -c "$ROOT/recovery_ram.pl" || bad=1; perl -c "$ROOT/recovery_file.pl" || bad=1; perl -c "$ROOT/storage_readonly.pl" || bad=1; else unknown PERL_UNAVAILABLE;return 3;fi
   if [ -f "$ROOT/manifest.tsv" ]; then
     while read -r sha size name; do
-      case "$name" in common.sh|count_stream.pl|fixtures.txt|metal_vram.m|net.sh|profile.sh|ram_native.c|run.sh|storage_file.c|supervise.pl|report.sh|profiles.tsv|recovery.sh|recovery_ram.pl|recovery_file.pl|readonly.sh|storage_readonly.pl) ;;*) bad=1;continue;;esac
+      case "$name" in common.sh|count_stream.pl|fixtures.txt|metal_vram.m|net.sh|profile.sh|ram_native.c|run.sh|storage_file.c|supervise.pl|report.sh|profiles.tsv|recovery.sh|recovery_ram.pl|recovery_file.pl|readonly.sh|storage_readonly.pl|registry.sh|registry_devices.tsv|registry_profiles.tsv|registry_tools.tsv|registry_tests.tsv) ;;*) bad=1;continue;;esac
       case "$seen" in *" $name "*) bad=1;;esac
       seen="$seen$name ";count=$((count+1))
       got=$(hash_file "$ROOT/$name") || bad=1
       [ "$got" = "$sha" ] && [ "$(wc -c < "$ROOT/$name" | tr -d ' ')" = "$size" ] || bad=1
     done < "$ROOT/manifest.tsv"
-    [ "$count" -eq 17 ] || bad=1
+    [ "$count" -eq 22 ] || bad=1
   else unknown PACKAGE_MANIFEST_MISSING; return 3; fi
+  rg_validate || bad=1
   [ "$bad" = 0 ] || { result FAIL 2 TOOLKIT_SELFTEST_FAILED 'Ошибка файлов комплекта, не диагноз ноутбука.' 'Toolkit file validation failed, not a hardware diagnosis.';return 2; }
   say 'SCOPE=PACKAGE_HASHES_SHELL_PERL_SYNTAX_AND_SHA_KNOWN_ANSWER not_hardware_certification=1'
   passed TOOLKIT_CHECKED
@@ -70,7 +72,7 @@ ram_main(){
 cpu_worker(){
   local n dir out p
   n=$1;dir=$2
-  dd if=/dev/zero bs=1048576 count=256 2>"$dir/dd-$n.err" | perl "$ROOT/count_stream.pl" 268435456 "$dir/count-$n" | "${SHA_CMD[@]}" > "$dir/hash-$n"
+  dd if=/dev/zero bs=1048576 count=256 2>"$dir/dd-$n.err" | "${DIAG_PERL:-perl}" "$ROOT/count_stream.pl" 268435456 "$dir/count-$n" | "${SHA_CMD[@]}" > "$dir/hash-$n"
   p=("${PIPESTATUS[@]}")
   [ "${p[0]}:${p[1]}:${p[2]}" = 0:0:0 ] || return 3
   [ "$(cat "$dir/count-$n")" = 268435456 ] || return 3
@@ -80,7 +82,8 @@ cpu_worker(){
 cpu_stress(){
   local round w pid rc workers rounds=4 bad=0 incomplete=0
   local -a pids
-  workers=$(sysctl -n hw.logicalcpu);valid_uint "$workers" 1 256 || return 3
+  workers=$(pf_read 5 sysctl -n hw.logicalcpu) || { say "CPU_COUNT_PROBE_FAILED";return 3; }
+  valid_uint "$workers" 1 256 || return 3
   [ "$workers" -le 16 ] || workers=16
   if [ "$ENVIRONMENT" != full ];then rounds=1;[ "$workers" -le 2 ] || workers=2;fi
   say "CPU_PLAN workers=$workers rounds=$rounds bytes_per_worker=268435456 cache_isolation=NOT_CLAIMED"
@@ -202,7 +205,10 @@ acceptance_main(){
   if [ "$LAST_STATE" != PASS ];then finish_suite;return $?;fi
   run_step GPU gpu_main || return $?
   # Don't put sustained load on a machine with an observed GPU path failure.
-  if [ "$LAST_STATE" = FAIL ];then finish_suite;return $?;fi
+  if [ "$LAST_STATE" = FAIL ] || { [ "$LAST_STATE" = INCONCLUSIVE ] && [ "${LAST_REASON:-}" = GPU_INCOMPLETE_OR_TIMEOUT ]; };then
+    say 'DEPENDENCY_STOP=GPU_RUNTIME_INCOMPLETE'
+    finish_suite;return $?
+  fi
   run_step NETWORK network_supervised || return $?
   run_step DOWNLOAD download_supervised || return $?
   [ "$LAST_STATE" != FAIL ] || { finish_suite;return $?; }
@@ -252,17 +258,27 @@ menu(){
 18  RAM -> RESCUE / Отдельный тест 40 ГиБ / separate 40 GiB test
 19  SUPPORT / Пакет обратной связи, ТОЛЬКО локально / NO upload
 20  HDD/SSD READ ONLY / Только чтение: выборочно или весь диск / NO writes
+21  COMPATIBILITY / Паспорт инструментов и план / NO hardware tests
  0  EXIT / Выход (также Enter / also Enter)
+RU: Один выбор — один сеанс. После теста/комплекса: отчёт и выход. Пункт 15 возвращает в меню.
 RU: Во время теста Ctrl+C останавливает запуск. Отчёт сохраняется отдельно.
+EN: One selection is one session: test/suite, report, exit. Option 15 returns to the menu.
 EN: Ctrl+C stops the run. The report is stored separately.
 MENU
+    if [ -n "${REGISTRY_STATUS:-}" ];then
+      say 'Доступность / Availability (NOT results):'
+      for check_stage in RAM_QUICK RAM_MAP CPU GPU NETWORK DOWNLOAD STORAGE_FILE STORAGE_READONLY;do
+        registry_decision "$check_stage"
+        printf '%s: %s [%s] %s\n' "$check_stage" "$REGISTRY_DECISION" "$REGISTRY_BACKEND" "$REGISTRY_REASON"
+      done
+    fi
     printf '> '
     read_reply || { say 'NO_INTERACTIVE_INPUT / Нет интерактивного ввода';return 3; }
     case "$REPLY" in
       0|'') MODE=exit;return 0;;1|13)MODE=raw;;2)MODE=ramquick;;3)MODE=ramfull;;4)MODE=rammap;;5)MODE=cpu;;6)MODE=gpu;;7)MODE=display;;8)MODE=network;;9)MODE=download;;10)MODE=power;;11)MODE=snapshot;;12)MODE=safe;;14)MODE=selftest;;
       15) if ! profile_choose;then say 'RU: Выбор отклонён; прежний профиль сохранён. EN: Selection rejected; previous profile retained.';fi;continue;;
-      16)MODE=acceptance;;17)MODE=storage;;18)MODE=bridge;;19)MODE=support;;20)MODE=readonly;;
-      *)say 'UNKNOWN_SELECTION / Неизвестный пункт: введите число 0–20.';continue;;
+      16)MODE=acceptance;;17)MODE=storage;;18)MODE=bridge;;19)MODE=support;;20)MODE=readonly;;21)MODE=profile;;
+      *)say 'UNKNOWN_SELECTION / Неизвестный пункт: введите число 0–21.';continue;;
     esac
     return 0
   done
@@ -290,7 +306,7 @@ engine_main(){
   [ "$KERNEL" = Darwin ] || return 3
   case "$mode" in
     cpu) [ "${CPU_BACKEND:-unavailable}" = sha_path ] && need perl && select_hash || return 3; cpu_stress;;
-    network) network_main;; download) download_main;; *) return 3;;
+    network) registry_gate NETWORK && network_main;; download) registry_gate DOWNLOAD && download_main;; *) return 3;;
   esac
 }
 main(){
@@ -321,6 +337,7 @@ main(){
   environment_record > "$SESSION/environment.tsv" || return 3
   printf '%b' "${CAP_ROWS:-}" > "$SESSION/capabilities.tsv" || return 3
   if [ -n "${MACDIAG_BOOT_LOG:-}" ] && [ -f "$MACDIAG_BOOT_LOG" ];then cp "$MACDIAG_BOOT_LOG" "$SESSION/bootstrap.log" || return 3;fi
+  registry_save || return 3
   profile_show
   say "PROFILE_LOGS=$SESSION"
   case "$ENVIRONMENT:$base" in full:*) ;;*:/tmp) say 'RU: Журнал в /tmp исчезнет после перезагрузки Recovery. Скопируйте его на внешний том. EN: Recovery /tmp is volatile; preserve it on an external volume.';;esac
@@ -329,13 +346,15 @@ main(){
   cp "$SESSION/environment.tsv" "$SESSION/environment.initial.tsv" || return 3
   profile_show > "$SESSION/profile.txt" || return 3
   environment_record > "$SESSION/environment.tsv" || return 3
+  registry_save || return 3
   [ "$MODE" != exit ] || { SESSION_FINAL_STATE=OBSERVED;return 0; }
   say "SESSION_LOGS=$SESSION CODE_REF=${MACDIAG_CODE_REF:-LOCAL_UNPINNED}"
   trap 'exit 130' INT
   trap 'exit 143' TERM
   trap 'exit 129' HUP
-  if [ "$KERNEL" != Darwin ] && [ "$MODE" != selftest ];then unknown NON_MACOS_ENVIRONMENT;return 3;fi
+  if [ "$KERNEL" != Darwin ] && [ "$MODE" != selftest ] && [ "$MODE" != profile ];then unknown NON_MACOS_ENVIRONMENT;return 3;fi
   case "$MODE" in
+    profile)run_step HARDWARE registry_main;;
     support)run_step SUPPORT support_main;;
     readonly)run_step STORAGE_READONLY readonly_main;;
     raw)run_step RAW raw_blocked;;
@@ -361,6 +380,6 @@ main(){
   rc=$?;[ "$rc" -eq 0 ] || { printf 'INTERRUPTED\n' > "$SESSION/session.state";return "$rc"; }
   SESSION_FINAL_STATE=$LAST_STATE
   case "$LAST_STATE" in PASS)rc=0;;FAIL)rc=2;;OBSERVED)rc=5;;PENDING_MANUAL)rc=6;;BLOCKED)rc=7;;*)rc=3;;esac
-  say "FINAL_STATE=$LAST_STATE LOGS=$SESSION";return "$rc"
+  say "STAGES_FINISHED STATE=$LAST_STATE LOGS=$SESSION";return "$rc"
 }
 if [ "${BASH_SOURCE[0]}" = "$0" ];then main "$@";exit $?;fi

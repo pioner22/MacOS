@@ -20,10 +20,10 @@ net_attempt(){
   [ -z "$range" ] || extra=(-r "$range")
   say "TRANSFER_START url=$url expected_bytes=$size range=$range"
   # Do not add --retry here: output cannot be rolled back inside a pipe.
-  curl -q -fsSL --retry 0 --proto '=https' --proto-redir '=https' --max-redirs 5 \
+  "${DIAG_CURL:-curl}" -q -fsSL --retry 0 --proto '=https' --proto-redir '=https' --max-redirs 5 \
     --connect-timeout 15 --max-time "${NET_TIMEOUT:-1800}" --speed-time 30 --speed-limit 1024 \
     -H 'Accept-Encoding: identity' -D "$work/headers" "${extra[@]}" "$url" 2>"$work/curl.err" |
-    perl "$ROOT/count_stream.pl" "$size" "$work/count" |
+    "${DIAG_PERL:-perl}" "$ROOT/count_stream.pl" "$size" "$work/count" |
     "${SHA_CMD[@]}" > "$work/hash"
   codes=("${PIPESTATUS[@]}"); crc=${codes[0]:-99}; ccr=${codes[1]:-99}; hrc=${codes[2]:-99}
   cat "$work/curl.err"
@@ -75,7 +75,7 @@ download_main(){
   local base size sha file repeats i rc failures=0 incomplete=0 done_count=0 http
   need perl && need curl && select_hash || { unknown STREAM_DEPENDENCIES_UNAVAILABLE; return 3; }
   base='https://github.com/pioner22/MacOS/releases/download/diagnostic-fixtures-v1'
-  http=$(curl -q -sSLI --retry 0 --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 45 -o /dev/null -w '%{http_code}' "$base/nettest-001MiB.bin"); rc=$?
+  http=$("${DIAG_CURL:-curl}" -q -sSLI --retry 0 --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 45 -o /dev/null -w '%{http_code}' "$base/nettest-001MiB.bin"); rc=$?
   if [ "$rc" -eq 0 ] && [ "$http" = 200 ]; then
     while read -r size sha file repeats; do
       for ((i=1;i<=repeats;i++)); do
@@ -117,7 +117,7 @@ network_main(){
   need curl || { unknown CURL_UNAVAILABLE; return 3; }
   for url in https://github.com/ https://raw.githubusercontent.com/pioner22/MacOS/main/README.md https://www.apple.com/; do
     for i in 1 2 3; do
-      out=$(curl -q -sSLI --retry 0 --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 45 -o /dev/null -w 'http=%{http_code} dns=%{time_namelookup} tcp=%{time_connect} tls=%{time_appconnect} total=%{time_total} verify=%{ssl_verify_result}' "$url" 2>&1); rc=$?
+      out=$("${DIAG_CURL:-curl}" -q -sSLI --retry 0 --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 45 -o /dev/null -w 'http=%{http_code} dns=%{time_namelookup} tcp=%{time_connect} tls=%{time_appconnect} total=%{time_total} verify=%{ssl_verify_result}' "$url" 2>&1); rc=$?
       say "PROBE url=$url run=$i curl=$rc $out"
       code=$(printf '%s\n' "$out" | sed -n 's/.*http=\([0-9][0-9][0-9]\).*/\1/p')
       if [ "$rc" -ne 0 ] || [ "$code" != 200 ]; then failures=$((failures+1)); fi

@@ -8,6 +8,9 @@ next_step(){
     return 0
   fi
   case "$1" in
+    READONLY_NOT_AUTHORIZED|READONLY_PROFILE_UNAVAILABLE|READONLY_TOOLS_UNAVAILABLE|READONLY_PERL_CAPABILITY_UNAVAILABLE|READONLY_DEVICE_LIST_UNAVAILABLE|READONLY_DEVICE_INVALID|READONLY_METADATA_UNAVAILABLE|READONLY_PHYSICAL_WHOLE_DISK_NOT_CONFIRMED|READONLY_METADATA_INVALID|READONLY_TARGET_CHANGED)
+      say 'RU: Чтение накопителя не начиналось: нет подтверждения или не пройдена предварительная проверка. Данные на диске этим этапом не проверены.'
+      say 'EN: Drive reading did not start: consent or preflight is missing. This stage did not test disk contents.';;
     READONLY_*)
       say 'RU: Проверено только чтение выбранных диапазонов. Смотрите раздел HDD/SSD READ ONLY, engine.log и read-target.tsv. Данные не исправлялись; при ошибке сохраните важные файлы, не запускайте повторную нагрузку.'
       say 'EN: Only selected-range readability was tested. See HDD/SSD READ ONLY, engine.log and read-target.tsv. No repair was performed; preserve valuable data and avoid repeated load after errors.';;
@@ -64,6 +67,7 @@ report_render(){
       printf 'Область: только программный комплект; оборудование не проверялось.\nScope: software toolkit only; hardware was not tested.\n\n'
     fi
     printf 'CLOCK_TRUST=UNVERIFIED: системное время не удостоверено / wall clock not authenticated.\n\n'
+    printf 'После завершения: выход из программы; следующий запуск — новый сеанс.\nAfter completion: exit; the next launch starts a new session.\n\n'
     printf 'Режим / Mode: `%s`  \nРевизия / Code revision: `%s`\n\n' "${MODE:-unknown}" "${MACDIAG_CODE_REF:-LOCAL_UNPINNED}"
     printf 'Начало UTC / Started UTC: %s  \nОбновлено UTC / Updated UTC: %s\n\n' "${SESSION_STARTED:-unknown}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf 'Это отчёт о выполненных проверках, не сертификат исправности.\nThis reports completed checks, not whole-machine certification.\n\n'
@@ -71,6 +75,11 @@ report_render(){
     if [ -f "$SESSION/capabilities.tsv" ];then
       printf '## Возможности среды / Environment capabilities\n\n```text\n'
       cat "$SESSION/capabilities.tsv";printf '```\n\n'
+    fi
+    if [ -f "$SESSION/dispatch-plan.tsv" ];then
+      printf '## Совместимость / Compatibility — NOT test results\n\n```text\n'
+      cat "$SESSION/registry-selection.txt" "$SESSION/tool-capabilities.tsv" "$SESSION/dispatch-plan.tsv"
+      printf '\n```\n\n'
     fi
     printf '| Этап / Stage | Состояние / State | Причина / Reason |\n|---|---|---|\n'
     while IFS=$'\t' read -r stage state reason location;do
@@ -109,7 +118,14 @@ report_render(){
     while IFS=$'\t' read -r stage state reason location;do
       [ -n "$stage" ] && [ "$state" != NOT_RUN ] || continue
       printf '\n### %s — %s\n\n' "$stage" "$state"
-      [ ! -f "$location/explanation.txt" ] || cat "$location/explanation.txt"
+      # A child's earlier PASS description is not the final conclusion after
+      # a crash, log error or signal. Keep the original file as private evidence.
+      if [ -f "$location/explanation.txt" ] && [ -f "$location/result.tsv" ] &&
+         awk -F '\t' -v s="$state" -v r="$reason" 'NR==1 && NF==3 && $1==s && $3==r {ok=1} END{exit (NR==1&&ok)?0:1}' "$location/result.tsv";then
+        cat "$location/explanation.txt"
+      else
+        printf 'RU: Итог определён по завершению процесса и журналу; раннее сообщение движка не заменяет этот результат.\nEN: Final state follows process completion and logging; an earlier engine message does not override it.\n'
+      fi
       next_step "$reason" "$state"
       [ ! -f "$location/leftover-files.txt" ] || cat "$location/leftover-files.txt"
       printf '\nЖурнал / Log: `%s/output.log`\n' "$location"
@@ -196,5 +212,8 @@ session_exit(){
   else say "REPORT=UNAVAILABLE EVIDENCE_DIRECTORY=$SESSION";fi
   say 'RU: Храните полный каталог локально. Для передачи используйте очищенный SUPPORT; полные логи могут раскрыть личные сведения.'
   say 'EN: Keep the full directory private. Share reviewed SUPPORT output; raw logs may contain private identifiers.'
+  say 'SESSION_END_ACTION=EXIT'
+  say 'RU: Сеанс завершён; автоматического возврата в меню нет. Следующий тест — новый запуск постоянной команды.'
+  say 'EN: Session ended; no automatic menu return. Start the permanent command again for another test.' 
   exit "$code"
 }

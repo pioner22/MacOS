@@ -1,0 +1,9 @@
+safe-mode	500	any	safe	any	any	any	screen
+installer-limited	500	any	installer_or_recovery	any	any	any	screen
+a2141-recovery	400	a2141	recovery	any	any	any	adaptive
+a2141-full	400	a2141	full	any	any	any	adaptive
+intel-recovery	300	intel_generic	recovery	any	any	any	adaptive
+intel-full	300	intel_generic	full	any	any	any	adaptive
+apple-recovery	300	apple_silicon	recovery	any	any	any	screen
+apple-full	300	apple_silicon	full	any	any	any	screen
+unknown-observation	1	any	any	any	any	any	observe
