@@ -78,7 +78,7 @@ macdiag_launch(){
   umask 077
   export LC_ALL=C
   MACDIAG_BOOT_LOG=
-  printf 'BOOTSTRAP_VERSION=1.2\n'
+  printf 'BOOTSTRAP_VERSION=1.3\n'
   mode=${1:-menu}
   # Minimal built-in preflight before importing any downloaded module.
   for name in mktemp rm cp mv cat wc tr awk sed grep tee date uname sleep dirname;do
@@ -134,7 +134,7 @@ macdiag_launch(){
   [ "${actual%% *}" = "$manifest_sha" ] || { boot_fail MANIFEST_HASH_MISMATCH 'Хэш манифеста не совпал; ничего не запускаем.' 'Manifest hash mismatch; nothing will execute.';return 3; }
   n=0
   while IFS=$'\t' read -r sha bytes name extra;do
-    case "$name" in common.sh|count_stream.pl|fixtures.txt|metal_vram.m|net.sh|profile.sh|ram_native.c|run.sh|storage_file.c|report.sh|supervise.pl|profiles.tsv|recovery.sh|recovery_ram.pl|recovery_file.pl) ;;*)boot_fail MANIFEST_PATH_INVALID 'Неизвестное имя файла в манифесте.' 'Unapproved file name in manifest.';return 3;;esac
+    case "$name" in common.sh|count_stream.pl|fixtures.txt|metal_vram.m|net.sh|profile.sh|ram_native.c|run.sh|storage_file.c|report.sh|supervise.pl|profiles.tsv|recovery.sh|recovery_ram.pl|recovery_file.pl|readonly.sh|storage_readonly.pl) ;;*)boot_fail MANIFEST_PATH_INVALID 'Неизвестное имя файла в манифесте.' 'Unapproved file name in manifest.';return 3;;esac
     case "$bytes" in ''|*[!0-9]*)boot_fail MANIFEST_SIZE_INVALID 'Неверный размер файла в манифесте.' 'Invalid manifest file size.';return 3;;esac
     case "$sha" in *[!a-f0-9]*|'')boot_fail MANIFEST_DIGEST_INVALID 'Неверный хэш файла в манифесте.' 'Invalid manifest digest.';return 3;;esac
     [ "${#sha}" = 64 ] && [ "${#bytes}" -le 6 ] && [ -z "$extra" ] && [ ! -e "$work/$name" ] || { boot_fail MANIFEST_FIELDS_OR_DUPLICATE 'Неверные поля или повтор файла в манифесте.' 'Invalid fields or duplicate manifest file.';return 3; }
@@ -148,8 +148,8 @@ macdiag_launch(){
     mv "$work/$name.part" "$work/$name" || { boot_fail VERIFIED_FILE_MOVE_FAILED "Не сохранён проверенный файл: $name." "Cannot finalize verified file: $name.";return 3; }
     n=$((n+1))
   done < "$work/manifest.tsv"
-  [ "$n" -eq 15 ] || { boot_fail PACKAGE_INCOMPLETE 'Пакет неполный; запуск запрещён.' 'Incomplete package; execution blocked.';return 3; }
-  for name in common.sh profile.sh net.sh report.sh recovery.sh run.sh;do /bin/bash -n "$work/$name" || { boot_fail PACKAGE_SYNTAX_FAILED "Ошибка синтаксиса: $name." "Syntax error: $name.";return 3; };done
+  [ "$n" -eq 17 ] || { boot_fail PACKAGE_INCOMPLETE 'Пакет неполный; запуск запрещён.' 'Incomplete package; execution blocked.';return 3; }
+  for name in common.sh profile.sh net.sh report.sh recovery.sh readonly.sh run.sh;do /bin/bash -n "$work/$name" || { boot_fail PACKAGE_SYNTAX_FAILED "Ошибка синтаксиса: $name." "Syntax error: $name.";return 3; };done
   export MACDIAG_CODE_REF=$ref MACDIAG_PACKAGE_WORK=$work MACDIAG_RELEASE_VERSION=$version
   # exec keeps the PID/TTY: Ctrl+C reaches the runner directly, no orphan launcher.
   # Validated source cache is retained in /tmp for investigation, not user payloads.

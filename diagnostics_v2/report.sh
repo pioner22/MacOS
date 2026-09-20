@@ -8,6 +8,9 @@ next_step(){
     return 0
   fi
   case "$1" in
+    READONLY_*)
+      say 'RU: Проверено только чтение выбранных диапазонов. Смотрите раздел HDD/SSD READ ONLY, engine.log и read-target.tsv. Данные не исправлялись; при ошибке сохраните важные файлы, не запускайте повторную нагрузку.'
+      say 'EN: Only selected-range readability was tested. See HDD/SSD READ ONLY, engine.log and read-target.tsv. No repair was performed; preserve valuable data and avoid repeated load after errors.';;
     *COVERAGE*|*BUDGET*|RAM_MAP_REQUIRES_NATIVE)
       say 'RU: См. coverage.tsv: исходный план не выполнен либо карта недоступна. Уменьшенный объём не даёт RAM PASS.'
       say 'EN: See coverage.tsv: the original plan is incomplete or mapping unavailable. Reduced coverage cannot pass the RAM plan.';;
@@ -88,6 +91,18 @@ report_render(){
       if [ -f "$location/coverage.tsv" ];then
         printf '\n### %s\n\n```text\n' "$stage"
         cat "$location/coverage.tsv";printf '```\n'
+      fi
+    done < "$SESSION/summary.tsv"
+    while IFS=$'\t' read -r stage state reason location;do
+      if [ "$stage" = STORAGE_READONLY ] && [ -f "$location/read-target.tsv" ];then
+        printf '\n## HDD/SSD READ ONLY — только чтение\n\n'
+        printf 'No test data are written. PASS only covers readability, not correctness of existing files, write ability or filesystem consistency.\n'
+        printf 'PASS означает только чтение указанного объёма, не исправность всех узлов и не проверку записи. ОС и журналы могут писать отдельно.\n\n```text\n'
+        cat "$location/read-target.tsv"
+        if [ -f "$location/engine.log" ];then
+          awk '/^READ_PROGRESS/{last=$0} /^(READONLY_(SCOPE|CLOCK|BEGIN|SUMMARY)|READ_(IO_ERROR|SEEK_ERROR|UNEXPECTED_EOF))/{print} END{if(last!="")print last}' "$location/engine.log" || :
+        fi
+        printf '```\n'
       fi
     done < "$SESSION/summary.tsv"
     printf '\n## Действия / Next steps\n\n'
