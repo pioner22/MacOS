@@ -17,5 +17,5 @@ diag_entry(){
   /bin/bash -n "$tmp" || return 3
   /bin/bash "$tmp" "$1"
 }
-diag_entry bridge
+diag_entry readonly
 exit $?
