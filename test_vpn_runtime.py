@@ -221,7 +221,7 @@ class Verification(Fixture):
 class Speed(Fixture):
     def test_no_native_uses_curl_no_disk(self):
         r=self.report()
-        with mock.patch.object(v,'assert_routes'),mock.patch.object(v.os.path,'isfile',return_value=False),mock.patch.object(v,'http',return_value=(None,META)) as m:
+        with mock.patch.object(v,'assert_routes'),mock.patch.object(v,'route_interface',return_value=v.IFACE),mock.patch.object(v.os.path,'isfile',return_value=False),mock.patch.object(v,'http',return_value=(None,META)) as m:
             v.speed(r)
         self.assertEqual(m.call_args.kwargs['destination'],os.devnull)
         self.assertEqual(m.call_args.kwargs['interface'],v.IFACE)
@@ -229,7 +229,7 @@ class Speed(Fixture):
         self.assertIsNone(r.data['speed']['upload_mbps'])
     def test_short_transfer_warns(self):
         r=self.report();meta=dict(META,bytes=100)
-        with mock.patch.object(v,'assert_routes'),mock.patch.object(v.os.path,'isfile',return_value=False),mock.patch.object(v,'http',return_value=(None,meta)):v.speed(r)
+        with mock.patch.object(v,'assert_routes'),mock.patch.object(v,'route_interface',return_value=v.IFACE),mock.patch.object(v.os.path,'isfile',return_value=False),mock.patch.object(v,'http',return_value=(None,meta)):v.speed(r)
         self.assertEqual(r.data['steps'][-1]['status'],'WARN')
     def test_native_success(self):
         r=self.report()
@@ -257,7 +257,7 @@ class Workflow(Fixture):
     def connect_patches(self):
         stack=contextlib.ExitStack()
         for name,value in [('info',''),('assert_no_other_vpn',None),('refresh',None),('resolve_node',v.parse_uri(TROJAN)),
-                           ('probe','198.51.100.2'),('check_config',None),('write_plist',None),('alive',True),('route_interface',v.IFACE)]:
+                           ('probe','198.51.100.2'),('check_config',None),('write_plist',None),('alive',True),('route_interface',v.IFACE),('managed_dns_present',True),('assert_dns',None)]:
             stack.enter_context(mock.patch.object(v,name,return_value=value))
         return stack
     def test_bad_server_no_launch(self):
