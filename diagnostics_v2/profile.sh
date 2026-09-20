@@ -155,6 +155,7 @@ profile_show(){
   printf 'SHELL=Bash-%s CONSOLE=%s PRIVILEGE=%s ROSETTA=%s PAGE_SIZE=%s\n' "$BASH_VERSION" "${CONSOLE:-unknown}" "${PRIVILEGE:-unknown}" "${ROSETTA:-unknown}" "${PAGE_SIZE:-unknown}"
   printf 'TOOLS perl=%s supervisor=%s sha256=%s curl=%s compiler=%s\n' "${CAP_PERL:-no}" "${CAP_SUPERVISOR:-no}" "${CAP_SHA:-no}" "${CAP_CURL:-no}" "${CAP_NATIVE:-no}"
   printf 'BACKENDS ram=%s cpu=%s file=%s gpu=%s\n' "${RAM_BACKEND:-unavailable}" "${CPU_BACKEND:-unavailable}" "${FILE_BACKEND:-unavailable}" "${GPU_BACKEND:-inventory}"
+  if declare -F readonly_capability >/dev/null;then printf 'DISK_READONLY_BACKEND=%s\n' "$(readonly_capability)";fi
   say 'RU: Профиль выбран по наблюдениям. Recovery не требует установленной ОС. Ограниченный скрининг не подтверждает всю RAM/SSD.'
   say 'EN: Profile selected from observations. Recovery needs no installed OS. Limited screening does not certify all RAM/storage.'
   say 'RU: Internet/local Recovery не различаются достоверно. Отсутствие инструмента — ограничение, не поломка.'

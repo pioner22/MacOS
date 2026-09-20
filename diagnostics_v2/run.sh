@@ -10,26 +10,27 @@ ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || exit 3
 . "$ROOT/net.sh"
 . "$ROOT/report.sh"
 . "$ROOT/recovery.sh"
+. "$ROOT/storage_readonly.sh"
 selftest_main(){
   local f got size sha name bad=0 count=0 seen=" "
   select_hash || { unknown SHA256_KNOWN_ANSWER_FAILED; return 3; }
-  for f in common.sh profile.sh net.sh report.sh recovery.sh run.sh; do /bin/bash -n "$ROOT/$f" || bad=1; done
+  for f in common.sh profile.sh net.sh report.sh recovery.sh storage_readonly.sh run.sh; do /bin/bash -n "$ROOT/$f" || bad=1; done
   if need perl;then
     if ! pf_probe 5 perl -MPOSIX -MIO::Select -MIO::Handle -MFcntl -MFile::Temp -MCwd -MErrno -e 'exit 0' > "$STEP_DIR/perl-prerequisites.log" 2>&1;then
       cat "$STEP_DIR/perl-prerequisites.log"
       unknown PERL_SELFTEST_DEPENDENCIES_UNAVAILABLE;return 3
     fi
   fi
-  if need perl; then perl -c "$ROOT/count_stream.pl" || bad=1; perl -c "$ROOT/supervise.pl" || bad=1; perl -c "$ROOT/recovery_ram.pl" || bad=1; perl -c "$ROOT/recovery_file.pl" || bad=1; else unknown PERL_UNAVAILABLE;return 3;fi
+  if need perl; then perl -c "$ROOT/count_stream.pl" || bad=1; perl -c "$ROOT/supervise.pl" || bad=1; perl -c "$ROOT/recovery_ram.pl" || bad=1; perl -c "$ROOT/recovery_file.pl" || bad=1; perl -c "$ROOT/storage_readonly.pl" || bad=1; else unknown PERL_UNAVAILABLE;return 3;fi
   if [ -f "$ROOT/manifest.tsv" ]; then
     while read -r sha size name; do
-      case "$name" in common.sh|count_stream.pl|fixtures.txt|metal_vram.m|net.sh|profile.sh|ram_native.c|run.sh|storage_file.c|supervise.pl|report.sh|profiles.tsv|recovery.sh|recovery_ram.pl|recovery_file.pl) ;;*) bad=1;continue;;esac
+      case "$name" in common.sh|count_stream.pl|fixtures.txt|metal_vram.m|net.sh|profile.sh|ram_native.c|run.sh|storage_file.c|supervise.pl|report.sh|profiles.tsv|recovery.sh|recovery_ram.pl|recovery_file.pl|storage_readonly.sh|storage_readonly.pl) ;;*) bad=1;continue;;esac
       case "$seen" in *" $name "*) bad=1;;esac
       seen="$seen$name ";count=$((count+1))
       got=$(hash_file "$ROOT/$name") || bad=1
       [ "$got" = "$sha" ] && [ "$(wc -c < "$ROOT/$name" | tr -d ' ')" = "$size" ] || bad=1
     done < "$ROOT/manifest.tsv"
-    [ "$count" -eq 15 ] || bad=1
+    [ "$count" -eq 17 ] || bad=1
   else unknown PACKAGE_MANIFEST_MISSING; return 3; fi
   [ "$bad" = 0 ] || { result FAIL 2 TOOLKIT_SELFTEST_FAILED 'Ошибка файлов комплекта, не диагноз ноутбука.' 'Toolkit file validation failed, not a hardware diagnosis.';return 2; }
   say 'SCOPE=PACKAGE_HASHES_SHELL_PERL_SYNTAX_AND_SHA_KNOWN_ANSWER not_hardware_certification=1'
@@ -250,6 +251,7 @@ menu(){
 17  STORAGE FILE / Новый файл: native 1 ГиБ / Perl-screen 256 МиБ
 18  RAM -> RESCUE / Отдельный тест 40 ГиБ / separate 40 GiB test
 19  SUPPORT / Пакет обратной связи, ТОЛЬКО локально / NO upload
+20  HDD/SSD READ-ONLY / Весь диск: ТОЛЬКО ЧТЕНИЕ, БЕЗ стирания / NO writes
  0  EXIT / Выход (также Enter / also Enter)
 RU: Во время теста Ctrl+C останавливает запуск. Отчёт сохраняется отдельно.
 EN: Ctrl+C stops the run. The report is stored separately.
@@ -259,8 +261,8 @@ MENU
     case "$REPLY" in
       0|'') MODE=exit;return 0;;1|13)MODE=raw;;2)MODE=ramquick;;3)MODE=ramfull;;4)MODE=rammap;;5)MODE=cpu;;6)MODE=gpu;;7)MODE=display;;8)MODE=network;;9)MODE=download;;10)MODE=power;;11)MODE=snapshot;;12)MODE=safe;;14)MODE=selftest;;
       15) if ! profile_choose;then say 'RU: Выбор отклонён; прежний профиль сохранён. EN: Selection rejected; previous profile retained.';fi;continue;;
-      16)MODE=acceptance;;17)MODE=storage;;18)MODE=bridge;;19)MODE=support;;
-      *)say 'UNKNOWN_SELECTION / Неизвестный пункт: введите число 0–19.';continue;;
+      16)MODE=acceptance;;17)MODE=storage;;18)MODE=bridge;;19)MODE=support;;20)MODE=readonly;;
+      *)say 'UNKNOWN_SELECTION / Неизвестный пункт: введите число 0–20.';continue;;
     esac
     return 0
   done
@@ -335,6 +337,7 @@ main(){
   if [ "$KERNEL" != Darwin ] && [ "$MODE" != selftest ];then unknown NON_MACOS_ENVIRONMENT;return 3;fi
   case "$MODE" in
     support)run_step SUPPORT support_main;;
+    readonly)run_step STORAGE_READONLY readonly_main;;
     raw)run_step RAW raw_blocked;;
     selftest)run_step TOOLKIT selftest_main;;
     ramquick)run_step RAM_QUICK ram_main quick;;ramfull)run_step RAM_FULL ram_main full;;rammap)run_step RAM_MAP ram_main map;;
