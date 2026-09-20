@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""BigSurVPN 2.0.0. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
+"""BigSurVPN 2.0.1. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
 Public provider preset is DATA. It must never be evaluated as shell/Python code.
 The CLI manages a sing-box TUN launchd job, not an IKEv2/mobileconfig profile.
 """
@@ -27,7 +27,7 @@ import tempfile
 import threading
 import time
 try:
-    from urllib.parse import urlsplit, unquote
+    from urllib.parse import urlsplit, unquote_to_bytes as unquote
     from queue import Queue, Empty
 except ImportError:
     from urlparse import urlsplit
@@ -38,7 +38,7 @@ try:
 except NameError:
     text_type = str
 
-VERSION = '2.0.0'
+VERSION = '2.0.1'
 BASE = '/Library/BigSurVPN'
 PRIVATE = BASE + '/private'
 CURRENT = BASE + '/current'
@@ -60,6 +60,8 @@ CORE_SHA = '99285bb2d30739dc8884144cf90f50538336eab9914ac4524290f5b82fdb5565'
 CORE_BYTES = 26335501
 IP_URL = 'https://ifconfig.me/ip'
 CHECK_URL = 'https://api.github.com/'
+CHECK_FALLBACK_URL = 'https://raw.githubusercontent.com/pioner22/MacOS/ccea27d1550fe9f079e3a1f413c0eeb6f4a9365b/vpn-runtime.py'
+CHECK_FALLBACK_SHA = '25b6dab32d0e8753d52d1406e94dbb95b8593ad501cc018a4452411198164206'
 CURL = '/usr/bin/curl'
 LAUNCH = '/bin/launchctl'
 NQ = '/usr/bin/networkQuality'
@@ -186,14 +188,14 @@ def run(args, data=None, timeout=30, file_limit=LIMIT):
         os.setsid()
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
         resource.setrlimit(resource.RLIMIT_FSIZE, (file_limit, file_limit))
-    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
-        p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=out, stderr=err,
+    with tempfile.TemporaryFile() as inp, tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        if data:
+            inp.write(data)
+        inp.seek(0)
+        p = subprocess.Popen(args, stdin=inp, stdout=out, stderr=err,
                              env=ENV, close_fds=True, preexec_fn=child_setup)
         expired = False
         try:
-            if data:
-                p.stdin.write(data)
-            p.stdin.close()
             deadline = CLOCK() + timeout
             while p.poll() is None:
                 if CLOCK() >= deadline:
@@ -204,9 +206,6 @@ def run(args, data=None, timeout=30, file_limit=LIMIT):
         except BaseException:
             kill_child(p)
             raise
-        finally:
-            if p.stdin and not p.stdin.closed:
-                p.stdin.close()
         out.seek(0)
         err.seek(0)
         return (124 if expired else p.returncode, out.read(LIMIT), err.read(65536))
@@ -262,11 +261,13 @@ def http(url, auth=None, subscription=False, destination=None, redirects=False,
         try:
             meta = {'http': code, 'peer': parts[1], 'bytes': int(float(parts[2])),
                     'bytes_per_second': float(parts[3]), 'seconds': float(parts[4])}
-        except ValueError:
+        except (ValueError, OverflowError):
             raise VPNError('Некорректные метрики curl.')
         if not all(math.isfinite(x) if hasattr(math, 'isfinite') else not (math.isnan(x) or math.isinf(x))
                    for x in (meta['bytes_per_second'], meta['seconds'])):
             raise VPNError('Некорректные числовые метрики curl.')
+        if meta['bytes_per_second'] < 0 or meta['seconds'] < 0 or float(parts[2]) != meta['bytes']:
+            raise VPNError('Отрицательные или дробные метрики HTTP-ответа.')
         if meta['bytes'] < 0 or meta['bytes'] > max_bytes:
             raise VPNError('Размер HTTP-ответа вне разрешённого диапазона.')
         if destination:
@@ -291,14 +292,24 @@ def public_ip(auth=None):
     return value, meta
 
 def github_check(auth=None):
-    body, meta = http(CHECK_URL, auth=auth, timeout=18)
+    # API rate limits/outages do not prove that GitHub raw downloads are down.
+    errors = []
     try:
+        body, meta = http(CHECK_URL, auth=auth, timeout=18)
         value = json.loads(body.decode('utf-8'))
         if not isinstance(value, dict) or 'current_user_url' not in value:
-            raise ValueError()
-    except (ValueError, UnicodeError):
-        raise VPNError('HTTPS GitHub вернул неожиданный ответ.')
-    return meta
+            raise VPNError('HTTPS GitHub API вернул неожиданный ответ.')
+        return meta
+    except (VPNError, ValueError, UnicodeError) as e:
+        errors.append(text_type(e))
+    try:
+        body, meta = http(CHECK_FALLBACK_URL, auth=auth, timeout=18)
+        if hashlib.sha256(body).hexdigest() != CHECK_FALLBACK_SHA:
+            raise VPNError('Контрольный файл GitHub raw не совпал с SHA-256.')
+        return meta
+    except VPNError as e:
+        errors.append(text_type(e))
+    raise VPNError('Оба HTTPS-теста GitHub не прошли: ' + '; '.join(errors))
 
 def percent(value):
     if re.search(r'%(?![0-9a-fA-F]{2})', value):
@@ -475,33 +486,135 @@ def check_config(path=CONFIG, core=CORE):
         raise VPNError('Ядро отклонило JSON (код %s). Диагностика: vpn-bigsur logs' % rc)
 
 def info():
-    rc, out, _ = run([LAUNCH, 'print', 'system/' + LABEL], timeout=10)
-    return out.decode('utf-8', 'replace') if rc == 0 else ''
+    rc, out, err = run([LAUNCH, 'print', 'system/' + LABEL], timeout=10)
+    if rc == 0:
+        text = out.decode('utf-8', 'replace')
+        if not text.strip():
+            raise VPNError('launchctl вернул пустое состояние; отсутствие службы не подтверждено.')
+        return text
+    diagnostic = (out + err).decode('utf-8', 'replace').lower()
+    if rc in (3, 113) and 'could not find service' in diagnostic and LABEL in diagnostic:
+        return ''
+    raise VPNError('Не удалось прочитать состояние launchd (код %s). Это не означает, что VPN выключен.' % rc)
 
 def alive():
     return bool(re.search(r'(?m)^\s*pid = [0-9]+\s*$', info()))
 
+def interface_state():
+    rc, out, err = run(['/sbin/ifconfig', IFACE], timeout=8)
+    if rc == 0 and out.startswith(b(IFACE + ':')):
+        return out
+    diagnostic = (out + err).decode('utf-8', 'replace').lower()
+    if rc == 1 and ('interface ' + IFACE + ' does not exist') in diagnostic:
+        return None
+    raise VPNError('Не удалось определить состояние %s (ifconfig=%s).' % (IFACE, rc))
+
 def route_interface(ip, v6=False):
-    rc, out, _ = run(['/sbin/route', '-n', 'get', '-inet6' if v6 else '-inet', str(ip)], timeout=8)
-    match = re.search(br'(?m)^\s*interface:\s*(\S+)', out) if not rc else None
-    return match.group(1).decode('ascii') if match else ''
+    try:
+        socket.inet_pton(socket.AF_INET6 if v6 else socket.AF_INET, str(ip))
+    except (socket.error, ValueError, TypeError):
+        raise VPNError('Некорректный IP для проверки маршрута.')
+    rc, out, err = run(['/sbin/route', '-n', 'get', '-inet6' if v6 else '-inet', str(ip)], timeout=8)
+    if rc == 0:
+        match = re.search(br'(?m)^\s*interface:\s*(\S+)', out)
+        if match:
+            return match.group(1).decode('ascii')
+    diagnostic = (out + err).decode('utf-8', 'replace').lower()
+    if rc == 1 and any(x in diagnostic for x in ('not in table', 'network is unreachable', 'no such process')):
+        return ''
+    raise VPNError('Не удалось проверить маршрут %s (route=%s).' % (ip, rc))
 
 def assert_routes():
     if not alive():
         raise VPNError('Служба launchd не имеет работающего процесса.')
-    rc, out, _ = run(['/sbin/ifconfig', IFACE], timeout=8)
-    if rc or not out.splitlines() or b'UP' not in out.splitlines()[0]:
+    out = interface_state()
+    if not out or not re.search(br'<(?:[^>]*,)?UP(?:,|>)', out.splitlines()[0]):
         raise VPNError('Интерфейс TUN не поднят.')
     for ip, v6 in ROUTES:
         if route_interface(ip, v6) != IFACE:
             raise VPNError('Маршрут %s не проходит через %s.' % (ip, IFACE))
 
-# Unlike a changed external IP alone, this checks the native DNS registration
-# and an actual UDP DNS response addressed to the tunnel's DNS module.
+# Validate the actual DNS message, not just the declared answer count.
+def dns_name(data, offset):
+    labels, visited, end = [], set(), None
+    for _ in range(128):
+        if offset >= len(data) or offset in visited:
+            raise VPNError('DNS: некорректное сжатие имени.')
+        visited.add(offset)
+        length = bytearray(data[offset:offset + 1])[0]
+        if length & 0xc0 == 0xc0:
+            if offset + 2 > len(data):
+                raise VPNError('DNS: оборванный указатель.')
+            target = ((length & 0x3f) << 8) | bytearray(data[offset + 1:offset + 2])[0]
+            if target >= offset:
+                raise VPNError('DNS: недопустимый указатель имени.')
+            if end is None:
+                end = offset + 2
+            offset = target
+            continue
+        if length & 0xc0 or offset + 1 + length > len(data):
+            raise VPNError('DNS: некорректная метка имени.')
+        offset += 1
+        if not length:
+            name = b'.'.join(labels)
+            if len(name) > 253:
+                raise VPNError('DNS: имя слишком длинное.')
+            return name.lower(), (offset if end is None else end)
+        labels.append(data[offset:offset + length])
+        offset += length
+    raise VPNError('DNS: превышен лимит меток имени.')
+
+def validate_dns_answer(data, query_id):
+    if len(data) < 12:
+        raise VPNError('DNS: короткий ответ.')
+    _, flags, qd, an, _, _ = struct.unpack('!HHHHHH', data[:12])
+    if data[:2] != query_id or not flags & 0x8000 or flags & 0x7a0f or qd != 1 or not 1 <= an <= 128:
+        raise VPNError('DNS: ошибка, усечение или отсутствие ответа.')
+    question, pos = dns_name(data, 12)
+    if question != b'ifconfig.me' or data[pos:pos + 4] != b'\x00\x01\x00\x01':
+        raise VPNError('DNS: ответ на другой вопрос.')
+    pos += 4
+    addresses, aliases = set(), {}
+    for _ in range(an):
+        owner, pos = dns_name(data, pos)
+        if pos + 10 > len(data):
+            raise VPNError('DNS: оборванная запись ответа.')
+        kind, cls, _, length = struct.unpack('!HHIH', data[pos:pos + 10])
+        pos += 10
+        end = pos + length
+        if end > len(data):
+            raise VPNError('DNS: неполные данные ответа.')
+        if cls == 1 and kind == 1:
+            if length != 4:
+                raise VPNError('DNS: некорректная запись A.')
+            addresses.add(owner)
+        elif cls == 1 and kind == 5:
+            alias, consumed = dns_name(data, pos)
+            if consumed != end:
+                raise VPNError('DNS: некорректная запись CNAME.')
+            aliases[owner] = alias
+        pos = end
+    current, seen = question, set()
+    while current not in seen:
+        if current in addresses:
+            return
+        seen.add(current)
+        if current not in aliases:
+            break
+        current = aliases[current]
+    raise VPNError('DNS: нет записи A для запрошенного имени или его CNAME.')
+
+def native_dns_registered(out):
+    for block in re.split(br'resolver #[0-9]+', out):
+        servers = re.findall(br'(?m)^\s*nameserver\[[0-9]+\]\s*:\s*(\S+)\s*$', block)
+        interfaces = re.findall(br'(?m)^\s*if_index\s*:\s*[0-9]+\s*\(([^)]+)\)', block)
+        if b(DNS4) in servers and (b(IFACE) in interfaces or not interfaces):
+            return True
+    return False
+
 def assert_dns():
     rc, out, _ = run(['/usr/sbin/scutil', '--dns'], timeout=10)
-    blocks = re.split(br'resolver #[0-9]+', out)
-    if rc or not any(b(DNS4) in block and b(IFACE) in block for block in blocks):
+    if rc or not native_dns_registered(out) or not managed_dns_present() or route_interface(DNS4) != IFACE:
         raise VPNError('Не подтверждён DNS-резолвер %s на %s.' % (DNS4, IFACE))
     query_id = os.urandom(2)
     question = b'\x08ifconfig\x02me\x00\x00\x01\x00\x01'
@@ -511,12 +624,7 @@ def assert_dns():
     try:
         sock.connect((str(DNS4), 53))
         sock.send(packet)
-        data = sock.recv(4096)
-        if len(data) < 12:
-            raise VPNError('DNS: короткий ответ.')
-        fields = struct.unpack('!HHHHHH', data[:12])
-        if data[:2] != query_id or not fields[1] & 0x8000 or fields[1] & 0x000f or fields[3] < 1:
-            raise VPNError('DNS: ошибка/отсутствие ответа A.')
+        validate_dns_answer(sock.recv(4096), query_id)
     except socket.error:
         raise VPNError('DNS через TUN не ответил за 6 секунд.')
     finally:
@@ -527,7 +635,7 @@ def assert_no_other_vpn():
         interface = route_interface(ip, v6)
         if interface.startswith(('utun','tun','ppp','ipsec')):
             raise VPNError('Уже есть VPN-маршрут через %s. Чужой VPN не изменён.' % interface)
-    if run(['/sbin/ifconfig', IFACE], timeout=8)[0] == 0:
+    if interface_state() is not None:
         raise VPNError(IFACE + ' занят другим интерфейсом; запуск отменён.')
 
 def stop():
@@ -537,16 +645,176 @@ def stop():
             raise VPNError('launchd не остановил службу. Чужие маршруты вручную не удаляю.')
     deadline = CLOCK() + 15
     while CLOCK() < deadline:
-        if not info() and run(['/sbin/ifconfig', IFACE], timeout=5)[0] != 0:
+        if not info() and interface_state() is None and dns_cleanup_complete():
             break
         time.sleep(0.3)
     else:
-        raise VPNError('После остановки осталась служба или utun98. Откат не подтверждён.')
+        raise VPNError('После остановки остались служба, TUN или DNS. Откат не подтверждён.')
     for ip, v6 in ROUTES:
         if route_interface(ip, v6) == IFACE:
             raise VPNError('После остановки остался маршрут через utun98.')
     if os.path.exists(ACTIVE):
         os.unlink(ACTIVE)
+
+class TemporaryDNS(object):
+    """A SystemConfiguration session owns temporary keys; no networksetup writes.
+
+    configd removes these keys when the owning process/session disconnects,
+    unless another privileged session has replaced them. CoreFoundation objects
+    are released explicitly. All calls use declared 64-bit-safe ctypes ABIs.
+    """
+    def __init__(self):
+        import ctypes as c
+        self.c, self.store = c, None
+        self.cf = c.CDLL('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation')
+        self.sc = c.CDLL('/System/Library/Frameworks/SystemConfiguration.framework/SystemConfiguration')
+        ptr, index = c.c_void_p, c.c_long
+        declarations = [(self.cf, 'CFStringCreateWithCString', [ptr, c.c_char_p, c.c_uint32], ptr),
+                        (self.cf, 'CFDataCreate', [ptr, ptr, index], ptr),
+                        (self.cf, 'CFPropertyListCreateWithData', [ptr, ptr, c.c_ulong, ptr, ptr], ptr),
+                        (self.cf, 'CFRelease', [ptr], None),
+                        (self.sc, 'SCDynamicStoreCreate', [ptr, ptr, ptr, ptr], ptr),
+                        (self.sc, 'SCDynamicStoreAddTemporaryValue', [ptr, ptr, ptr], c.c_ubyte),
+                        (self.sc, 'SCDynamicStoreCopyValue', [ptr, ptr], ptr),
+                        (self.sc, 'SCError', [], c.c_int)]
+        for lib, name, args, result in declarations:
+            fn = getattr(lib, name)
+            fn.argtypes, fn.restype = args, result
+        name = self.string(LABEL)
+        try:
+            self.store = self.sc.SCDynamicStoreCreate(None, name, None, None)
+        finally:
+            self.cf.CFRelease(name)
+        if not self.store:
+            raise VPNError('Не удалось открыть временную DNS-сессию SystemConfiguration.')
+
+    def string(self, text):
+        value = self.cf.CFStringCreateWithCString(None, b(text), 0x08000100)
+        if not value:
+            raise VPNError('Не удалось создать CFString.')
+        return value
+
+    def add(self, key, value):
+        import plistlib
+        data = plistlib.writePlistToString(value) if sys.version_info[0] == 2 else plistlib.dumps(value)
+        raw = self.cf.CFDataCreate(None, self.c.cast(self.c.c_char_p(data), self.c.c_void_p), len(data))
+        if not raw:
+            raise VPNError('Не удалось создать CFData для DNS.')
+        try:
+            obj = self.cf.CFPropertyListCreateWithData(None, raw, 0, None, None)
+        finally:
+            self.cf.CFRelease(raw)
+        if not obj:
+            raise VPNError('Не удалось сформировать DNS property list.')
+        name = None
+        try:
+            name = self.string(key)
+            if not self.sc.SCDynamicStoreAddTemporaryValue(self.store, name, obj):
+                raise VPNError('Временный DNS-ключ уже занят или недоступен; чужая настройка не заменена.')
+        finally:
+            if name:
+                self.cf.CFRelease(name)
+            self.cf.CFRelease(obj)
+
+    def contains(self, key):
+        name = self.string(key)
+        try:
+            obj = self.sc.SCDynamicStoreCopyValue(self.store, name)
+            if obj:
+                self.cf.CFRelease(obj)
+                return True
+            if self.sc.SCError() == 1004:  # kSCStatusNoKey
+                return False
+            raise VPNError('Не удалось прочитать временный DNS-ключ; отсутствие не подтверждено.')
+        finally:
+            self.cf.CFRelease(name)
+
+    def close(self):
+        if self.store:
+            self.cf.CFRelease(self.store)
+            self.store = None
+
+def managed_dns_key():
+    return 'State:/Network/Service/' + LABEL + '/DNS'
+
+def managed_dns_present():
+    session = TemporaryDNS()
+    try:
+        return session.contains(managed_dns_key())
+    finally:
+        session.close()
+
+def install_temporary_dns(session):
+    prefix = 'State:/Network/Service/' + LABEL + '/'
+    session.add(prefix + 'IPv4', {'InterfaceName': IFACE, 'Addresses': ['172.29.255.1'],
+                                  'SubnetMasks': ['255.255.255.252']})
+    session.add(prefix + 'IPv6', {'InterfaceName': IFACE, 'Addresses': ['fd56:76aa:6273::1'],
+                                  'PrefixLength': [126]})
+    session.add(prefix + 'DNS', {'ServerAddresses': [DNS4, DNS6], 'SupplementalMatchDomains': [''],
+                                'SupplementalMatchDomainsNoSearch': 1, 'SupplementalMatchOrders': [100]})
+
+def dns_cleanup_complete():
+    session = TemporaryDNS()
+    try:
+        prefix = 'State:/Network/Service/' + LABEL + '/'
+        if any(session.contains(prefix + suffix) for suffix in ('DNS', 'IPv4', 'IPv6')):
+            return False
+    finally:
+        session.close()
+    rc, out, _ = run(['/usr/sbin/scutil', '--dns'], timeout=10)
+    if rc:
+        raise VPNError('Не удалось проверить DNS после остановки.')
+    servers = re.findall(br'(?m)^\s*nameserver\[[0-9]+\]\s*:\s*(\S+)\s*$', out)
+    return not any(b(address) in servers for address in (DNS4, DNS6))
+
+def stop_service_child(process):
+    if process.poll() is None:
+        try:
+            process.terminate()
+        except OSError:
+            if process.poll() is None:
+                raise
+        deadline = CLOCK() + 15
+        while process.poll() is None and CLOCK() < deadline:
+            time.sleep(0.1)
+        if process.poll() is None:
+            try:
+                process.kill()
+            except OSError:
+                if process.poll() is None:
+                    raise
+    process.wait()
+
+def serve():
+    # launchd owns this supervisor and its process group. Keep children in that
+    # group so launchd also cleans them if the supervisor dies unexpectedly.
+    check_install()
+    session, core = None, None
+    try:
+        session = TemporaryDNS()
+        with open(os.devnull, 'rb') as null:
+            core = subprocess.Popen([os.path.realpath(CORE), 'run', '-c', CONFIG],
+                                    stdin=null, env=ENV, close_fds=True)
+        deadline = CLOCK() + 25
+        while interface_state() is None:
+            if core.poll() is not None:
+                raise VPNError('Ядро завершилось до создания TUN.')
+            if CLOCK() >= deadline:
+                raise VPNError('Ядро не создало TUN за время ожидания.')
+            time.sleep(0.2)
+        install_temporary_dns(session)
+        while core.poll() is None:
+            time.sleep(0.2)
+        raise VPNError('Ядро VPN завершилось; временная DNS-сессия закрывается.')
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        try:
+            if session is not None:
+                session.close()
+        finally:
+            if core is not None:
+                stop_service_child(core)
 
 def write_plist():
     import plistlib
@@ -554,8 +822,9 @@ def write_plist():
     if os.path.exists(log):
         os.rename(log, log + '.previous')
     atomic_bytes(log, b'')
-    value = {'Label': LABEL, 'ProgramArguments': [os.path.realpath(CORE), 'run', '-c', CONFIG],
-             'WorkingDirectory': PRIVATE, 'RunAtLoad': True, 'KeepAlive': False, 'ExitTimeOut': 15,
+    value = {'Label': LABEL, 'ProgramArguments': ['/usr/bin/python', '-E', '-s', '-B',
+                                                  os.path.realpath(CURRENT + '/vpn-runtime.py'), '_serve'],
+             'WorkingDirectory': PRIVATE, 'RunAtLoad': True, 'KeepAlive': False, 'ExitTimeOut': 20, 'AbandonProcessGroup': False,
              'EnvironmentVariables': ENV, 'StandardOutPath': '/dev/null', 'StandardErrorPath': log,
              'Umask': 0o077, 'SoftResourceLimits': {'FileSize': LIMIT},
              'HardResourceLimits': {'FileSize': LIMIT}}
@@ -667,12 +936,16 @@ def speed(report):
         atomic_bytes(PRIVATE + '/network-quality.log', out)
         text = safe(out, 12000)
         say(text)
-        values = re.findall(r'(?i)(?:Downlink|Download|Uplink|Upload) capacity:\s*([0-9.]+)\s*(?:[KMG]bps)', text)
-        if rc or len(values) < 2 or any(float(v) <= 0 for v in values[:2]):
+        capacities = {}
+        for direction, value, unit in re.findall(r'(?im)^\s*(Downlink|Download|Uplink|Upload) capacity:\s*([0-9]+(?:\.[0-9]+)?)\s*([KMG]bps)\s*$', text):
+            number = float(value) * {'kbps': 1e-3, 'mbps': 1.0, 'gbps': 1e3}[unit.lower()]
+            capacities['download' if direction.lower() in ('downlink', 'download') else 'upload'] = number
+        if rc or any(k not in capacities or capacities[k] <= 0 or math.isinf(capacities[k]) for k in ('download', 'upload')):
             report.mark('SPEED', 'WARN', 'networkQuality не завершила полный замер (код %s). VPN не объявляется неисправным только из-за этого.' % rc)
             return
         report.mark('SPEED', 'PASS', 'Штатный тест Apple завершён; значения показаны выше.')
-        report.data['speed'] = {'method': 'Apple networkQuality', 'output': text}
+        report.data['speed'] = {'method': 'Apple networkQuality', 'output': text,
+                                'download_mbps': capacities['download'], 'upload_mbps': capacities['upload']}
         return
     report.mark('NETWORKQUALITY', 'SKIP', 'Штатная /usr/bin/networkQuality отсутствует (обычно Big Sur). Сторонний Speedtest не устанавливается.')
     report.mark('SPEED_START', 'INFO', 'Резерв: системный curl, один HTTPS-поток, 26.3 МБ с GitHub CDN в /dev/null; до 90 секунд.')
@@ -680,6 +953,8 @@ def speed(report):
         _, meta = http(CORE_URL, destination=os.devnull, redirects=True, max_bytes=CORE_BYTES,
                        timeout=90, interface=IFACE)
         assert_routes()
+        if route_interface(meta['peer']) != IFACE:
+            raise VPNError('Конечный адрес теста скорости маршрутизируется вне TUN.')
         if meta['bytes'] != CORE_BYTES or meta['seconds'] <= 0 or meta['bytes_per_second'] <= 0:
             raise VPNError('Тестовый объект не скачан полностью или метрики нулевые.')
         rate = meta['bytes_per_second'] * 8.0 / 1000000.0
@@ -725,24 +1000,41 @@ def connect(base, report):
             raise VPNError('launchctl bootstrap завершился с кодом %s. Журнал: vpn-bigsur logs' % rc)
         deadline = CLOCK() + 20
         while CLOCK() < deadline:
-            if alive() and route_interface('1.1.1.1') == IFACE:
+            if alive() and route_interface('1.1.1.1') == IFACE and managed_dns_present():
                 break
             time.sleep(0.3)
+        # configd/mDNSResponder can publish resolver state after the TUN route.
+        for attempt in range(3):
+            try:
+                assert_dns()
+                break
+            except VPNError:
+                if attempt == 2:
+                    raise
+                time.sleep(0.5)
         ip = verify(base, report)
         atomic_json(ACTIVE, {'baseline': base, 'name': selected['name'], 'id': selected['id'],
                             'auth': auth, 'ip': ip, 'verified_at': now(), 'version': VERSION})
-    except BaseException:
         try:
-            stop()
-            report.mark('ROLLBACK', 'PASS', 'Собственная служба и маршруты TUN остановлены. Прямой интернет возможен.')
+            refresh(auth, report)
         except VPNError as e:
-            report.mark('ROLLBACK', 'FAIL', text_type(e))
+            report.mark('SUBSCRIPTION', 'WARN', 'VPN подключён, но актуальная подписка не получена: ' + text_type(e))
+        return ip
+    except BaseException:
+        rollback_new(report)
         raise
+
+def rollback_new(report):
     try:
-        refresh(auth, report)
-    except VPNError as e:
-        report.mark('SUBSCRIPTION', 'WARN', 'VPN подключён, но актуальная подписка не получена: ' + text_type(e))
-    return ip
+        stop()
+        status, detail = 'PASS', 'Собственная служба и маршруты TUN остановлены. Прямой интернет возможен.'
+    except BaseException as e:
+        status, detail = 'FAIL', 'Остановка не подтверждена: ' + safe(e)
+    try:
+        report.mark('ROLLBACK', status, detail)
+    except Exception:
+        say('[%s] ROLLBACK: %s (отчёт на диск не записан).' % (status, detail))
+
 
 CLI = '''#!/bin/bash
 set +x
@@ -918,12 +1210,38 @@ def setup(profile_path, report):
         try:
             return finish_connected(base, report)
         except BaseException:
-            stop()
-            report.mark('ROLLBACK', 'PASS', 'После провала итоговой проверки собственный VPN остановлен.')
+            rollback_new(report)
             raise
     finally:
         if staged and os.path.isdir(staged[0]):
             shutil.rmtree(staged[0])
+
+def record_verification(ip):
+    state = read_json(ACTIVE)
+    state.update(ip=ip, verified_at=now())
+    atomic_json(ACTIVE, state)
+
+def turn_on(report):
+    started = False
+    if alive() and os.path.isfile(ACTIVE):
+        base = read_json(ACTIVE).get('baseline', {})
+    else:
+        if info():
+            stop()
+        base = baseline(report)
+        connect(base, report)  # connect rolls back its own failed/cancelled launch.
+        started = True
+    try:
+        report.data['baseline'] = base
+        ip = verify(base, report)
+        record_verification(ip)
+        report.end('CONNECTED_WITH_WARNINGS' if report.warnings() else 'CONNECTED')
+        say('VPN подключён. IP: %s. Замер скорости: vpn-bigsur speed' % ip)
+        return 2 if report.warnings() else 0
+    except BaseException:
+        if started:
+            rollback_new(report)
+        raise
 
 def list_nodes(select=None):
     state = read_json(CATALOG)
@@ -953,6 +1271,8 @@ def main():
     if not os.path.isdir('/System/Volumes/Data'):
         raise VPNError('Internet Recovery не поддерживается.')
     prepare_dirs()
+    if sys.argv[1:] == ['_serve']:
+        return serve()
     with open(PRIVATE + '/command.lock','a') as lock:
         try:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -960,6 +1280,10 @@ def main():
             raise VPNError('Другая команда VPN ещё выполняется.')
         cmd = sys.argv[1] if len(sys.argv) > 1 else 'status'
         args = sys.argv[2:]
+        arities = {'setup': 1, 'select': 1, 'on': 0, 'off': 0, 'status': 0, 'test': 0, 'speed': 0,
+                   'list': 0, 'update': 0, 'report': 0, 'logs': 0, 'uninstall': 0}
+        if cmd not in arities or len(args) != arities[cmd]:
+            raise VPNError('Неизвестная команда или неверное число аргументов. Пример: vpn-bigsur select 2')
         if cmd == 'report':
             say(json.dumps(read_json(REPORT), ensure_ascii=False, indent=2))
             return 0
@@ -1002,17 +1326,7 @@ def main():
                 return setup(args[0], report)
             check_install()
             if cmd == 'on':
-                if alive() and os.path.isfile(ACTIVE):
-                    base = read_json(ACTIVE).get('baseline', {})
-                else:
-                    if info():
-                        stop()
-                    base = baseline(report)
-                    connect(base, report)
-                verify(base, report)
-                report.end('CONNECTED_WITH_WARNINGS' if report.warnings() else 'CONNECTED')
-                say('VPN подключён. Замер скорости: vpn-bigsur speed')
-                return 2 if report.warnings() else 0
+                return turn_on(report)
             if cmd in ('test','speed'):
                 if not os.path.isfile(ACTIVE):
                     raise VPNError('Нет активной сессии. Сначала vpn-bigsur on.')
@@ -1021,6 +1335,7 @@ def main():
                 verify(base, report)
                 if cmd == 'speed':
                     return finish_connected(base, report)
+                record_verification(report.data['ip_after'])
                 report.end('PASS_WITH_WARNINGS' if report.warnings() else 'PASS')
                 return 2 if report.warnings() else 0
             if cmd == 'update':
