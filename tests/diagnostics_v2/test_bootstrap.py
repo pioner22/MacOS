@@ -37,7 +37,7 @@ if name==os.environ.get('MOCK_CORRUPT'):out.write_bytes(out.read_bytes()+b'bad')
     def test_truncated_bootstrap_never_executes(self):
         text=(BASE/'st.sh').read_text();cut=text.index('export MACDIAG_CODE_REF')
         p=subprocess.run(['/bin/bash'],input=text[:cut],env=self.env,capture_output=True,text=True)
-        self.assertNotEqual(p.returncode,0);self.assertNotIn('MACDIAG_PACKAGE_REF=',p.stdout)
+        self.assertNotEqual(p.returncode,0);self.assertNotIn('BOOTSTRAP_VERSION=',p.stdout);self.assertNotIn('BOOTSTRAP_STAGE=',p.stderr)
     def test_bootstrap_syntax(self):
         p=subprocess.run(['/bin/bash','-n',str(BASE/'st.sh')],capture_output=True)
         self.assertEqual(p.returncode,0,p.stderr)

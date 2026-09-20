@@ -1,3 +1,5 @@
+> Текущая версия: rc4. Приоритет изменений и критериев: [RC4_REVIEW_FIXES](docs/diagnostics/RC4_REVIEW_FIXES.md). / Current rc4 semantics take precedence.
+
 # Результаты / Result states — v2
 
 | Код / code | Состояние / state | RU | EN |

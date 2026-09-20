@@ -148,4 +148,22 @@ if '-w' in args:print('200',end='')
         p=self.run_boot();self.assertEqual(p.returncode,0,p.stdout+p.stderr)
         self.assertNotIn('RESULT=FAIL',p.stdout)
 
+    def test_empty_tab_fields_and_unterminated_tail_rejected(self):
+        valid=(BASE/'diagnostics-release.tsv').read_text()
+        for row in ['\t'+valid,valid.replace('\t','\t\t',1),valid[:-1]+'\t\n',valid+'junk']:
+            with self.subTest(row=repr(row)):
+                p=self.run_boot(QA_DATA=row)
+                self.assertEqual(p.returncode,3,p.stdout+p.stderr)
+                self.assertIn('BOOTSTRAP_REASON=',p.stderr)
+                self.assertNotIn('SESSION_LOGS=',p.stdout)
+
+    def test_prefix_after_inner_function_is_not_silent_success(self):
+        data=(BASE/'st.sh').read_bytes()
+        close=data.rfind(b'\n}')+1
+        for cut in range(max(0,close-40),close+1):
+            with self.subTest(cut=cut):
+                p=subprocess.run(['/bin/bash'],input=data[:cut],env=self.env,capture_output=True,timeout=5)
+                self.assertNotEqual(p.returncode,0)
+                self.assertNotIn(b'BOOTSTRAP_VERSION=',p.stdout)
+
 if __name__=='__main__': unittest.main()
