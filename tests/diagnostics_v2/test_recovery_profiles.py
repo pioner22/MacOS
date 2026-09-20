@@ -24,6 +24,7 @@ class ProfileTests(unittest.TestCase):
           /System/Installation/CDIS) [ {env} = recovery ] || [ {env} = installer ];;
           /System/Library/CoreServices/Finder.app|/var/db/.AppleSetupDone) [ {env} = full ] || [ {env} = safe ];;*)return 1;;esac; }}
         profile_capabilities(){{ CAP_PERL={'yes' if perl else 'no'};CAP_SUPERVISOR={'yes' if perl else 'no'};CAP_NATIVE={'candidate' if native else 'no'};CAP_FILE_PERL={'yes' if perl else 'no'};CAP_SHA=yes;CAP_METAL=present;CAP_CURL=yes; }}
+        registry_collect(){{ unset REGISTRY_STATUS; }} # isolated legacy fact derivation
         unset MODEL_PROFILE OS_PROFILE ENV_PROFILE SSH_CONNECTION SSH_TTY
         profile_detect;profile_show
         '''

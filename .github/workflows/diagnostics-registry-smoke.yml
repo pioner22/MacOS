@@ -1,0 +1,42 @@
+name: Diagnostic registry macOS compatibility smoke
+on:
+  pull_request:
+    paths: ['diagnostics_v2/**', 'registry/**', 'st.sh', '.github/workflows/diagnostics-registry-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mac-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15-intel, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - name: Read exact source revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" > source.tar.gz
+          tar -xzf source.tar.gz --strip-components=1
+      - name: System Bash syntax and read-only profile smoke
+        shell: /bin/bash --noprofile --norc {0}
+        run: |
+          set -euo pipefail
+          /bin/bash --version
+          for f in st.sh diagnostics_v2/*.sh; do /bin/bash -n "$f"; done
+          for f in diagnostics_v2/*.pl; do /usr/bin/perl -c "$f"; done
+          set +e
+          /bin/bash diagnostics_v2/run.sh profile
+          rc=$?
+          set -e
+          test "$rc" -eq 5
+      - name: Compile native engines without running stress
+        run: |
+          set -euo pipefail
+          xcrun clang -std=c11 -O2 -Wall -Wextra -Werror diagnostics_v2/ram_native.c -o /tmp/ram-qa
+          xcrun clang -std=c11 -O2 -Wall -Wextra -Werror diagnostics_v2/storage_file.c -o /tmp/file-qa
+          xcrun clang -fobjc-arc -Wall -Wextra -Werror -framework Foundation -framework Metal diagnostics_v2/metal_vram.m -o /tmp/metal-qa
+          /tmp/ram-qa --selftest
