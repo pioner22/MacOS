@@ -8,12 +8,19 @@ Date: 2026-09-20. Execution host: Linux, Bash 5.2.37, Perl 5.40.1, Python 3.13.5
 - Perl syntax checks for the four libraries and dispatcher: PASS.
 - Bash syntax check for the local entry point: PASS.
 - `prove -I lib tests/*.t`: 3 files, 98 assertions, PASS.
-- Python CLI unittest: 14 tests, PASS.
+- Python unittest: 22 tests, PASS (14 CLI tests and 8 bootstrap tests).
+- Bootstrap download transport replaced by a local file-copy harness: complete profile collection, export after cleanup, corrupt hash rejection, download failure rejection and incomplete-loader behavior: PASS. The actual GitHub network download chain was not exercised in the container.
 - Actual offline profile collection on this Linux host: completed; classified as unknown-observe, not as macOS.
 - A real test with a TERM-ignoring descendant verifies that the process-group runner stops further execution after timeout. This is not a guarantee against an intentionally detached session.
 - Actual relative-path JSON export and refusal to overwrite an existing file: PASS, mode 0600.
 
 macOS commands, service state, DNS state and device identities are simulated in portable tests. No HTTP, VPN-provider or bandwidth test is included in these counts. Tests do not use the publicly stored VPN subscription.
+
+The initial runtime READMEs describe the first 98 + 14 checks. This record and `MACDIAG_CORE_RU.md` additionally include the eight subsequently added bootstrap tests.
+
+Runtime commit: `5b2eecc9613c34f4844ced1b73d5650731d2ec2e`. Fifteen published source/test/document blobs were compared to local files and matched their Git blob SHA. The bootstrap pins seven runtime components by SHA-256.
+
+Raw console output is included as `docs/macdiag-core/validation.log` in the downloadable archive; no real device profile is uploaded to the repository.
 
 ## Not executed / not certified
 
