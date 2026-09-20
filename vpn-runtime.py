@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""BigSurVPN 2.0.1. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
+"""BigSurVPN 2.0.2. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
 Public provider preset is DATA. It must never be evaluated as shell/Python code.
 The CLI manages a sing-box TUN launchd job, not an IKEv2/mobileconfig profile.
 """
@@ -38,7 +38,7 @@ try:
 except NameError:
     text_type = str
 
-VERSION = '2.0.1'
+VERSION = '2.0.2'
 BASE = '/Library/BigSurVPN'
 PRIVATE = BASE + '/private'
 CURRENT = BASE + '/current'
@@ -509,20 +509,67 @@ def interface_state():
         return None
     raise VPNError('Не удалось определить состояние %s (ifconfig=%s).' % (IFACE, rc))
 
+def parse_route_result(rc, out, err):
+    """Distinguish a real interface, explicit NO_ROUTE, and unknown failure.
+
+    Apple's route(8) can print an RTM_GET error but exit 0. rtmsg() calls
+    print_getmsg() (void), then returns 0, even when rtm_errno is nonzero.
+    A zero process status alone proves neither a route nor its absence.
+    """
+    if rc not in (0, 1):
+        raise VPNError('Команда route не выполнила проверку (код %s).' % rc)
+    stdout = out.decode('utf-8', 'replace')
+    stderr = err.decode('utf-8', 'replace')
+    interfaces = re.findall(r'(?m)^[ \t]*interface:[ \t]*([^\s]+)[ \t]*$', stdout)
+    diagnostic = (stdout + '\n' + stderr).lower()
+    # Exact diagnostics, not "any error = no route". Both rc=0 and rc=1
+    # occur in Apple route; permission errors/timeouts remain fatal.
+    absent_patterns = (
+        r'(?m)^[ \t]*(?:route: )?writing to routing socket: (?:not in table|no such process|network is unreachable|network unreachable)[ \t]*$',
+        r'(?m)^[ \t]*(?:route: )?message indicates error (?:3: no such process|51: network is unreachable|51: network unreachable|65: no route to host)[ \t]*$',
+        r'(?m)^[ \t]*route: (?:not in table|no such process|network is unreachable|network unreachable|no route to host)[ \t]*$',
+    )
+    absent = any(re.search(pattern, diagnostic) for pattern in absent_patterns)
+    if absent:
+        if interfaces:
+            raise VPNError('Противоречивый ответ route: одновременно интерфейс и отсутствие маршрута.')
+        # Do not swallow an additional unrelated error alongside NO_ROUTE.
+        remaining = diagnostic
+        for pattern in absent_patterns:
+            remaining = re.sub(pattern, '', remaining)
+        remaining = re.sub(r'(?m)^[ \t]*route to:[^\n]*$', '', remaining)
+        if remaining.strip():
+            raise VPNError('Дополнительная ошибка route рядом с сообщением об отсутствии маршрута.')
+        return ''
+    if rc != 0 or stderr.strip():
+        raise VPNError('Ошибка или предупреждение route; маршрут не подтверждён.')
+    if len(interfaces) != 1 or not re.match(r'^[A-Za-z][A-Za-z0-9_.-]{0,31}\Z', interfaces[0]):
+        raise VPNError('В ответе route нет однозначного имени интерфейса.')
+    flags = re.findall(r'(?m)^[ \t]*flags:[ \t]*<([^>]+)>[ \t]*$', stdout)
+    if any(set(value.split(',')) & set(('REJECT', 'BLACKHOLE')) for value in flags):
+        raise VPNError('Маршрут помечен REJECT/BLACKHOLE; это не рабочий маршрут VPN.')
+    return interfaces[0]
+
 def route_interface(ip, v6=False):
     try:
         socket.inet_pton(socket.AF_INET6 if v6 else socket.AF_INET, str(ip))
     except (socket.error, ValueError, TypeError):
         raise VPNError('Некорректный IP для проверки маршрута.')
-    rc, out, err = run(['/sbin/route', '-n', 'get', '-inet6' if v6 else '-inet', str(ip)], timeout=8)
-    if rc == 0:
-        match = re.search(br'(?m)^\s*interface:\s*(\S+)', out)
-        if match:
-            return match.group(1).decode('ascii')
-    diagnostic = (out + err).decode('utf-8', 'replace').lower()
-    if rc == 1 and any(x in diagnostic for x in ('not in table', 'network is unreachable', 'no such process')):
-        return ''
-    raise VPNError('Не удалось проверить маршрут %s (route=%s).' % (ip, rc))
+    args = ['/sbin/route', '-n', 'get', '-inet6' if v6 else '-inet', str(ip)]
+    rc, out, err = run(args, timeout=8)
+    try:
+        return parse_route_result(rc, out, err)
+    except VPNError as e:
+        # These commands contain only numeric test addresses, never credentials.
+        detail = {'command': args, 'returncode': rc, 'at': now(),
+                  'stdout': safe(out, 4096), 'stderr': safe(err, 4096)}
+        try:
+            atomic_json(PRIVATE + '/route-diagnostic.json', detail)
+        except (IOError, OSError, VPNError):
+            pass  # preserve the real route failure if writing a report fails
+        excerpt = safe(out + b' | ' + err, 500).replace('\n', ' ').strip()
+        raise VPNError('Не удалось проверить маршрут %s (route=%s): %s Вывод: %s' %
+                       (ip, rc, text_type(e), excerpt or '[пусто]'))
 
 def assert_routes():
     if not alive():
@@ -810,11 +857,11 @@ def serve():
         return 0
     finally:
         try:
-            if session is not None:
-                session.close()
-        finally:
             if core is not None:
                 stop_service_child(core)
+        finally:
+            if session is not None:
+                session.close()
 
 def write_plist():
     import plistlib
@@ -825,7 +872,7 @@ def write_plist():
     value = {'Label': LABEL, 'ProgramArguments': ['/usr/bin/python', '-E', '-s', '-B',
                                                   os.path.realpath(CURRENT + '/vpn-runtime.py'), '_serve'],
              'WorkingDirectory': PRIVATE, 'RunAtLoad': True, 'KeepAlive': False, 'ExitTimeOut': 20, 'AbandonProcessGroup': False,
-             'EnvironmentVariables': ENV, 'StandardOutPath': '/dev/null', 'StandardErrorPath': log,
+             'EnvironmentVariables': ENV, 'StandardOutPath': log, 'StandardErrorPath': log,
              'Umask': 0o077, 'SoftResourceLimits': {'FileSize': LIMIT},
              'HardResourceLimits': {'FileSize': LIMIT}}
     if sys.version_info[0] == 2:
@@ -998,11 +1045,13 @@ def connect(base, report):
         rc, _, _ = run([LAUNCH, 'bootstrap', 'system', PLIST], timeout=20)
         if rc:
             raise VPNError('launchctl bootstrap завершился с кодом %s. Журнал: vpn-bigsur logs' % rc)
-        deadline = CLOCK() + 20
+        deadline = CLOCK() + 30
         while CLOCK() < deadline:
             if alive() and route_interface('1.1.1.1') == IFACE and managed_dns_present():
                 break
             time.sleep(0.3)
+        else:
+            raise VPNError('Служба, TUN и временный DNS не стали готовы за время ожидания. Журнал: vpn-bigsur logs')
         # configd/mDNSResponder can publish resolver state after the TUN route.
         for attempt in range(3):
             try:
@@ -1288,7 +1337,7 @@ def main():
             say(json.dumps(read_json(REPORT), ensure_ascii=False, indent=2))
             return 0
         if cmd == 'logs':
-            for name in ('startup.log','config-check.log'):
+            for name in ('startup.log','config-check.log','route-diagnostic.json'):
                 path = PRIVATE + '/' + name
                 if os.path.isfile(path):
                     with open(path,'rb') as f:
