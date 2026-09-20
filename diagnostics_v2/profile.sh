@@ -11,7 +11,14 @@ pf_probe() (
   if [ -n "${PF_LOG:-}" ];then "$@" </dev/null 2>>"$PF_LOG" &
   else "$@" </dev/null & fi
   child=$!
-  ( sleep "$seconds"; kill -TERM "$child" 2>/dev/null; sleep 1; kill -KILL "$child" 2>/dev/null ) </dev/null >/dev/null 2>&1 & guard=$!
+  (
+    timer=''
+    trap '[ -z "$timer" ] || kill -TERM "$timer" 2>/dev/null; [ -z "$timer" ] || wait "$timer" 2>/dev/null; exit 0' INT TERM HUP
+    sleep "$seconds" & timer=$!;wait "$timer";timer=''
+    kill -TERM "$child" 2>/dev/null
+    sleep 1 & timer=$!;wait "$timer";timer=''
+    kill -KILL "$child" 2>/dev/null
+  ) </dev/null >/dev/null 2>&1 & guard=$!
   trap 'kill -TERM "$child" "$guard" 2>/dev/null; exit 130' INT TERM HUP
   wait "$child";rc=$?
   kill -TERM "$guard" 2>/dev/null;wait "$guard" 2>/dev/null

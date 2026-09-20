@@ -1,4 +1,8 @@
 #!/bin/bash
+# Prefer system utilities on Darwin, not unqualified Homebrew overrides.
+if [ "$(/usr/bin/uname -s 2>/dev/null)" = Darwin ];then
+  PATH=/usr/bin:/bin:/usr/sbin:/sbin;export PATH
+fi
 # SPDX-License-Identifier: GPL-3.0-or-later
 ROOT=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd) || exit 3
 . "$ROOT/common.sh"
@@ -26,16 +30,20 @@ selftest_main(){
   passed TOOLKIT_CHECKED
 }
 ram_main(){
-  local mode mib cap total rc bin hold rounds
+  local mode mib cap total rc bin hold rounds planned
   mode=$1
   if [ "${RAM_BACKEND:-unavailable}" = perl_screen ];then recovery_ram_main "$mode";return $?;fi
   profile_validate && [ "${RAM_BACKEND:-unavailable}" = native_candidate ] || { unknown NATIVE_RAM_RUNTIME_UNAVAILABLE;return 3; }
   total=$((RAM_BYTES/1048576));cap=$((total*3/4))
   case "$mode" in full) mib=49152;hold=1;rounds=1;;map) mib=8192;hold=3;rounds=2;;*) mib=8192;hold=1;rounds=1;;esac
   [ "$mib" -le "$cap" ] || mib=$cap
+  planned=$((mib/32*32))
+  coverage_record "$planned" 0 0 "$total" BUDGET_PENDING || return 3
   mib=$(native_budget "$mib") || { unknown MEMORY_BUDGET_UNAVAILABLE_OR_LOW;return 3; }
   mib=$((mib/32*32)); [ "$mib" -ge 32 ] || { unknown RAM_SIZE_INVALID;return 3; }
-  say "RAM_PLAN mode=$mode target_mib=$mib installed_mib=$total reserve_mib=$((total-mib))"
+  coverage_record "$planned" "$mib" 0 "$total" INCOMPLETE || return 3
+  say "RAM_PLAN mode=$mode planned_mib=$planned target_mib=$mib installed_mib=$total reserve_mib=$((total-mib))"
+  [ "$mib" -eq "$planned" ] || say 'COVERAGE_REDUCED: RU: Уменьшенный тест не даст RAM PASS. EN: A reduced test cannot pass the RAM plan.' 
   say 'RU: Требуется закрепление mlock. При отказе тест не нагружает память; повторите с нужными правами после закрытия приложений.'
   say 'EN: mlock is required. If locking fails, no stress starts; retry with sufficient privileges after closing applications.'
   bin="$STEP_DIR/ram_native"
@@ -44,7 +52,10 @@ ram_main(){
   capture 14410 "$bin" "$mib" "$rounds" "$mode" "$hold" 14400;rc=$?
   case "$rc" in 129|130|143) return "$rc";;esac
   case "$rc" in
-    0) grep -qx 'ENGINE_COMPLETE=RAM_PASS' "$STEP_DIR/engine.log" || { unknown RAM_COMPLETION_MISSING;return 3; };passed RAM_ALLOCATION_VERIFIED;;
+    0) grep -qx 'ENGINE_COMPLETE=RAM_PASS' "$STEP_DIR/engine.log" || { unknown RAM_COMPLETION_MISSING;return 3; }
+      coverage_record "$planned" "$mib" "$mib" "$total" COMPLETED || return 3
+      [ "$mib" -eq "$planned" ] || { unknown RAM_COVERAGE_REDUCED;return 3; }
+      passed RAM_ALLOCATION_VERIFIED;;
     2) fault RAM_DATA_PATH_MISMATCH_INDEPENDENT_CONFIRMATION_REQUIRED;;
     *) unknown RAM_INCOMPLETE_OR_RESOURCE_LIMIT;;
   esac
@@ -88,7 +99,7 @@ gpu_main(){
   intel_full && [ -d /System/Library/Frameworks/Metal.framework ] && need xcrun && xcode-select -p >/dev/null 2>&1 || { unknown GPU_REQUIRES_FULL_MACOS_AND_TOOLCHAIN;return 3; }
   compiler=$(xcrun -f clang) || { unknown CLANG_NOT_AVAILABLE;return 3; }
   bin="$STEP_DIR/metal_vram";rm -f "$bin"
-  "$compiler" -fobjc-arc -Wall -Wextra -Werror -mmacosx-version-min=10.15 -framework Foundation -framework Metal "$ROOT/metal_vram.m" -o "$bin" > "$STEP_DIR/compile.log" 2>&1
+  supervise 120 "$compiler" -fobjc-arc -Wall -Wextra -mmacosx-version-min=10.15 -framework Foundation -framework Metal "$ROOT/metal_vram.m" -o "$bin" > "$STEP_DIR/compile.log" 2>&1
   rc=$?;cat "$STEP_DIR/compile.log"
   [ "$rc" -eq 0 ] && [ -x "$bin" ] || { rm -f "$bin";unknown GPU_CURRENT_BUILD_FAILED;return 3; }
   capture 1810 "$bin" 256;rc=$?
@@ -104,15 +115,17 @@ file_main(){
     path=${BRIDGE_TARGET:-/Volumes/RESCUE};mib=40960
     [ "$RAM_BYTES" -ge 68719476736 ] || { unknown BRIDGE_REQUIRES_64GIB_RAM;return 3; }
     [ "$(native_budget 40960)" = 40960 ] || { unknown BRIDGE_MEMORY_BUDGET_TOO_LOW;return 3; }
-    location=$(diskutil info "$path" 2>/dev/null | awk -F: '/^[ \t]*Device Location:/{gsub(/^[ \t]+|[ \t]+$/,"",$2);print $2;exit}')
+    location=$(pf_probe 8 diskutil info "$path" 2>/dev/null | awk -F: '/^[ \t]*Device Location:/{gsub(/^[ \t]+|[ \t]+$/,"",$2);print $2;exit}')
     [ "$location" = External ] || { unknown EXTERNAL_TARGET_NOT_CONFIRMED;return 3; }
   else path=${FILE_TARGET:-};mib=1024;fi
   [ -n "$path" ] && [ -d "$path" ] && [ -w "$path" ] || { unknown SELECT_WRITABLE_TEST_DIRECTORY;return 3; }
   [ "${FILE_CONSENT:-}" = TEST-FILES ] || { unknown FILE_WRITE_NOT_AUTHORIZED;return 3; }
+  target_preflight "$path" || return 3;path=$TARGET_CANONICAL
   say "FILE_TEST_TARGET=$path TEST_MIB=$mib rounds=2 mode=$mode raw_devices=NEVER"
-  diskutil info "$path" 2>/dev/null || :
+  cat "$STEP_DIR/target-diskutil.txt"
   bin="$STEP_DIR/storage_file";compile_c "$ROOT/storage_file.c" "$bin" || { unknown FILE_ENGINE_BUILD_FAILED;return 3; }
-  capture 14410 "$bin" "$mode" "$mib" 2 "$path" 14400;rc=$?
+  MACDIAG_STOP_GRACE=30 capture 14440 "$bin" "$mode" "$mib" 2 "$path" 14400;rc=$?
+  [ "$rc" = 0 ] || record_leftover_file "$STEP_DIR"
   case "$rc" in 129|130|143) return "$rc";;esac
   case "$rc" in
     0) grep -qx 'ENGINE_COMPLETE=FILE_BYTES_VERIFIED' "$STEP_DIR/engine.log" && grep -qx 'MEDIA_CACHE_CONTROLS=APPLIED' "$STEP_DIR/engine.log" || { unknown FILE_COMPLETION_MISSING;return 3; };passed FILE_WRITE_AND_TWO_READBACKS;;
@@ -151,6 +164,7 @@ consent_files(){
     say 'RU: В Recovery укажите существующий каталог /Volumes/ИМЯ; новый том не создаётся. EN: Recovery needs an existing /Volumes/NAME directory.';return 3
   fi
   FILE_TARGET=${REPLY:-$HOME}
+  FILE_TARGET=$(canonical_target "$FILE_TARGET") || { say 'FILE_TARGET_INVALID / Недопустимый каталог';return 3; }
   printf 'TARGET=%s\nRU: Будут созданы и проверены только временные тестовые файлы. Введите TEST-FILES.\nEN: Only new temporary test files will be created and verified. Type TEST-FILES.\n> ' "$FILE_TARGET"
   read_reply && [ "$REPLY" = TEST-FILES ] || return 3
   FILE_CONSENT=TEST-FILES
@@ -210,7 +224,7 @@ menu(){
  1  SSD RAW / Стирание всего диска — ЗАБЛОКИРОВАНО / BLOCKED
  2  RAM QUICK / Память: native до 8 ГиБ / Perl-screen до 256 МиБ
  3  RAM EXTENDED / Расширенная: native до 48 ГиБ / Perl-screen до 1 ГиБ
- 4  RAM MAP / Карта несовпадений, НЕ адреса чипов / NOT chip addresses
+ 4  RAM MAP / Только native; в Perl недоступна / native only, NOT chip addresses
  5  CPU / Проверка вычислений SHA / SHA execution test
  6  GPU / Видеопамять: 256 МиБ на устройство / per device, experimental
  7  DISPLAY / Экран — ручная проверка / manual checklist
@@ -270,7 +284,7 @@ engine_main(){
 main(){
   local base rc state
   case "${1:-}" in --version) say "VERSION=$DIAG_VERSION";return 0;;--engine) shift;engine_main "$@";return $?;;esac
-  if [ -n "${MACDIAG_RELEASE_VERSION:-}" ] && [ "$MACDIAG_RELEASE_VERSION" != "$DIAG_VERSION" ];then say 'RESULT=INCONCLUSIVE RELEASE_VERSION_MISMATCH';return 3;fi
+  if [ -n "${MACDIAG_RELEASE_VERSION:-}" ] && [ "$MACDIAG_RELEASE_VERSION" != "$DIAG_VERSION" ];then unknown RELEASE_VERSION_MISMATCH; say 'RU: Версии загрузчика и пакета не совпадают. EN: Bootstrap and package versions differ.';return 3;fi
   profile_detect;profile_validate || { say 'RESULT=INCONCLUSIVE PROFILE_MISMATCH';return 3; }
   MODE=${1:-menu}
   base=/tmp
@@ -282,6 +296,7 @@ main(){
   elif [ -d /Volumes/RESCUE ] && [ -w /Volumes/RESCUE ];then base=/Volumes/RESCUE;fi
   SESSION=$(mktemp -d "$base/macdiag-v2.XXXXXX") || return 3
   STEP_DIR=$SESSION;export SESSION STEP_DIR
+  SESSION_FINAL_STATE=;ACTIVE_STAGE_NAME=;ACTIVE_STAGE_DIR=;SESSION_EXECUTION_STATE=RUNNING
   SESSION_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   trap 'session_exit $?' EXIT
   trap 'exit 130' INT
@@ -298,6 +313,8 @@ main(){
   say "PROFILE_LOGS=$SESSION"
   case "$ENVIRONMENT:$base" in full:*) ;;*:/tmp) say 'RU: Журнал в /tmp исчезнет после перезагрузки Recovery. Скопируйте его на внешний том. EN: Recovery /tmp is volatile; preserve it on an external volume.';;esac
   if [ "$MODE" = menu ];then menu || return 3;fi
+  cp "$SESSION/profile.txt" "$SESSION/profile.initial.txt" || return 3
+  cp "$SESSION/environment.tsv" "$SESSION/environment.initial.tsv" || return 3
   profile_show > "$SESSION/profile.txt" || return 3
   environment_record > "$SESSION/environment.tsv" || return 3
   [ "$MODE" != exit ] || { SESSION_FINAL_STATE=OBSERVED;return 0; }
@@ -316,13 +333,13 @@ main(){
     power)run_step POWER power_main;;snapshot)run_step HARDWARE snapshot_main;;display)run_step MANUAL manual_main;;
     storage)
       if consent_files;then run_step FILE file_main storage
-      else unknown FILE_TEST_NOT_AUTHORIZED;return 3;fi;;
+      else run_step FILE unknown FILE_TEST_NOT_AUTHORIZED;fi;;
     bridge)
       BRIDGE_TARGET=/Volumes/RESCUE
       say 'TARGET=/Volumes/RESCUE TEST_MIB=40960'
       say 'RU: Отдельный тест займёт 40 ГиБ RAM и создаст новый файл на внешнем RESCUE. Введите RAM-BRIDGE.'
       say 'EN: This separate test locks 40 GiB RAM and creates a new file on external RESCUE. Type RAM-BRIDGE.'
-      if ! read_reply || [ "$REPLY" != RAM-BRIDGE ];then unknown BRIDGE_NOT_AUTHORIZED;return 3;fi
+      if ! read_reply || [ "$REPLY" != RAM-BRIDGE ];then run_step FILE unknown BRIDGE_NOT_AUTHORIZED;return 3;fi
       FILE_CONSENT=TEST-FILES
       run_step FILE file_main bridge;;
     acceptance|safe)acceptance_main "$MODE";rc=$?;return "$rc";;

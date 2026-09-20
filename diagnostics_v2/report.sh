@@ -2,7 +2,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Text reports only; no automatic upload, repair verdict, or unverified PASS.
 next_step(){
+  if [ "${2:-}" = PASS ];then
+    say 'RU: Завершён только указанный этап и объём. Остальные проверки не заменены.'
+    say 'EN: Only the stated stage and coverage completed; other checks are not replaced.'
+    return 0
+  fi
   case "$1" in
+    *COVERAGE*|*BUDGET*|RAM_MAP_REQUIRES_NATIVE)
+      say 'RU: См. coverage.tsv: исходный план не выполнен либо карта недоступна. Уменьшенный объём не даёт RAM PASS.'
+      say 'EN: See coverage.tsv: the original plan is incomplete or mapping unavailable. Reduced coverage cannot pass the RAM plan.';;
+    *UNAVAILABLE*|*INVALID*|*UNKNOWN*|*MISSING*|SUPPORT_NO_*)
+      say 'RU: Не выполнены условия запуска. Смотрите причину и probes.log; аппаратная неисправность не установлена.'
+      say 'EN: A prerequisite is unavailable. Inspect the reason and probes.log; no hardware diagnosis is established.';;
     *SCREEN_CLEAN*)
       say 'RU: Скрининг не нашёл несовпадений, но нативное полное покрытие не получено. INCONCLUSIVE здесь не означает поломку.'
       say 'EN: Screening found no mismatch but native coverage is missing. INCONCLUSIVE here does not mean faulty hardware.';;
@@ -34,8 +45,8 @@ next_step(){
       say 'RU: Сохраните engine.log и оставленный тестовый файл. Проверьте том, свободное место, кабель и независимый RAM-тест.'
       say 'EN: Preserve engine.log and any retained test file. Check the volume, free space, cable and independent RAM results.';;
     *)
-      say 'RU: PASS относится только к выполненному этапу. Для приёмки нужны независимый RAM-тест, повтор после выключения и ручная проверка.'
-      say 'EN: PASS covers only the completed stage. Acceptance needs independent RAM testing, a cold-boot repeat and manual checks.';;
+      say 'RU: Ориентируйтесь на состояние и причину этого этапа. Неполный результат не является PASS; сведения не являются тестом железа.'
+      say 'EN: Follow this stage state and reason. An incomplete result is not PASS; inventory is not a hardware test.';;
   esac
 }
 report_render(){
@@ -45,6 +56,11 @@ report_render(){
   {
     printf '# Mac Hardware Diagnostics %s — RU / EN\n\n' "$DIAG_VERSION"
     printf 'Состояние / State: **%s**\n\n' "$final"
+    printf 'Исполнение / Execution: **%s**\n\n' "${SESSION_EXECUTION_STATE:-RUNNING}"
+    if [ "${MODE:-}" = selftest ];then
+      printf 'Область: только программный комплект; оборудование не проверялось.\nScope: software toolkit only; hardware was not tested.\n\n'
+    fi
+    printf 'CLOCK_TRUST=UNVERIFIED: системное время не удостоверено / wall clock not authenticated.\n\n'
     printf 'Режим / Mode: `%s`  \nРевизия / Code revision: `%s`\n\n' "${MODE:-unknown}" "${MACDIAG_CODE_REF:-LOCAL_UNPINNED}"
     printf 'Начало UTC / Started UTC: %s  \nОбновлено UTC / Updated UTC: %s\n\n' "${SESSION_STARTED:-unknown}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf 'Это отчёт о выполненных проверках, не сертификат исправности.\nThis reports completed checks, not whole-machine certification.\n\n'
@@ -66,12 +82,21 @@ report_render(){
         fi
       done < "$SESSION/plan.txt"
     fi
+    printf '\n## Покрытие RAM / RAM coverage\n\n'
+    printf 'completed_mib означает полностью завершённый набор шаблонов. Ноль при прерывании не означает отсутствия частичной работы.\ncompleted_mib counts a complete pattern set; zero on interruption does not mean no partial work.\n\n'
+    while IFS=$'\t' read -r stage state reason location;do
+      if [ -f "$location/coverage.tsv" ];then
+        printf '\n### %s\n\n```text\n' "$stage"
+        cat "$location/coverage.tsv";printf '```\n'
+      fi
+    done < "$SESSION/summary.tsv"
     printf '\n## Действия / Next steps\n\n'
     while IFS=$'\t' read -r stage state reason location;do
-      [ -n "$stage" ] || continue
+      [ -n "$stage" ] && [ "$state" != NOT_RUN ] || continue
       printf '\n### %s — %s\n\n' "$stage" "$state"
       [ ! -f "$location/explanation.txt" ] || cat "$location/explanation.txt"
-      next_step "$reason"
+      next_step "$reason" "$state"
+      [ ! -f "$location/leftover-files.txt" ] || cat "$location/leftover-files.txt"
       printf '\nЖурнал / Log: `%s/output.log`\n' "$location"
     done < "$SESSION/summary.tsv"
     printf '\n## Ограничения / Limits\n\n'
@@ -84,22 +109,64 @@ report_render(){
   } > "$SESSION/report.tmp" || return 3
   mv "$SESSION/report.tmp" "$SESSION/REPORT_RU_EN.md"
 }
+# Reconcile a stage that started but never reached run_step post-processing.
+# No traps are replaced in run_step. This also covers signals sent only to main.
+record_unfinished_stage(){
+  local code name dir state reason
+  code=$1; name=${ACTIVE_STAGE_NAME:-}; dir=${ACTIVE_STAGE_DIR:-}
+  [ -n "$name" ] && [ -n "$dir" ] || return 0
+  case "$name" in *[!A-Z0-9_]*) return 3;;esac
+  case "$dir" in "$SESSION"/"$name".*) ;;*) return 3;;esac
+  [ -d "$dir" ] || return 3
+  if awk -F '\t' -v n="$name" '$1==n{found=1} END{exit found?0:1}' "$SESSION/summary.tsv";then return 0;fi
+  state=INCONCLUSIVE; reason=PROCESS_EXIT_WITHOUT_MATCHING_RESULT
+  case "$code" in 129|130|143) reason=INTERRUPTED;;esac
+  # Preserve a structured failure already emitted by the stage, even when the
+  # subsequent shell bookkeeping was interrupted. Never promote an aborted PASS.
+  if [ -f "$dir/result.tsv" ] && awk -F '\t' '
+      NR==1 && NF==3 && $1=="FAIL" && $2=="2" && $3~/^[A-Z0-9_]+$/ {ok=1}
+      END {exit (NR==1 && ok)?0:1}' "$dir/result.tsv";then
+    state=FAIL; reason=$(awk -F '\t' 'NR==1{print $3}' "$dir/result.tsv")
+  fi
+  printf '%s\t%s\t%s\t%s\n' "$name" "$state" "$reason" "$dir" >> "$SESSION/summary.tsv" || return 3
+  printf '%s\t%s\n' "$name" "$state" > "$SESSION/current-stage.tsv" || return 3
+  printf '%s\n' "STAGE_TERMINATION_CODE=$code" > "$dir/termination.txt" || return 3
+  if declare -F record_leftover_file >/dev/null;then record_leftover_file "$dir";fi
+  say "STEP_END=$name STATE=$state REASON=$reason"
+  next_step "$reason" "$state"
+  ACTIVE_STAGE_NAME=;ACTIVE_STAGE_DIR=
+}
+record_not_run(){
+  local name
+  [ -f "$SESSION/plan.txt" ] || return 0
+  while IFS= read -r name;do
+    case "$name" in ''|*[!A-Z0-9_]*) continue;;esac
+    if ! awk -F '\t' -v n="$name" '$1==n{ok=1} END{exit ok?0:1}' "$SESSION/summary.tsv";then
+      printf '%s\tNOT_RUN\tPLAN_NOT_EXECUTED\t-\n' "$name" >> "$SESSION/summary.tsv" || return 3
+    fi
+  done < "$SESSION/plan.txt"
+}
 session_exit(){
   local code final
   code=$1
   trap - EXIT INT TERM HUP
   [ -n "${SESSION:-}" ] || return "$code"
+  record_unfinished_stage "$code" || { say 'STAGE_FINALIZATION_FAILED';code=3; }
+  record_not_run || { say 'PLAN_FINALIZATION_FAILED';code=3; }
+  SESSION_EXECUTION_STATE=FINISHED
+  case "$code" in 129|130|143) SESSION_EXECUTION_STATE=INTERRUPTED;;esac
   final=${SESSION_FINAL_STATE:-INCONCLUSIVE}
   case "$code" in 129|130|143) final=INTERRUPTED;;esac
   # A known failure remains visible even when subsequent work was interrupted.
   if [ -f "$SESSION/summary.tsv" ] && grep -q $'\tFAIL\t' "$SESSION/summary.tsv";then
-    [ "$final" = INTERRUPTED ] || final=FAIL
+    final=FAIL
   fi
+  printf 'execution\t%s\nexit_code\t%s\n' "$SESSION_EXECUTION_STATE" "$code" > "$SESSION/execution.tsv" || code=3
   printf 'FINISHED\t%s\t%s\n' "$final" "$code" > "$SESSION/session.state" || code=3
   report_render "$final" || { say 'REPORT_WRITE_FAILED / Не удалось сохранить отчёт';code=3; }
   say "FINAL_STATE=$final EXIT_CODE=$code"
   say "REPORT=$SESSION/REPORT_RU_EN.md"
-  say 'RU: Сохраните каталог отчёта целиком. EN: Keep the entire report directory.'
-  sync
+  say 'RU: Храните полный каталог локально. Для передачи используйте очищенный SUPPORT; полные логи могут раскрыть личные сведения.'
+  say 'EN: Keep the full directory private. Share reviewed SUPPORT output; raw logs may contain private identifiers.'
   exit "$code"
 }

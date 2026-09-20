@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Existing selected volume only; new exclusive temporary file; no raw device I/O.
-use strict;use warnings;
+use strict;use warnings;use Errno ();
 use Fcntl qw(:DEFAULT :mode SEEK_SET);use File::Temp qw(tempfile);use Cwd qw(abs_path);use IO::Handle;
 $|=1;
 my($dir,$mib)=@ARGV;
@@ -11,6 +11,11 @@ $dir=abs_path($dir);exit 3 unless defined $dir && -d $dir && -w $dir && $dir ne 
 my($fh,$name)=tempfile('macdiag-screen-XXXXXX',DIR=>$dir,UNLINK=>0);
 binmode $fh;my @identity=stat($fh);my $rc=0;my $complete=0;
 $SIG{INT}=sub{die "CANCEL_130\n"};$SIG{TERM}=sub{die "CANCEL_143\n"};$SIG{HUP}=sub{die "CANCEL_129\n"};$SIG{ALRM}=sub{die "TIMEOUT\n"};alarm 900;
+sub io_error {
+ my($op)=@_;my $e=0+$!;my $msg="$!";
+ my $device=($e==Errno::EIO());my $ed=eval {Errno::EDEVERR()};$device ||= defined($ed) && $e==$ed;
+ $rc=$device?2:3;die "IO_ERROR operation=$op errno=$e detail=$msg\n";
+}
 sub block {
  my($i)=@_;my $b='';for my $p(0..255){my $n=$i*256+$p;$b.=pack('V4',$n,0xffffffff-$n,0x73534c46,0x19a21410)x256}return $b;
 }
@@ -18,19 +23,19 @@ print "FILE_ENGINE=RECOVERY_PERL bytes=".($mib*1048576)." cache_bypass=UNAVAILAB
 eval {
  for my $i(0..$mib-1){
   my $b=block($i);my $pos=0;
-  while($pos<length $b){my $n=syswrite($fh,$b,length($b)-$pos,$pos);if(!defined $n){next if $!{EINTR};die "WRITE_$!\n"}die "WRITE_ZERO\n" unless $n;$pos+=$n}
+  while($pos<length $b){my $n=syswrite($fh,$b,length($b)-$pos,$pos);if(!defined $n){next if $!{EINTR};io_error("write")}die "WRITE_ZERO\n" unless $n;$pos+=$n}
  }
- $fh->sync or die "SYNC_UNAVAILABLE\n";
- close($fh) or die "CLOSE_WRITE\n";
+ $fh->sync or io_error("sync");
+ close($fh) or io_error("close_writer");
  for my $pass(1..2){
-  sysopen($fh,$name,O_RDONLY|O_NOFOLLOW) or die "REOPEN\n";binmode $fh;
+  sysopen($fh,$name,O_RDONLY|O_NOFOLLOW) or io_error("reopen");binmode $fh;
   my @st=stat($fh);die "IDENTITY_CHANGED\n" unless $st[0]==$identity[0] && $st[1]==$identity[1] && S_ISREG($st[2]);
   if($st[7]!=$mib*1048576){$rc=2;die "DATA_SIZE_MISMATCH\n"}
   for my $i(0..$mib-1){
-   my $b='';while(length($b)<1048576){my $n=sysread($fh,my $piece,1048576-length($b));if(!defined $n){next if $!{EINTR};die "READ_$!\n"}if(!$n){$rc=2;die "DATA_SHORT_READ\n"}$b.=$piece}
+   my $b='';while(length($b)<1048576){my $n=sysread($fh,my $piece,1048576-length($b));if(!defined $n){next if $!{EINTR};io_error("read")}if(!$n){$rc=2;die "DATA_SHORT_READ\n"}$b.=$piece}
    if($b ne block($i)){$rc=2;die "DATA_MISMATCH block=$i pass=$pass\n"}
   }
-  close($fh) or die "CLOSE_READ\n";print "FILE_SCREEN_READBACK=$pass\n";
+  close($fh) or io_error("close_reader");print "FILE_SCREEN_READBACK=$pass\n";
  }
  $complete=1;
 };

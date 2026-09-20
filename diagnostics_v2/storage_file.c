@@ -35,7 +35,11 @@ static int number(const char *s,uint64_t lo,uint64_t hi,uint64_t *out){
 }
 static int io_code(const char *op){
     int e=errno;printf("IO_ERROR operation=%s errno=%d\n",op,e);
-    return e==EIO?2:3; /* ENOSPC, permissions, resources are not media diagnoses. */
+    return (e==EIO
+#ifdef EDEVERR
+            ||e==EDEVERR
+#endif
+           )?2:3; /* ENOSPC, permissions, resources are not media diagnoses. */
 }
 static int transfer(int fd,void *buf,size_t n,int writing){
     size_t p=0;
@@ -123,7 +127,7 @@ int main(int argc,char **argv){
 #endif
         if(bridge){if((rc=verify(source,(size_t)bytes/8,0,pass,"RAM_POSTWRITE")))goto cleanup;puts("BRIDGE_RAM_POSTVERIFY=PASS");}
 #ifdef DIAG_TESTING
-        if(getenv("MACDIAG_TEST_FILE_INJECT")&&pass==0){unsigned char bad=0;pread(fd,&bad,1,13);bad^=1;pwrite(fd,&bad,1,13);fsync(fd);puts("TEST_ONLY_FILE_FAULT=1");}
+        if(getenv("MACDIAG_TEST_FILE_INJECT")&&pass==0){unsigned char bad=0;if(pread(fd,&bad,1,13)!=1){rc=3;goto cleanup;}bad^=1;if(pwrite(fd,&bad,1,13)!=1||fsync(fd)){rc=3;goto cleanup;}puts("TEST_ONLY_FILE_FAULT=1");}
 #endif
         if(close(fd)){fd=-1;rc=io_code("close_writer");goto cleanup;}fd=-1;
         for(unsigned reread=0;reread<2;reread++){

@@ -41,7 +41,7 @@ static int testDevice(id<MTLDevice> dev,NSUInteger requested){
                 id<MTLComputeCommandEncoder> ce=[cb computeCommandEncoder];if(!ce)return 3;
                 [ce setComputePipelineState:pipe];[ce setBuffer:buffers[i] offset:0 atIndex:0];[ce setBytes:param length:sizeof(param) atIndex:1];
                 [ce dispatchThreads:MTLSizeMake(words,1,1) threadsPerThreadgroup:MTLSizeMake(group,1,1)];[ce endEncoding];[cb commit];[cb waitUntilCompleted];
-                if(cb.status!=MTLCommandBufferStatusCompleted){NSLog(@"GPU_COMMAND_ERROR=%@",cb.error);return 2;}
+                if(cb.status!=MTLCommandBufferStatusCompleted){NSLog(@"GPU_COMMAND_ERROR=%@",cb.error);return 3;}
             }
             sleep(1);
             for(NSUInteger i=0;i<count;i++){
@@ -49,7 +49,7 @@ static int testDevice(id<MTLDevice> dev,NSUInteger requested){
                 id<MTLCommandBuffer> cb=[q commandBuffer];if(!cb)return 3;
                 id<MTLBlitCommandEncoder> be=[cb blitCommandEncoder];if(!be)return 3;
                 [be copyFromBuffer:buffers[i] sourceOffset:0 toBuffer:readback destinationOffset:0 size:size];if(!unified)[be synchronizeResource:readback];[be endEncoding];[cb commit];[cb waitUntilCompleted];
-                if(cb.status!=MTLCommandBufferStatusCompleted){NSLog(@"GPU_READBACK_ERROR=%@",cb.error);return 2;}
+                if(cb.status!=MTLCommandBufferStatusCompleted){NSLog(@"GPU_READBACK_ERROR=%@",cb.error);return 3;}
                 uint32_t seed=0x13579bdfu^pass*0x01020304u^(uint32_t)i*0x9e3779b9u;
                 const uint32_t *p=readback.contents;
                 for(NSUInteger k=0;k<words;k++){uint32_t e=reference((uint32_t)k,seed,pass);if(p[k]!=e){NSLog(@"GPU_DATA_MISMATCH pass=%u chunk=%lu word=%lu expected=%08X actual=%08X attribution=UNCONFIRMED",pass,(unsigned long)i,(unsigned long)k,e,p[k]);return 2;}}
