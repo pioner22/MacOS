@@ -1,0 +1,10 @@
+{
+  "subscription": "https://service.chitly.ru:2096/rpCJeVK8bLbbieueSSUlvrgo/kohfz07zrx5rm4qf",
+  "bootstrap": [
+    "trojan://GbJMEF33EmUzC60N8hGj2tFu_m6Ma127@service.chitly.ru:9444?alpn=http%2F1.1&fp=chrome&security=tls&sni=service.chitly.ru&type=tcp#Bootstrap%20Trojan%20TLS",
+    "vless://e700df08-5378-44c4-82aa-61ad4609c1da@service.chitly.ru:443?encryption=none&flow=xtls-rprx-vision&fp=chrome&pbk=yT5RH5fVJa-wG9zjwXFCyvnIm_feW0FZIg6QLSkb-0Y&security=reality&sid=3a6c830e368dbb8d&sni=www.google.com&spx=%2F5f57ac321228d36&type=tcp#Bootstrap%20VLESS%20REALITY"
+  ],
+  "schema": "bigsur-vpn-profile-v2",
+  "name": "Chitly VPN",
+  "notice": "PUBLIC PERSONAL PRESET. This file grants access to the owner VPN subscription. Published by explicit owner request; rotate credentials after use."
+}
