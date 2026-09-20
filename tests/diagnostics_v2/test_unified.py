@@ -33,7 +33,7 @@ class UnifiedTests(unittest.TestCase):
     def test_invalid_menu_reprompt(self):
         p=self.interactive('main menu');p.expect('> ');p.sendline('99');p.expect('UNKNOWN_SELECTION');p.expect('> ');p.sendline('0');p.expect(pexpect.EOF);p.close();self.assertEqual(p.exitstatus,0)
     def test_menu_routes_all_choices(self):
-        modes={1:'raw',2:'ramquick',3:'ramfull',4:'rammap',5:'cpu',6:'gpu',7:'display',8:'network',9:'download',10:'power',11:'snapshot',12:'safe',13:'raw',14:'selftest',16:'acceptance',17:'storage',18:'bridge',19:'support'}
+        modes={1:'raw',2:'ramquick',3:'ramfull',4:'rammap',5:'cpu',6:'gpu',7:'display',8:'network',9:'download',10:'power',11:'snapshot',12:'safe',13:'raw',14:'selftest',16:'acceptance',17:'storage',18:'bridge',19:'support',20:'readonly'}
         for n,mode in modes.items():
             with self.subTest(n=n):
                 p=self.interactive('profile_detect; menu; echo SELECTED=$MODE');p.expect('> ');p.sendline(str(n));p.expect('SELECTED='+mode);p.expect(pexpect.EOF);p.close();self.assertEqual(p.exitstatus,0)
