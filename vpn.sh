@@ -1,53 +1,91 @@
 #!/bin/bash
-# BigSurVPN one-command setup 1.1.0: install, configure, connect, verify.
-# A personal command supplies VPN_INSTALL_KEY; no key is published here.
-# Existing installed profiles do not need a key again.
-# Keep invocation last to reject a script truncated during curl | bash.
+# BigSurVPN 2.0.0. One command: download -> configure -> launch -> verify -> speed.
+# Usage: curl -fL https://raw.githubusercontent.com/pioner22/MacOS/main/vpn.sh | bash
+# PERSONAL PUBLIC PRESET: the owner explicitly requested embedded VPN access.
+# Anyone able to download vpn-profile.json can use its subscription/credentials.
+# Invocation stays last: do not execute an incompletely downloaded function.
 bigsur_vpn_bootstrap() (
   set +x
   set -euo pipefail
   export PATH=/usr/bin:/bin:/usr/sbin:/sbin
   export LC_ALL=C
-  unset BASH_ENV ENV CDPATH PYTHONHOME PYTHONPATH
+  unset BASH_ENV ENV CDPATH PYTHONHOME PYTHONPATH VPN_INSTALL_KEY
   umask 077
-  local install_key="${VPN_INSTALL_KEY-}"
-  unset VPN_INSTALL_KEY
-  export -n install_key 2>/dev/null || :
-  if [ -n "$install_key" ] && ! [[ "$install_key" =~ ^[0-9a-f]{32}$ ]]; then
-    printf '%s\n' 'ОШИБКА: некорректный ключ в персональной команде. Ничего не установлено.' >&2
+  local runtime_ref=ccea27d1550fe9f079e3a1f413c0eeb6f4a9365b
+  local runtime_sha=25b6dab32d0e8753d52d1406e94dbb95b8593ad501cc018a4452411198164206
+  local profile_ref=51e09d51cb7868297bb2e2ff493a875b2176916b
+  local profile_sha=2d549bc7d7092054300c8c436a875bc3bff08dd26eab3aee3d76217143a92eae
+  local work runner
+  printf '%s\n' 'BigSurVPN 2.0.0 — установка, профиль, служба, IP, проверка и скорость.'
+  printf '%s\n' 'VPN-данные встроены в отдельный публичный профиль. Ключ установки не нужен.'
+  [ "$(/usr/bin/uname -s)" = Darwin ] || { printf '%s\n' 'ОШИБКА: требуется macOS.' >&2; exit 1; }
+  case "$(/usr/bin/sw_vers -productVersion)" in
+    11.*) ;;
+    *) printf '%s\n' 'ОШИБКА: эта версия рассчитана на Big Sur 11.x.' >&2; exit 1;;
+  esac
+  [ "$(/usr/bin/uname -m)" = x86_64 ] || { printf '%s\n' 'ОШИБКА: требуется Intel Mac.' >&2; exit 1; }
+  [ -d /System/Volumes/Data ] || { printf '%s\n' 'ОШИБКА: Internet Recovery не поддерживается.' >&2; exit 1; }
+  /usr/bin/python -E -s -B -c 'import sys; assert sys.version_info[:2] == (2,7)' >/dev/null 2>&1 || {
+    printf '%s\n' 'ОШИБКА: не найден штатный Python 2.7 Big Sur. Xcode/Homebrew не устанавливаются.' >&2
     exit 1
-  fi
-  if [ "$(/usr/bin/uname -s)" != Darwin ]; then
-    printf '%s\n' 'ОШИБКА: требуется установленная macOS Big Sur на Intel.' >&2
-    exit 1
-  fi
+  }
   if [ "$EUID" -ne 0 ] && ! ( : < /dev/tty ) 2>/dev/null; then
-    printf '%s\n' 'ОШИБКА: запустите команду в Терминале Mac; для пароля администратора нужен терминал.' >&2
+    printf '%s\n' 'ОШИБКА: нужен Терминал для подтверждения прав администратора Mac.' >&2
     exit 1
   fi
-
-  local work
   work=$(/usr/bin/mktemp -d /private/var/tmp/bigsur-vpn-bootstrap.XXXXXX)
   trap '/bin/rm -rf "$work"' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
-  printf '%s\n' 'BigSurVPN: установка -> настройка -> подключение -> проверка связи.'
-  /usr/bin/curl -q -fL --proto '=https' --proto-redir '=https' \
-    --proxy '' --noproxy '*' --connect-timeout 20 --max-time 180 --retry 2 \
-    'https://raw.githubusercontent.com/pioner22/MacOS/04e5db8fab81a09944cbfbdc3f739ae0edc14567/vpn-bigsur.sh' \
-    -o "$work/vpn-bigsur.sh" || {
-      printf '%s\n' 'ОШИБКА: установщик не скачан. Ничего не установлено.' >&2
+
+  fetch_checked() {
+    local url=$1 output=$2 expected=$3
+    printf '%s\n' "Загрузка $(/usr/bin/basename "$output") с GitHub..."
+    (
+      ulimit -f 4096
+      /usr/bin/curl -q -fL --proto '=https' --proto-redir '=https' \
+        --proxy '' --noproxy '*' --connect-timeout 20 --max-time 180 \
+        --max-filesize 2097152 --retry 2 -H 'Cache-Control: no-cache' "$url" -o "$output"
+    ) || { printf '%s\n' 'ОШИБКА: загрузка не завершена. Непроверенный код не запускается.' >&2; exit 1; }
+    printf '%s  %s\n' "$expected" "$output" | /usr/bin/shasum -a 256 -c - || {
+      printf '%s\n' 'ОШИБКА: SHA-256 не совпадает. Выполнение отменено.' >&2
       exit 1
     }
-  printf '%s  %s\n' \
-    'a7ebc561b25608d00b002d8556dfaee0c0c36c04e6859c386af687408e95792a' \
-    "$work/vpn-bigsur.sh" | /usr/bin/shasum -a 256 -c - || {
-      printf '%s\n' 'ОШИБКА: SHA-256 не совпадает. Установщик не запущен.' >&2
-      exit 1
-    }
-  # The key travels over stdin through sudo, not through argv or sudo -E.
-  # sudo reads the macOS administrator password from /dev/tty, NOT this pipe.
-  # setup reuses a private local profile when present, even with an empty key.
-  printf '%s\n' "$install_key" | /bin/bash "$work/vpn-bigsur.sh" setup --key-stdin
+  }
+  fetch_checked "https://raw.githubusercontent.com/pioner22/MacOS/$runtime_ref/vpn-runtime.py" "$work/vpn-runtime.py" "$runtime_sha"
+  fetch_checked "https://raw.githubusercontent.com/pioner22/MacOS/$profile_ref/vpn-profile.json" "$work/vpn-profile.json" "$profile_sha"
+
+  # Verify again after elevation, then execute only the verified bytes from a
+  # root-owned temporary directory. No getpass, key-stdin or credentials in argv.
+  runner='import hashlib, os, shutil, sys, tempfile
+os.umask(0o077)
+if os.geteuid() != 0:
+    sys.exit("Administrator privileges are required.")
+items = [(sys.argv[1], sys.argv[2], "vpn-runtime.py"), (sys.argv[3], sys.argv[4], "vpn-profile.json")]
+verified = []
+for path, expected, name in items:
+    with open(path, "rb") as stream:
+        payload = stream.read(2097153)
+    if len(payload) > 2097152 or hashlib.sha256(payload).hexdigest() != expected:
+        sys.exit("SHA-256 verification failed after privilege elevation; nothing executed.")
+    verified.append((name, payload))
+root = tempfile.mkdtemp(prefix="bigsur-vpn-root-", dir="/private/var/tmp")
+try:
+    for name, payload in verified:
+        with open(os.path.join(root, name), "wb") as stream:
+            stream.write(payload)
+    script = os.path.join(root, "vpn-runtime.py")
+    sys.argv = [script, "setup", os.path.join(root, "vpn-profile.json")]
+    scope = {"__name__": "__main__", "__file__": script, "__package__": None}
+    exec(compile(verified[0][1], script, "exec"), scope)
+finally:
+    shutil.rmtree(root)
+'
+  printf '%s\n' 'Начинаю автоматическую установку. Может понадобиться только пароль администратора Mac.'
+  if [ "$EUID" -eq 0 ]; then
+    /usr/bin/python -E -s -B -c "$runner" "$work/vpn-runtime.py" "$runtime_sha" "$work/vpn-profile.json" "$profile_sha" < /dev/null
+  else
+    /usr/bin/sudo /usr/bin/python -E -s -B -c "$runner" "$work/vpn-runtime.py" "$runtime_sha" "$work/vpn-profile.json" "$profile_sha" < /dev/tty
+  fi
 )
 bigsur_vpn_bootstrap "$@"
