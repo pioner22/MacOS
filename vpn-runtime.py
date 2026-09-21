@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""BigSurVPN 2.1.1. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
+"""BigSurVPN 2.1.3. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
 Public provider preset is DATA. It must never be evaluated as shell/Python code.
 The CLI manages a sing-box TUN launchd job, not an IKEv2/mobileconfig profile.
 """
@@ -38,11 +38,12 @@ try:
 except NameError:
     text_type = str
 
-VERSION = '2.1.1'
+VERSION = '2.1.3'
 BASE = '/Library/BigSurVPN'
 PRIVATE = BASE + '/private'
 CURRENT = BASE + '/current'
 COMMAND_LINK = '/usr/local/bin/vpn-bigsur'
+COMMAND_PATH_FILE = '/private/etc/paths.d/ru.pioner22.bigsur-vpn'
 CORE = CURRENT + '/sing-box'
 CONFIG = PRIVATE + '/config.json'
 CATALOG = PRIVATE + '/profiles.json'
@@ -180,19 +181,116 @@ def prepare_command_dir(prefix='/usr/local'):
         if mode & 0o111 != 0o111:
             raise VPNError('Каталог команды недоступен всем пользователям: ' + path)
 
+def canonical_command():
+    # This is the authoritative entry point; /usr/local is never trusted for sudo.
+    return BASE + '/vpn-bigsur'
+
+def expected_command_link(path):
+    if not os.path.lexists(path):
+        return False
+    s = os.lstat(path)
+    return (stat.S_ISLNK(s.st_mode) and s.st_uid == 0
+            and os.readlink(path) == BASE + '/vpn-bigsur.sh')
+
 def check_activation_paths():
-    prepare_command_dir()
-    cli_path = COMMAND_LINK
-    if os.path.lexists(cli_path):
-        if not (os.path.islink(cli_path) and os.lstat(cli_path).st_uid == 0
-                and os.readlink(cli_path) == BASE + '/vpn-bigsur.sh'):
-            raise VPNError('Имя /usr/local/bin/vpn-bigsur уже занято; чужой файл не перезаписываю.')
+    # A shared/Homebrew directory must NOT prevent installing our root-owned CLI.
+    # Keep the old shared-directory validator for compatibility, but do not use
+    # it as a setup gate. Never chmod/chown /usr/local or its children here.
+    owned(BASE, directory=True)
+    cli_path = canonical_command()
+    if os.path.lexists(cli_path) and not expected_command_link(cli_path):
+        raise VPNError('Имя собственной команды уже занято: ' + cli_path)
     if os.path.lexists(CURRENT) and not os.path.islink(CURRENT):
         raise VPNError('current должен быть ссылкой управляемой установки.')
     wrapper = BASE + '/vpn-bigsur.sh'
     if os.path.lexists(wrapper):
         owned(wrapper)
     return cli_path
+
+def command_path_data():
+    return b(BASE + '\n')
+
+def command_path_preflight():
+    # /etc is a macOS symlink. Use the real directory deliberately, and validate
+    # every ancestor before writing. No user shell startup files are edited.
+    parent = os.path.dirname(COMMAND_PATH_FILE)
+    ancestors = []
+    current = parent
+    while current != os.path.dirname(current):
+        ancestors.append(current)
+        current = os.path.dirname(current)
+    for directory in reversed(ancestors):
+        if directory == parent and not os.path.lexists(directory):
+            os.mkdir(directory, 0o755)
+            os.chmod(directory, 0o755)
+        owned(directory, directory=True)
+    if os.path.lexists(COMMAND_PATH_FILE):
+        owned(COMMAND_PATH_FILE)
+        with open(COMMAND_PATH_FILE, 'rb') as stream:
+            if stream.read(4097) != command_path_data():
+                raise VPNError('Файл регистрации PATH уже содержит другие данные.')
+
+def optional_legacy_parent():
+    # Optional compatibility alias only. Stop at the first unsafe ancestor;
+    # do not resolve symlinks, create shared dirs, or change their permissions.
+    parent = os.path.dirname(COMMAND_LINK)
+    ancestors = []
+    current = parent
+    while current != os.path.dirname(current):
+        ancestors.append(current)
+        current = os.path.dirname(current)
+    for directory in reversed(ancestors):
+        try:
+            s = os.lstat(directory)
+        except OSError:
+            return False, 'каталог отсутствует или недоступен: ' + directory
+        mode = stat.S_IMODE(s.st_mode)
+        if not stat.S_ISDIR(s.st_mode) or s.st_uid != 0 or mode & 0o022 or mode & 0o111 != 0o111:
+            return False, '%s (uid=%s, gid=%s, mode=%04o)' % (directory, s.st_uid, s.st_gid, mode)
+    return True, ''
+
+def install_command_entry(report):
+    cli_path = check_activation_paths()
+    if not os.path.lexists(cli_path):
+        os.symlink(BASE + '/vpn-bigsur.sh', cli_path)
+    owned(BASE + '/vpn-bigsur.sh')
+    report.data['command_path'] = cli_path
+    # Failure to register a convenience PATH entry is not failure of the VPN.
+    try:
+        command_path_preflight()
+        atomic_bytes(COMMAND_PATH_FILE, command_path_data(), 0o644)
+        report.data['command_path_registered'] = True
+        report.mark('COMMAND_PATH', 'INFO', 'Команда установлена: ' + cli_path +
+                    '. Для короткого vpn-bigsur откройте новую вкладку Терминала, если команда ещё не найдена.')
+    except (VPNError, OSError, IOError):
+        report.data['command_path_registered'] = False
+        report.mark('COMMAND_PATH', 'WARN', 'PATH автоматически не зарегистрирован; используйте ' + cli_path + ' status')
+    safe_parent, detail = optional_legacy_parent()
+    if not safe_parent:
+        report.mark('COMMAND_ALIAS', 'INFO', 'Общий каталог оставлен без изменений: ' + detail +
+                    '. Установка продолжается через собственную команду.')
+        return
+    try:
+        if not os.path.lexists(COMMAND_LINK):
+            os.symlink(BASE + '/vpn-bigsur.sh', COMMAND_LINK)
+        elif not expected_command_link(COMMAND_LINK):
+            report.mark('COMMAND_ALIAS', 'WARN', 'Чужое имя vpn-bigsur не заменено. Используйте ' + cli_path)
+            return
+    except (OSError, IOError):
+        report.mark('COMMAND_ALIAS', 'INFO', 'Необязательный общий ярлык не создан. Используйте ' + cli_path)
+
+def remove_command_entries():
+    # Remove only our exact links/registration; never recursively alter /usr/local.
+    safe_parent, _ = optional_legacy_parent()
+    if safe_parent and expected_command_link(COMMAND_LINK):
+        os.unlink(COMMAND_LINK)
+    if os.path.lexists(COMMAND_PATH_FILE):
+        try:
+            command_path_preflight()
+            os.unlink(COMMAND_PATH_FILE)
+        except (VPNError, OSError, IOError):
+            say('Регистрация PATH не удалена: файл или права изменены. Чужие данные не тронуты.')
+
 
 class Report(object):
     def __init__(self, operation):
@@ -1235,6 +1333,8 @@ HELP = """BigSurVPN @VERSION@ — macOS Big Sur 11.x Intel
   version      Версия программы (также --version, -V)
 
 Без команды выполняется status. Допустимы --status, --test и другие --КОМАНДА.
+Полный путь команды: /Library/BigSurVPN/vpn-bigsur.
+Если короткая команда не найдена после установки, откройте новую вкладку Терминала.
 Справка и версия не требуют sudo; остальные команды запрашивают права.
 Установщик предлагает Xray или SOCKS5; on использует сохранённый выбор.
 SOCKS5: только TCP через TUN, без шифрования SOCKS5-транспорта.
@@ -1380,8 +1480,7 @@ def activate_install(stage, state, profile, meta, report):
     link = BASE + '/.current-' + binascii.hexlify(os.urandom(8)).decode('ascii')
     os.symlink('releases/' + os.path.basename(release), link)
     os.rename(link, CURRENT)
-    if not os.path.lexists(cli_path):
-        os.symlink(BASE + '/vpn-bigsur.sh', cli_path)
+    install_command_entry(report)
     atomic_bytes(BASE + '/VERSION', b(VERSION + '\n'), 0o644)
     report.mark('INSTALLED', 'PASS', 'Команда vpn-bigsur, отдельный профиль и версия ' + VERSION + ' установлены.')
 
@@ -1441,6 +1540,7 @@ def setup(profile_path, report):
             catalog['backend'] = selected
             atomic_json(CATALOG, catalog)
             atomic_bytes(BASE + '/vpn-bigsur.sh', b(CLI), 0o755)
+            install_command_entry(report)
             report.mark('REUSE', 'PASS', 'Используется установленная проверенная версия; выбор подключения сохранён.')
         check_install()
         connect(base, report)
@@ -1547,9 +1647,7 @@ def main():
         if cmd == 'uninstall':
             check_install()
             stop()
-            link = COMMAND_LINK
-            if os.path.islink(link) and os.readlink(link) == BASE + '/vpn-bigsur.sh':
-                os.unlink(link)
+            remove_command_entries()
             shutil.rmtree(BASE)
             say('BigSurVPN удалён вместе с локальными профилями и отчётами.')
             return 0
