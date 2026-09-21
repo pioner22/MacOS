@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""BigSurVPN 2.1.1. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
+"""BigSurVPN 2.1.3. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
 Public provider preset is DATA. It must never be evaluated as shell/Python code.
 The CLI manages a sing-box TUN launchd job, not an IKEv2/mobileconfig profile.
 """
@@ -38,7 +38,7 @@ try:
 except NameError:
     text_type = str
 
-VERSION = '2.1.1'
+VERSION = '2.1.3'
 BASE = '/Library/BigSurVPN'
 PRIVATE = BASE + '/private'
 CURRENT = BASE + '/current'
@@ -161,24 +161,35 @@ def prepare_dirs():
     os.chmod(BASE + '/releases', 0o755)
     os.chmod(BASE, 0o755)
 
+def command_path_details(path, entry):
+    kind = ('directory' if stat.S_ISDIR(entry.st_mode) else
+            'symlink' if stat.S_ISLNK(entry.st_mode) else 'not-directory')
+    return '%s (type=%s, uid=%s, gid=%s, mode=%04o)' % (
+        path, kind, entry.st_uid, entry.st_gid, stat.S_IMODE(entry.st_mode))
+
 def prepare_command_dir(prefix='/usr/local'):
-    # /usr/local and /usr/local/bin are commonly user-owned on Intel Macs
-    # (Homebrew and older developer setups). They are shared command-search
-    # directories, so ownership by root is not required. Never chown them.
+    # This shared PATH directory holds only an unprivileged command shortcut.
+    # It is NOT a source of privileged code or private configuration. The CLI
+    # elevates via the fixed root-owned /Library/BigSurVPN/vpn-bigsur.sh path.
+    # Accept group-writable directories (0775/02775), without chmod/chown.
+    # Reject symlinks, non-directories and world-write; never relax BASE/PRIVATE.
     owned(os.path.dirname(prefix), directory=True)
     for path in (prefix, prefix + '/bin'):
         created = not os.path.lexists(path)
         if created:
             os.mkdir(path, 0o755)
-        s = os.lstat(path)
-        if not stat.S_ISDIR(s.st_mode) or s.st_mode & 0o022:
-            raise VPNError('Небезопасный тип или права каталога команды: ' + path)
-        mode = stat.S_IMODE(s.st_mode)
-        if created or (s.st_uid == 0 and mode == 0o700):
+        entry = os.lstat(path)
+        detail = command_path_details(path, entry)
+        if not stat.S_ISDIR(entry.st_mode):
+            raise VPNError('Путь команды не является обычным каталогом: ' + detail)
+        mode = stat.S_IMODE(entry.st_mode)
+        if mode & 0o002:
+            raise VPNError('Каталог команды открыт всем на запись; права не изменены: ' + detail)
+        if created or (entry.st_uid == 0 and mode == 0o700):
             os.chmod(path, 0o755)
             mode = stat.S_IMODE(os.lstat(path).st_mode)
         if mode & 0o111 != 0o111:
-            raise VPNError('Каталог команды недоступен всем пользователям: ' + path)
+            raise VPNError('Нет прохода через каталог команды для всех пользователей: ' + detail)
 
 def check_activation_paths():
     prepare_command_dir()
