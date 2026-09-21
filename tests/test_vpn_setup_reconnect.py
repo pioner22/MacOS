@@ -60,6 +60,7 @@ class SetupReconnectTests(unittest.TestCase):
         install_mock('rollback_new')
         install_mock('atomic_json')
         install_mock('atomic_bytes')
+        install_mock('install_command_entry')
         self.stack.enter_context(mock.patch.object(vpn.os.path, 'isdir', return_value=True))
         self.cleanup = self.stack.enter_context(mock.patch.object(vpn.shutil, 'rmtree'))
 
