@@ -960,13 +960,13 @@ def refresh(auth, report):
     report.mark('SUBSCRIPTION', 'PASS', 'Получено %s совместимых серверов; пропущено %s.' % (len(nodes), skipped))
 
 def candidates(state):
-    seen, result = set(), []
+    seen, result = [], []
     all_nodes = state.get('nodes', []) + state.get('bootstrap', [])
     preferred = [x for x in all_nodes if x['id'] == state.get('preferred')]
     for n in preferred + state.get('nodes', [])[:6] + state.get('bootstrap', []):
         if n['id'] not in seen:
             result.append(n)
-            seen.add(n['id'])
+            seen.append(n['id'])
     return result[:9]
 
 def baseline(report):
@@ -1315,12 +1315,8 @@ def setup(profile_path, report):
     except (VPNError, IOError, OSError, ValueError, KeyError):
         installed = None
     same = installed and installed.get('version') == VERSION and installed['hashes']['vpn-runtime.py'] == digest(os.path.realpath(__file__)) and installed.get('profile_sha256') == digest(profile_path)
-    if same and alive() and os.path.isfile(ACTIVE):
-        report.mark('REUSE', 'PASS', 'Установка не менялась и служба запущена. Проверяю её без отключения.')
-        base = read_json(ACTIVE).get('baseline', {})
-        report.data['baseline'] = base
-        verify(base, report)
-        return finish_connected(base, report)
+    # Re-running the one-command installer always recreates its connection.
+    # Reuse verified program files, never an old active session or baseline.
     staged = None
     existing_job = bool(info())
     base = None if existing_job else baseline(report)
