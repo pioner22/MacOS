@@ -11,12 +11,13 @@ bigsur_vpn_bootstrap() (
   export LC_ALL=C
   unset BASH_ENV ENV CDPATH PYTHONHOME PYTHONPATH VPN_INSTALL_KEY
   umask 077
-  local runtime_ref=ba550cbd6f96ac7cd9efb2208d218ed1837c1692
-  local runtime_sha=0be06b6023c4ddbb808563af357cbef563f6dd97b54f20bc69bf05d0b02a097e
+  local runtime_ref=d798e10400d56cc36f41155bc7b01f8727d4c10b
+  local runtime_sha=d7a59e0c4a1ff4316a67b9c705a6529afb1250a8873b18d3972efb16d3790d2d
   local profile_ref=51e09d51cb7868297bb2e2ff493a875b2176916b
   local profile_sha=2d549bc7d7092054300c8c436a875bc3bff08dd26eab3aee3d76217143a92eae
   local work runner
-  printf '%s\n' 'BigSurVPN 2.0.3 — установка, профиль, служба, IP, проверка и скорость.'
+  printf '%s\n' 'BigSurVPN 2.0.3 — установка/обновление и пересоздание подключения.'
+  printf '%s\n' 'При повторном запуске VPN переподключается; временно возможен прямой интернет.'
   printf '%s\n' 'VPN-данные встроены в отдельный публичный профиль. Ключ установки не нужен.'
   [ "$(/usr/bin/uname -s)" = Darwin ] || { printf '%s\n' 'ОШИБКА: требуется macOS.' >&2; exit 1; }
   case "$(/usr/bin/sw_vers -productVersion)" in
