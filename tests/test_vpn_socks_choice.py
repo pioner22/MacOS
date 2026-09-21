@@ -114,7 +114,7 @@ class MenuTests(unittest.TestCase):
         with self.assertRaises(KeyboardInterrupt): self.choose('0\n')
 
     def test_closed_input(self):
-        with self.assertRaises(v.VPNError): self.choose('')
+        with self.assertRaises(v.UsageError): self.choose('')
 
     def test_retries_are_bounded(self):
         with self.assertRaises(v.UsageError): self.choose('bad\nbad\nbad\n2\n')
@@ -207,7 +207,7 @@ class LifecycleTests(unittest.TestCase):
                           ('stage_install', ('/fixture/stage', copy.deepcopy(self.state), {}, {})),
                           ('stop', None), ('activate_install', None), ('connect', '198.51.100.1'),
                           ('finish_connected', 2), ('rollback_new', None), ('atomic_json', None),
-                          ('atomic_bytes', None)]:
+                          ('atomic_bytes', None), ('install_command_entry', None)]:
             def callback(*args, _name=name, _ret=ret, **kwargs):
                 self.events.append(_name); return _ret
             self.m[name] = self.stack.enter_context(mock.patch.object(v, name, side_effect=callback))
