@@ -8,9 +8,22 @@ pf_path(){ [ -e "$1" ]; }
 # Run in a subshell so caller signal handlers are never replaced.
 pf_probe() (
   seconds=$1;shift
+  # A separate job group also contains ordinary grandchildren and shell-function
+  # workers. Killing only the direct child can leave pf_read's stdout pipe open.
+  set -m || exit 3
   if [ -n "${PF_LOG:-}" ];then "$@" </dev/null 2>>"$PF_LOG" &
   else "$@" </dev/null & fi
   child=$!
+  set +m
+  probe_cleanup(){
+    kill -TERM -- "-$child" 2>/dev/null
+    if kill -0 -- "-$child" 2>/dev/null;then
+      sleep 1
+      kill -KILL -- "-$child" 2>/dev/null
+    fi
+    wait "$child" 2>/dev/null
+    return 0
+  }
   (
     timer=''; guard_result=0
     trap '[ -z "$timer" ] || kill -TERM "$timer" 2>/dev/null; [ -z "$timer" ] || wait "$timer" 2>/dev/null; exit "$guard_result"' INT TERM HUP
@@ -19,17 +32,32 @@ pf_probe() (
     # neither that exit nor its partial stdout can confirm a capability/fact.
     # Return the deadline state through wait, even when cleanup stops the guard.
     guard_result=124
-    kill -TERM "$child" 2>/dev/null
+    kill -TERM -- "-$child" 2>/dev/null
     sleep 1 & timer=$!;wait "$timer";timer=''
-    kill -KILL "$child" 2>/dev/null
+    kill -KILL -- "-$child" 2>/dev/null
     exit "$guard_result"
   ) </dev/null >/dev/null 2>&1 & guard=$!
-  trap 'kill -TERM "$child" "$guard" 2>/dev/null; exit 130' INT TERM HUP
-  wait "$child";rc=$?;child_rc=$rc
+  probe_cancel(){
+    trap '' INT TERM HUP
+    kill -TERM "$guard" 2>/dev/null;wait "$guard" 2>/dev/null
+    probe_cleanup
+    exit "$1"
+  }
+  trap 'probe_cancel 130' INT
+  trap 'probe_cancel 143' TERM
+  trap 'probe_cancel 129' HUP
+  wait "$child" 2>/dev/null;rc=$?;child_rc=$rc
   kill -TERM "$guard" 2>/dev/null;wait "$guard" 2>/dev/null;guard_rc=$?
   timed_out=0
   if [ "$guard_rc" -eq 124 ];then rc=124;timed_out=1;fi
-  if [ -n "${PF_LOG:-}" ];then printf 'PROBE command=%s rc=%s child_rc=%s timeout=%s limit_seconds=%s\n' "$*" "$rc" "$child_rc" "$timed_out" "$seconds" >> "$PF_LOG";fi
+  unfinished=0
+  if kill -0 -- "-$child" 2>/dev/null;then
+    unfinished=1;probe_cleanup
+    [ "$rc" -ne 0 ] || rc=3
+  fi
+  if [ -n "${PF_LOG:-}" ];then
+    printf 'PROBE command=%s rc=%s child_rc=%s timeout=%s limit_seconds=%s unfinished_descendants=%s\n' "$*" "$rc" "$child_rc" "$timed_out" "$seconds" "$unfinished" >> "$PF_LOG" || exit 3
+  fi
   exit "$rc"
 )
 # stdout from a failed/terminated command is evidence, never an observed fact.

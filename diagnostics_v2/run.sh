@@ -276,7 +276,14 @@ MENU
     read_reply || { say 'NO_INTERACTIVE_INPUT / Нет интерактивного ввода';return 3; }
     case "$REPLY" in
       0|'') MODE=exit;return 0;;1|13)MODE=raw;;2)MODE=ramquick;;3)MODE=ramfull;;4)MODE=rammap;;5)MODE=cpu;;6)MODE=gpu;;7)MODE=display;;8)MODE=network;;9)MODE=download;;10)MODE=power;;11)MODE=snapshot;;12)MODE=safe;;14)MODE=selftest;;
-      15) if ! profile_choose;then say 'RU: Выбор отклонён; прежний профиль сохранён. EN: Selection rejected; previous profile retained.';fi;continue;;
+      15) if profile_choose;then
+          # Persist an accepted restriction before another read can end or be
+          # interrupted; the final report must show the current profile.
+          profile_show > "$SESSION/profile.txt" || return 3
+          environment_record > "$SESSION/environment.tsv" || return 3
+          registry_save || return 3
+        else say 'RU: Выбор отклонён; прежний профиль сохранён. EN: Selection rejected; previous profile retained.';fi
+        continue;;
       16)MODE=acceptance;;17)MODE=storage;;18)MODE=bridge;;19)MODE=support;;20)MODE=readonly;;21)MODE=profile;;
       *)say 'UNKNOWN_SELECTION / Неизвестный пункт: введите число 0–21.';continue;;
     esac
@@ -341,9 +348,9 @@ main(){
   profile_show
   say "PROFILE_LOGS=$SESSION"
   case "$ENVIRONMENT:$base" in full:*) ;;*:/tmp) say 'RU: Журнал в /tmp исчезнет после перезагрузки Recovery. Скопируйте его на внешний том. EN: Recovery /tmp is volatile; preserve it on an external volume.';;esac
-  if [ "$MODE" = menu ];then menu || return 3;fi
   cp "$SESSION/profile.txt" "$SESSION/profile.initial.txt" || return 3
   cp "$SESSION/environment.tsv" "$SESSION/environment.initial.tsv" || return 3
+  if [ "$MODE" = menu ];then menu || return 3;fi
   profile_show > "$SESSION/profile.txt" || return 3
   environment_record > "$SESSION/environment.tsv" || return 3
   registry_save || return 3
