@@ -12,7 +12,7 @@ bigsur_vpn_bootstrap() (
   unset BASH_ENV ENV CDPATH PYTHONHOME PYTHONPATH VPN_INSTALL_KEY
   umask 077
   local runtime_ref=e6cd152f25d0b254667706950a025a881520e3d6
-  local runtime_sha=eb1d89d5c2b3a827064af4b970bb875f73ec159e8fcb76d00cc6927336ab89e5
+  local runtime_sha=131296d7736026474dca2c040796c5105221fee2eacf2560defff8c9266df8ad
   local profile_ref=93ccab1365bab351dd10bdf861a5facc53e6a642
   local profile_sha=0d45033f165b47595e78e5127233d8e1e802e7be3391afa7d325702af89524ad
   local work runner
