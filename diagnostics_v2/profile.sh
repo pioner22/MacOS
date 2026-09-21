@@ -12,17 +12,24 @@ pf_probe() (
   else "$@" </dev/null & fi
   child=$!
   (
-    timer=''
-    trap '[ -z "$timer" ] || kill -TERM "$timer" 2>/dev/null; [ -z "$timer" ] || wait "$timer" 2>/dev/null; exit 0' INT TERM HUP
+    timer=''; guard_result=0
+    trap '[ -z "$timer" ] || kill -TERM "$timer" 2>/dev/null; [ -z "$timer" ] || wait "$timer" 2>/dev/null; exit "$guard_result"' INT TERM HUP
     sleep "$seconds" & timer=$!;wait "$timer";timer=''
+    # Mark expiry before signalling the child. A TERM handler may exit 0;
+    # neither that exit nor its partial stdout can confirm a capability/fact.
+    # Return the deadline state through wait, even when cleanup stops the guard.
+    guard_result=124
     kill -TERM "$child" 2>/dev/null
     sleep 1 & timer=$!;wait "$timer";timer=''
     kill -KILL "$child" 2>/dev/null
+    exit "$guard_result"
   ) </dev/null >/dev/null 2>&1 & guard=$!
   trap 'kill -TERM "$child" "$guard" 2>/dev/null; exit 130' INT TERM HUP
-  wait "$child";rc=$?
-  kill -TERM "$guard" 2>/dev/null;wait "$guard" 2>/dev/null
-  if [ -n "${PF_LOG:-}" ];then printf 'PROBE command=%s rc=%s limit_seconds=%s\n' "$*" "$rc" "$seconds" >> "$PF_LOG";fi
+  wait "$child";rc=$?;child_rc=$rc
+  kill -TERM "$guard" 2>/dev/null;wait "$guard" 2>/dev/null;guard_rc=$?
+  timed_out=0
+  if [ "$guard_rc" -eq 124 ];then rc=124;timed_out=1;fi
+  if [ -n "${PF_LOG:-}" ];then printf 'PROBE command=%s rc=%s child_rc=%s timeout=%s limit_seconds=%s\n' "$*" "$rc" "$child_rc" "$timed_out" "$seconds" >> "$PF_LOG";fi
   exit "$rc"
 )
 # stdout from a failed/terminated command is evidence, never an observed fact.
