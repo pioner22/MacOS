@@ -15,8 +15,9 @@ bigsur_vpn_bootstrap() (
   local runtime_sha=966a6d63a7968113af5c713b5595c9c9c53628fb80e83badd31bedb84d24b877
   local profile_ref=93ccab1365bab351dd10bdf861a5facc53e6a642
   local profile_sha=0d45033f165b47595e78e5127233d8e1e802e7be3391afa7d325702af89524ad
-  local work runner
+  local work runner runtime_status
   printf '%s\n' 'BigSurVPN 2.1.3 — выбор Xray или SOCKS5, установка/обновление и проверка.'
+  printf '%s\n' 'Автодиагностика каталогов команды при ошибке установки включена.'
   printf '%s\n' 'При повторном запуске VPN переподключается; временно возможен прямой интернет.'
   printf '%s\n' 'VPN-данные встроены в отдельный публичный профиль. Ключ установки не нужен.'
   [ "$(/usr/bin/uname -s)" = Darwin ] || { printf '%s\n' 'ОШИБКА: требуется macOS.' >&2; exit 1; }
@@ -56,6 +57,24 @@ bigsur_vpn_bootstrap() (
   fetch_checked "https://raw.githubusercontent.com/pioner22/MacOS/$runtime_ref/vpn-runtime.py" "$work/vpn-runtime.py" "$runtime_sha"
   fetch_checked "https://raw.githubusercontent.com/pioner22/MacOS/$profile_ref/vpn-profile.json" "$work/vpn-profile.json" "$profile_sha"
 
+  # Only read metadata of these two fixed paths; never list directory contents.
+  # Keep the actual runtime error and its exit status, even if diagnostics fail.
+  command_path_diagnostics() {
+    local path
+    printf '\n%s\n' '=== ДИАГНОСТИКА КАТАЛОГОВ КОМАНДЫ ==='
+    printf '%s\n' 'Только чтение. Показаны права, владельцы, флаги и ACL; файлы VPN не читаются.'
+    for path in /usr/local /usr/local/bin; do
+      printf '\n%s\n' "Путь: $path"
+      /bin/ls -ldeOq "$path" 2>&1 ||
+        printf '%s\n' 'WARN: ls не смог получить метаданные этого пути.'
+      /usr/bin/stat -f '%N | type=%HT | uid=%u gid=%g | mode=%Lp' "$path" 2>&1 ||
+        printf '%s\n' 'WARN: stat не смог получить метаданные этого пути.'
+    done
+    printf '\n%s\n' '=== КОНЕЦ ДИАГНОСТИКИ ==='
+    printf '%s\n' 'Этот блок не меняет chmod/chown/ACL и не исправляет права вслепую.'
+    return 0
+  }
+
   # Verify again after elevation, then execute only the verified bytes from a
   # root-owned temporary directory. No getpass, key-stdin or credentials in argv.
   runner='import hashlib, os, shutil, sys, tempfile
@@ -83,10 +102,16 @@ finally:
     shutil.rmtree(root)
 '
   printf '%s\n' 'Начинаю автоматическую установку. Может понадобиться только пароль администратора Mac.'
+  runtime_status=0
   if [ "$EUID" -eq 0 ]; then
-    /usr/bin/python -E -s -B -c "$runner" "$work/vpn-runtime.py" "$runtime_sha" "$work/vpn-profile.json" "$profile_sha" < /dev/null
+    /usr/bin/python -E -s -B -c "$runner" "$work/vpn-runtime.py" "$runtime_sha" "$work/vpn-profile.json" "$profile_sha" < /dev/null || runtime_status=$?
   else
-    /usr/bin/sudo /usr/bin/python -E -s -B -c "$runner" "$work/vpn-runtime.py" "$runtime_sha" "$work/vpn-profile.json" "$profile_sha" < /dev/tty
+    /usr/bin/sudo /usr/bin/python -E -s -B -c "$runner" "$work/vpn-runtime.py" "$runtime_sha" "$work/vpn-profile.json" "$profile_sha" < /dev/tty || runtime_status=$?
   fi
+  # 2 can mean CONNECTED_WITH_WARNINGS; 130/143 are cancellation, not failure.
+  if [ "$runtime_status" -eq 1 ]; then
+    command_path_diagnostics || :
+  fi
+  exit "$runtime_status"
 )
 bigsur_vpn_bootstrap "$@"
