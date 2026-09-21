@@ -5,6 +5,11 @@
 # Anyone able to download vpn-profile.json can use its subscription/credentials.
 # Invocation stays last: do not execute an incompletely downloaded function.
 bigsur_vpn_bootstrap() (
+  if [ "${1:-}" = "--socks5" ]; then
+    shift
+    printf '%s\n' 'SOCKS5 backend выбран. Запустите опубликованный vpn-socks.sh setup.'
+    exit 2
+  fi
   set +x
   set -euo pipefail
   export PATH=/usr/bin:/bin:/usr/sbin:/sbin
