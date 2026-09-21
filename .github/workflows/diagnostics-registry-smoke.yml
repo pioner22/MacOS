@@ -1,7 +1,7 @@
 name: Diagnostic registry macOS compatibility smoke
 on:
   pull_request:
-    paths: ['diagnostics_v2/**', 'registry/**', 'st.sh', '.github/workflows/diagnostics-registry-smoke.yml']
+    paths: ['diagnostics_v2/**', 'tests/diagnostics_v2/**', 'registry/**', 'st.sh', '.github/workflows/diagnostics-registry-smoke.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -33,6 +33,10 @@ jobs:
           rc=$?
           set -e
           test "$rc" -eq 5
+      - name: Probe, report and profile regressions without hardware stress
+        env:
+          MACDIAG_TEST_BASH: /bin/bash
+        run: python3 -m unittest discover -s tests/diagnostics_v2 -p test_rc9_audit.py -v
       - name: Compile native engines without running stress
         run: |
           set -euo pipefail
