@@ -1,0 +1,35 @@
+name: BigSurVPN delivery and permissions
+
+on:
+  push:
+    paths:
+      - 'vpn.sh'
+      - 'vpn-runtime.py'
+      - 'vpn-profile.json'
+      - 'tests/test_vpn_*.py'
+      - '.github/workflows/vpn-delivery.yml'
+  pull_request:
+    paths:
+      - 'vpn.sh'
+      - 'vpn-runtime.py'
+      - 'vpn-profile.json'
+      - 'tests/test_vpn_*.py'
+      - '.github/workflows/vpn-delivery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-delivery:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Bootstrap syntax
+        run: bash -n vpn.sh
+      - name: Offline VPN regressions including real permission checks
+        run: sudo /usr/bin/python3 -B -m unittest discover -s tests -p 'test_vpn_*.py' -v
