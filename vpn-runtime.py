@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""BigSurVPN 2.0.3. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
+"""BigSurVPN 2.1.1. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
 Public provider preset is DATA. It must never be evaluated as shell/Python code.
 The CLI manages a sing-box TUN launchd job, not an IKEv2/mobileconfig profile.
 """
@@ -38,7 +38,7 @@ try:
 except NameError:
     text_type = str
 
-VERSION = '2.0.3'
+VERSION = '2.1.1'
 BASE = '/Library/BigSurVPN'
 PRIVATE = BASE + '/private'
 CURRENT = BASE + '/current'
@@ -185,6 +185,9 @@ def check_activation_paths():
             raise VPNError('Имя /usr/local/bin/vpn-bigsur уже занято; чужой файл не перезаписываю.')
     if os.path.lexists(CURRENT) and not os.path.islink(CURRENT):
         raise VPNError('current должен быть ссылкой управляемой установки.')
+    wrapper = BASE + '/vpn-bigsur.sh'
+    if os.path.lexists(wrapper):
+        owned(wrapper)
     return cli_path
 
 class Report(object):
@@ -468,14 +471,80 @@ def parse_subscription(raw):
         raise VPNError('Нет совместимых VLESS/Trojan-профилей; старые настройки не заменены.')
     return nodes, skipped
 
+def backend_of(state):
+    value = state.get('backend', 'xray')
+    if value not in ('xray', 'socks5'):
+        raise VPNError('Неизвестный выбранный тип подключения; повторите установку.')
+    return value
+
+def backend_name(value):
+    return {'xray': 'Xray / VLESS / Trojan (sing-box)',
+            'socks5': 'SOCKS5 резерв (TCP через TUN)'}[value]
+
+def validate_socks(value):
+    # A data-only SOCKS5 preset, never a shell command or Amnezia container.
+    if not isinstance(value, dict) or set(value) != set(('server', 'port', 'username', 'password')):
+        raise VPNError('Некорректная структура резервного SOCKS5-профиля.')
+    host, port = value['server'], value['port']
+    if not isinstance(host, text_type) or not re.match(r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}\Z', host):
+        raise VPNError('Для резервного SOCKS5 требуется IPv4-адрес сервера.')
+    try:
+        socket.inet_pton(socket.AF_INET, str(host))
+    except (socket.error, ValueError):
+        raise VPNError('Некорректный IPv4-адрес резервного SOCKS5.')
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        raise VPNError('Некорректный порт резервного SOCKS5.')
+    for key in ('username', 'password'):
+        field = value[key]
+        if not isinstance(field, text_type) or not 1 <= len(b(field)) <= 255 or re.search(r'[\x00-\x1f\x7f]', field):
+            raise VPNError('Некорректные реквизиты SOCKS5; значения не выводятся.')
+    out = {'type': 'socks', 'tag': 'proxy', 'server': host, 'server_port': port,
+           'version': '5', 'username': value['username'], 'password': value['password'],
+           'network': 'tcp'}
+    ident = hashlib.sha256(b(json.dumps(value, sort_keys=True, ensure_ascii=True))).hexdigest()[:20]
+    return {'id': ident, 'name': 'SOCKS5 резерв', 'outbound': out, 'spiderx_ignored': False}
+
+def choose_backend(state, terminal=None):
+    # The bootstrap may be piped into bash: never consume that stdin stream.
+    if not state.get('socks5'):
+        return 'xray'  # old profiles remain usable without a new prompt
+    say('Выберите подключение:\n  1 — Xray (VLESS / Trojan)\n  2 — SOCKS5 резервный\n  0 — Отмена')
+    say('SOCKS5: TCP через TUN. Сам SOCKS5 не шифрует транспорт и пароль; используйте HTTPS.')
+    own = terminal is None
+    if own:
+        try:
+            terminal = io.open('/dev/tty', 'r', encoding='utf-8')
+        except (IOError, OSError):
+            raise VPNError('Для выбора подключения нужен интерактивный Терминал. Ничего не переключено.')
+    try:
+        for _ in range(3):
+            say('Введите 1, 2 или 0:')
+            line = terminal.readline(32)
+            if not line:
+                raise VPNError('Ввод закрыт. Подключение не переключено.')
+            if len(line) == 32 and not line.endswith('\n'):
+                raise UsageError('Слишком длинная строка выбора. Ничего не переключено.')
+            if line.strip() == '0':
+                raise KeyboardInterrupt()
+            if line.strip() in ('1', '2'):
+                return {'1': 'xray', '2': 'socks5'}[line.strip()]
+            say('Некорректный выбор.')
+        raise UsageError('Выбор не получен; подключение не переключено.')
+    finally:
+        if own:
+            terminal.close()
+
 def validate_profile(value):
     if not isinstance(value, dict) or value.get('schema') != 'bigsur-vpn-profile-v2':
         raise VPNError('Неизвестная схема файла профиля.')
     url_ok(value.get('subscription'))
     if not isinstance(value.get('bootstrap'), list) or not 1 <= len(value['bootstrap']) <= 8:
         raise VPNError('Не задан резервный список профилей.')
-    return {'subscription': value['subscription'], 'bootstrap': [parse_uri(u) for u in value['bootstrap']],
-            'nodes': [], 'preferred': '', 'updated_at': None}
+    state = {'subscription': value['subscription'], 'bootstrap': [parse_uri(u) for u in value['bootstrap']],
+             'nodes': [], 'preferred': '', 'updated_at': None, 'backend': 'xray'}
+    if 'socks5' in value:
+        state['socks5'] = validate_socks(value['socks5'])
+    return state
 
 def resolve_node(node):
     copy = json.loads(json.dumps(node))
@@ -509,6 +578,10 @@ def make_config(node, auth, tun):
              'outbounds': [json.loads(json.dumps(node['outbound']))],
              'route': {'auto_detect_interface': True, 'final': 'proxy',
                        'rules': [{'port': 53, 'action': 'hijack-dns'}]}}
+    if node['outbound']['type'] == 'socks':
+        # DNS is hijacked above, then sent as HTTPS/TCP via the selected proxy.
+        # Do not silently send unsupported UDP outside the tunnel.
+        value['route']['rules'].append({'network': ['udp', 'icmp'], 'action': 'reject'})
     if tun:
         value['inbounds'].insert(0, {'type': 'tun', 'tag': 'tun-in', 'interface_name': IFACE,
             'address': ['172.29.255.1/30', 'fd56:76aa:6273::1/126'], 'mtu': 1400,
@@ -953,6 +1026,8 @@ def probe(node, auth):
 
 def refresh(auth, report):
     state = read_json(CATALOG)
+    if backend_of(state) == 'socks5':
+        raise VPNError('У SOCKS5 нет подписки; реквизиты обновляются через установщик.')
     body, _ = http(state['subscription'], auth=auth, subscription=True)
     nodes, skipped = parse_subscription(body)
     state.update(nodes=nodes, updated_at=now())
@@ -960,6 +1035,11 @@ def refresh(auth, report):
     report.mark('SUBSCRIPTION', 'PASS', 'Получено %s совместимых серверов; пропущено %s.' % (len(nodes), skipped))
 
 def candidates(state):
+    if backend_of(state) == 'socks5':
+        node = state.get('socks5')
+        if not isinstance(node, dict) or node.get('outbound', {}).get('type') != 'socks':
+            raise VPNError('Выбран SOCKS5, но резервный профиль отсутствует. Повторите установку.')
+        return [node]  # explicit choice: never contact the failed primary provider
     seen, result = [], []
     all_nodes = state.get('nodes', []) + state.get('bootstrap', [])
     preferred = [x for x in all_nodes if x['id'] == state.get('preferred')]
@@ -985,6 +1065,10 @@ def baseline(report):
 def verify(baseline_value, report):
     check_config()
     report.mark('CONFIG', 'PASS', 'JSON принят установленным sing-box.')
+    selected_type = read_json(CONFIG)['outbounds'][0]['type']
+    report.data['backend'] = 'socks5' if selected_type == 'socks' else 'xray'
+    if selected_type == 'socks':
+        report.mark('SOCKS5_LIMITS', 'WARN', 'Резерв: TCP через TUN, DNS через HTTPS. SOCKS5 не шифрует транспорт/пароль. UDP/ICMP не поддерживаются этим режимом; это не тест всех приложений.')
     assert_routes()
     report.mark('SERVICE_TUN_ROUTES', 'PASS', 'Процесс, utun98 и обе половины IPv4/IPv6-маршрутов.')
     assert_dns()
@@ -1048,13 +1132,18 @@ def speed(report):
         report.mark('DOWNLOAD_SPEED', 'WARN', 'Замер не завершён: ' + text_type(e))
 
 def connect(base, report):
+    state = read_json(CATALOG)
+    backend = backend_of(state)
+    report.data['backend'] = backend
+    report.mark('BACKEND', 'INFO', backend_name(backend))
     if info():
         raise VPNError('Перед новым подключением осталась служба. Выполните vpn-bigsur off.')
     assert_no_other_vpn()
-    try:
-        refresh(None, report)
-    except VPNError as e:
-        report.mark('SUBSCRIPTION_DIRECT', 'INFO', 'Прямое обновление недоступно; пробую сохранённые/резервные профили. ' + text_type(e))
+    if backend == 'xray':
+        try:
+            refresh(None, report)
+        except VPNError as e:
+            report.mark('SUBSCRIPTION_DIRECT', 'INFO', 'Прямое обновление недоступно; пробую сохранённые/резервные профили. ' + text_type(e))
     state = read_json(CATALOG)
     auth = binascii.hexlify(os.urandom(24)).decode('ascii')
     selected = None
@@ -1099,11 +1188,12 @@ def connect(base, report):
                 time.sleep(0.5)
         ip = verify(base, report)
         atomic_json(ACTIVE, {'baseline': base, 'name': selected['name'], 'id': selected['id'],
-                            'auth': auth, 'ip': ip, 'verified_at': now(), 'version': VERSION})
-        try:
-            refresh(auth, report)
-        except VPNError as e:
-            report.mark('SUBSCRIPTION', 'WARN', 'VPN подключён, но актуальная подписка не получена: ' + text_type(e))
+                            'auth': auth, 'ip': ip, 'verified_at': now(), 'version': VERSION, 'backend': backend})
+        if backend == 'xray':
+            try:
+                refresh(auth, report)
+            except VPNError as e:
+                report.mark('SUBSCRIPTION', 'WARN', 'VPN подключён, но актуальная подписка не получена: ' + text_type(e))
         return ip
     except BaseException:
         rollback_new(report)
@@ -1142,6 +1232,8 @@ HELP = """BigSurVPN @VERSION@ — macOS Big Sur 11.x Intel
 
 Без команды выполняется status. Допустимы --status, --test и другие --КОМАНДА.
 Справка и версия не требуют sudo; остальные команды запрашивают права.
+Установщик предлагает Xray или SOCKS5; on использует сохранённый выбор.
+SOCKS5: только TCP через TUN, без шифрования SOCKS5-транспорта.
 Нет kill switch: при отключении VPN возможен прямой интернет.""".replace('@VERSION@', VERSION)
 
 def parse_command(argv):
@@ -1238,14 +1330,16 @@ def stage_install(profile_path, report):
             raise VPNError('Legacy-ядро не запускается на этом Mac или версия не совпадает.')
         report.mark('CORE', 'PASS', 'SHA-256 архива и запуск sing-box ' + CORE_VERSION + ' на этом Mac.')
         # Schema validation by the actual installed core, before network changes.
-        sample = make_config(state['bootstrap'][0], 'schema-check', True)
-        # Avoid resolving a sample hostname in core check; retain the original SNI.
-        sample['outbounds'][0]['server'] = '192.0.2.1'
-        sample_path = stage + '/sample.json'
-        atomic_json(sample_path, sample)
-        check_config(sample_path, stage + '/sing-box')
-        os.unlink(sample_path)
-        # make_config shares outbound data: restore a newly validated catalog.
+        sample_nodes = [state['bootstrap'][0]] + ([state['socks5']] if state.get('socks5') else [])
+        for sample_node in sample_nodes:
+            sample = make_config(sample_node, 'schema-check', True)
+            # No DNS/network is needed for either configuration schema check.
+            sample['outbounds'][0]['server'] = '192.0.2.1'
+            sample_path = stage + '/sample.json'
+            atomic_json(sample_path, sample)
+            check_config(sample_path, stage + '/sing-box')
+            os.unlink(sample_path)
+        # Restore a fresh catalog after checking both sample schemas.
         state = validate_profile(profile)
         shutil.copyfile(os.path.realpath(__file__), stage + '/vpn-runtime.py')
         os.chmod(stage + '/vpn-runtime.py', 0o644)
@@ -1308,8 +1402,11 @@ def finish_connected(base, report):
     return code
 
 def setup(profile_path, report):
-    validate_profile(read_json(profile_path))
+    state = validate_profile(read_json(profile_path))
     check_activation_paths()
+    selected = choose_backend(state)
+    report.data['backend'] = selected
+    report.mark('CHOICE', 'INFO', backend_name(selected))
     try:
         installed = check_install()
     except (VPNError, IOError, OSError, ValueError, KeyError):
@@ -1325,6 +1422,7 @@ def setup(profile_path, report):
         github_check()
         report.mark('BOOTSTRAP_INTERNET', 'PASS', 'HTTPS GitHub доступен для загрузки.')
         staged = stage_install(profile_path, report)
+        staged[1]['backend'] = selected
     try:
         if existing_job:
             report.mark('RECONNECT', 'INFO', 'Останавливаю только собственную службу для нового исходного замера IP; прямой интернет временно возможен.')
@@ -1335,7 +1433,11 @@ def setup(profile_path, report):
             activate_install(staged[0], staged[1], staged[2], staged[3], report)
             staged = None
         else:
-            report.mark('REUSE', 'PASS', 'Используется установленная проверенная версия и локальный профиль.')
+            catalog = read_json(CATALOG)
+            catalog['backend'] = selected
+            atomic_json(CATALOG, catalog)
+            atomic_bytes(BASE + '/vpn-bigsur.sh', b(CLI), 0o755)
+            report.mark('REUSE', 'PASS', 'Используется установленная проверенная версия; выбор подключения сохранён.')
         check_install()
         connect(base, report)
         try:
@@ -1376,6 +1478,11 @@ def turn_on(report):
 
 def list_nodes(select=None):
     state = read_json(CATALOG)
+    if backend_of(state) == 'socks5':
+        if select is not None and select != '1':
+            raise VPNError('В режиме SOCKS5 доступен один сервер: номер 1.')
+        say('1. SOCKS5 резерв. Смена типа подключения: повторите установку.')
+        return
     nodes = state.get('nodes', []) + state['bootstrap']
     if select is not None:
         index = int(select)
@@ -1443,6 +1550,8 @@ def main():
             say('BigSurVPN удалён вместе с локальными профилями и отчётами.')
             return 0
         if cmd == 'status':
+            if os.path.isfile(CATALOG):
+                say('Выбранное подключение: ' + backend_name(backend_of(read_json(CATALOG))))
             say('Служба: ' + ('ПРОЦЕСС ЗАПУЩЕН' if alive() else 'НЕ ЗАПУЩЕН'))
             say('IPv4-маршрут: ' + (route_interface('1.1.1.1') or 'нет данных'))
             if os.path.isfile(ACTIVE):
@@ -1471,6 +1580,10 @@ def main():
                 report.end('PASS_WITH_WARNINGS' if report.warnings() else 'PASS')
                 return 2 if report.warnings() else 0
             if cmd == 'update':
+                if backend_of(read_json(CATALOG)) == 'socks5':
+                    report.end('NOT_APPLICABLE')
+                    say('SOCKS5 использует фиксированные реквизиты. Для обновления запустите установщик; подключение не менялось.')
+                    return 0
                 assert_routes()
                 refresh(read_json(ACTIVE)['auth'], report)
                 report.end('UPDATED')

@@ -5,6 +5,12 @@
     "vless://e700df08-5378-44c4-82aa-61ad4609c1da@service.chitly.ru:443?encryption=none&flow=xtls-rprx-vision&fp=chrome&pbk=yT5RH5fVJa-wG9zjwXFCyvnIm_feW0FZIg6QLSkb-0Y&security=reality&sid=3a6c830e368dbb8d&sni=www.google.com&spx=%2F5f57ac321228d36&type=tcp#Bootstrap%20VLESS%20REALITY"
   ],
   "schema": "bigsur-vpn-profile-v2",
-  "name": "Chitly VPN",
-  "notice": "PUBLIC PERSONAL PRESET. This file grants access to the owner VPN subscription. Published by explicit owner request; rotate credentials after use."
+  "name": "Xray and temporary SOCKS5 reserve",
+  "notice": "PUBLIC TEMPORARY PERSONAL PRESET, published at the explicit request of the owner. These credentials grant VPN/proxy access. Revoke them at the provider after use; deleting this file does not remove Git history.",
+  "socks5": {
+    "server": "144.31.180.114",
+    "port": 45004,
+    "username": "proxy_user",
+    "password": "AiOZTgkvdMjlgeYG"
+  }
 }

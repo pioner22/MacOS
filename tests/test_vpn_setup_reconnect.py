@@ -58,6 +58,8 @@ class SetupReconnectTests(unittest.TestCase):
         install_mock('verify', '198.51.100.2')
         install_mock('finish_connected', 0)
         install_mock('rollback_new')
+        install_mock('atomic_json')
+        install_mock('atomic_bytes')
         self.stack.enter_context(mock.patch.object(vpn.os.path, 'isdir', return_value=True))
         self.cleanup = self.stack.enter_context(mock.patch.object(vpn.shutil, 'rmtree'))
 
@@ -85,7 +87,8 @@ class SetupReconnectTests(unittest.TestCase):
         self.mocks['stage_install'].assert_not_called()
         self.mocks['activate_install'].assert_not_called()
         self.mocks['verify'].assert_not_called()  # no old fast-path verification
-        self.mocks['read_json'].assert_called_once_with('/unused/profile.json')
+        self.assertEqual(self.mocks['read_json'].call_args_list,
+                         [mock.call('/unused/profile.json'), mock.call(vpn.CATALOG)])
 
     def test_same_version_offline_session_is_connected(self):
         self.mocks['info'].side_effect = None

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline regressions for BigSurVPN 2.0.3; no VPN/network/service is started.
+"""Offline regressions for BigSurVPN 2.x; no VPN/network/service is started.
 Run: python3 -m unittest discover -s tests -p 'test_vpn_permissions_cli.py' -v
 Root-only cases use temporary directories and unprivileged subprocesses.
 """
@@ -65,7 +65,7 @@ class CommandTests(unittest.TestCase):
     def test_runtime_help_subprocess(self):
         p = subprocess.run([sys.executable, str(SOURCE), '--help'], capture_output=True)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertIn(b'2.0.3', p.stdout)
+        self.assertIn(vpn.VERSION.encode('ascii'), p.stdout)
 
     def test_shell_syntax(self):
         p = subprocess.run(['/bin/bash', '-n'], input=vpn.CLI.encode(), capture_output=True)
@@ -175,7 +175,7 @@ class PermissionTests(unittest.TestCase):
         vpn.prepare_dirs()
         p = self.as_nobody([str(wrapper), '--help'])
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertIn(b'2.0.3', p.stdout)
+        self.assertIn(vpn.VERSION.encode('ascii'), p.stdout)
 
     def test_idempotent_and_private_bytes_unchanged(self):
         self.make_old()
@@ -298,7 +298,7 @@ class PermissionTests(unittest.TestCase):
         for name in ('help', '--help', '-h', 'version', '--version', '-V'):
             p = self.as_nobody([str(path), name])
             self.assertEqual(p.returncode, 0, p.stderr)
-            self.assertIn(b'2.0.3', p.stdout)
+            self.assertIn(vpn.VERSION.encode('ascii'), p.stdout)
         for args in (['--unknown'], ['status', 'extra'], ['--help', 'extra'],
                      ['select'], [''], ['_serve']):
             p = self.as_nobody([str(path)] + args)
