@@ -16,6 +16,7 @@ USER='proxy_user'
 PASS='AiOZTgkvdMjlgeYG'
 VERSION='2.1.0'
 SELF="$BASE/vpn-socks.sh"
+CHOICE="$PRIVATE/backend"
 LINK=/usr/local/bin/vpn-bigsur
 say(){ printf '%s\\n' "$*"; }
 die(){ say "ОШИБКА: $*" >&2; exit 1; }
@@ -68,6 +69,7 @@ cmd_setup(){
   /bin/mkdir -p /usr/local/bin; /bin/chmod 755 /usr/local /usr/local/bin
   if [ -e "$LINK" ] || [ -L "$LINK" ]; then /bin/rm -f "$LINK"; fi
   /bin/ln -s "$SELF" "$LINK"
+  printf "%s\\n" SOCKS5 > "$CHOICE"; /bin/chmod 600 "$CHOICE"
   cmd_on
  }
 cmd_on(){
