@@ -162,18 +162,22 @@ def prepare_dirs():
     os.chmod(BASE, 0o755)
 
 def prepare_command_dir(prefix='/usr/local'):
-    # Never chown a Homebrew/user-owned directory or follow a symlink.
-    # Existing root-owned 0700 directories are the v2.0.2 umask regression.
+    # /usr/local and /usr/local/bin are commonly user-owned on Intel Macs
+    # (Homebrew and older developer setups). They are shared command-search
+    # directories, so ownership by root is not required. Never chown them.
     owned(os.path.dirname(prefix), directory=True)
     for path in (prefix, prefix + '/bin'):
         created = not os.path.lexists(path)
         if created:
             os.mkdir(path, 0o755)
-        owned(path, directory=True)
-        mode = stat.S_IMODE(os.lstat(path).st_mode)
-        if created or mode == 0o700:
+        s = os.lstat(path)
+        if not stat.S_ISDIR(s.st_mode) or s.st_mode & 0o022:
+            raise VPNError('Небезопасный тип или права каталога команды: ' + path)
+        mode = stat.S_IMODE(s.st_mode)
+        if created or (s.st_uid == 0 and mode == 0o700):
             os.chmod(path, 0o755)
-        elif mode & 0o111 != 0o111:
+            mode = stat.S_IMODE(os.lstat(path).st_mode)
+        if mode & 0o111 != 0o111:
             raise VPNError('Каталог команды недоступен всем пользователям: ' + path)
 
 def check_activation_paths():
