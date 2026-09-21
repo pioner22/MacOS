@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""BigSurVPN 2.0.2. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
+"""BigSurVPN 2.0.3. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
 Public provider preset is DATA. It must never be evaluated as shell/Python code.
 The CLI manages a sing-box TUN launchd job, not an IKEv2/mobileconfig profile.
 """
@@ -38,10 +38,11 @@ try:
 except NameError:
     text_type = str
 
-VERSION = '2.0.2'
+VERSION = '2.0.3'
 BASE = '/Library/BigSurVPN'
 PRIVATE = BASE + '/private'
 CURRENT = BASE + '/current'
+COMMAND_LINK = '/usr/local/bin/vpn-bigsur'
 CORE = CURRENT + '/sing-box'
 CONFIG = PRIVATE + '/config.json'
 CATALOG = PRIVATE + '/profiles.json'
@@ -73,6 +74,9 @@ ENV = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'LC_ALL': 'C', 'LANG': 'C',
 CLOCK = getattr(time, 'monotonic', time.time)
 
 class VPNError(Exception):
+    pass
+
+class UsageError(VPNError):
     pass
 
 def b(value):
@@ -135,7 +139,7 @@ def owned(path, directory=False, private=False):
         raise VPNError('Файл имеет дополнительные жёсткие ссылки: ' + path)
 
 def prepare_dirs():
-    owned('/Library', directory=True)
+    owned(os.path.dirname(BASE), directory=True)
     if not os.path.lexists(BASE):
         os.mkdir(BASE, 0o755)
     owned(BASE, directory=True)
@@ -143,6 +147,7 @@ def prepare_dirs():
         if not os.path.lexists(path):
             os.mkdir(path, mode)
         owned(path, directory=True, private=(mode == 0o700))
+    # Validate all private state BEFORE opening the public parent directory.
     # Do not follow pre-existing links in any root-written private file.
     for name in os.listdir(PRIVATE):
         path = os.path.join(PRIVATE, name)
@@ -150,6 +155,37 @@ def prepare_dirs():
             raise VPNError('Ссылка в закрытом каталоге: ' + name)
         if os.path.isfile(path):
             owned(path, private=True)
+    # mkdir(mode) is filtered by umask 077. Restore the exact intended modes
+    # only after ownership/type checks, including on a repeated installation.
+    os.chmod(PRIVATE, 0o700)
+    os.chmod(BASE + '/releases', 0o755)
+    os.chmod(BASE, 0o755)
+
+def prepare_command_dir(prefix='/usr/local'):
+    # Never chown a Homebrew/user-owned directory or follow a symlink.
+    # Existing root-owned 0700 directories are the v2.0.2 umask regression.
+    owned(os.path.dirname(prefix), directory=True)
+    for path in (prefix, prefix + '/bin'):
+        created = not os.path.lexists(path)
+        if created:
+            os.mkdir(path, 0o755)
+        owned(path, directory=True)
+        mode = stat.S_IMODE(os.lstat(path).st_mode)
+        if created or mode == 0o700:
+            os.chmod(path, 0o755)
+        elif mode & 0o111 != 0o111:
+            raise VPNError('Каталог команды недоступен всем пользователям: ' + path)
+
+def check_activation_paths():
+    prepare_command_dir()
+    cli_path = COMMAND_LINK
+    if os.path.lexists(cli_path):
+        if not (os.path.islink(cli_path) and os.lstat(cli_path).st_uid == 0
+                and os.readlink(cli_path) == BASE + '/vpn-bigsur.sh'):
+            raise VPNError('Имя /usr/local/bin/vpn-bigsur уже занято; чужой файл не перезаписываю.')
+    if os.path.lexists(CURRENT) and not os.path.islink(CURRENT):
+        raise VPNError('current должен быть ссылкой управляемой установки.')
+    return cli_path
 
 class Report(object):
     def __init__(self, operation):
@@ -924,13 +960,13 @@ def refresh(auth, report):
     report.mark('SUBSCRIPTION', 'PASS', 'Получено %s совместимых серверов; пропущено %s.' % (len(nodes), skipped))
 
 def candidates(state):
-    seen, result = set(), []
+    seen, result = [], []
     all_nodes = state.get('nodes', []) + state.get('bootstrap', [])
     preferred = [x for x in all_nodes if x['id'] == state.get('preferred')]
     for n in preferred + state.get('nodes', [])[:6] + state.get('bootstrap', []):
         if n['id'] not in seen:
             result.append(n)
-            seen.add(n['id'])
+            seen.append(n['id'])
     return result[:9]
 
 def baseline(report):
@@ -1085,14 +1121,72 @@ def rollback_new(report):
         say('[%s] ROLLBACK: %s (отчёт на диск не записан).' % (status, detail))
 
 
+COMMAND_ARITIES = {'setup': 1, 'select': 1, 'on': 0, 'off': 0, 'status': 0,
+                   'test': 0, 'speed': 0, 'list': 0, 'update': 0, 'report': 0,
+                   'logs': 0, 'uninstall': 0, 'help': 0, 'version': 0}
+HELP = """BigSurVPN @VERSION@ — macOS Big Sur 11.x Intel
+Использование: vpn-bigsur КОМАНДА [АРГУМЕНТ]
+
+  status       Состояние службы и маршрута (без нового теста соединения)
+  test         Проверить подключение, DNS, HTTPS и выходной IP
+  on / off     Включить / выключить VPN
+  speed        Проверить VPN и измерить скорость
+  list         Список серверов
+  select N     Выбрать приоритетный сервер по номеру
+  update       Обновить подписку серверов, НЕ программу
+  report       Последний отчёт
+  logs         Диагностические журналы
+  uninstall    Отключить VPN и удалить установку с локальными профилями
+  help         Эта справка (также --help, -h)
+  version      Версия программы (также --version, -V)
+
+Без команды выполняется status. Допустимы --status, --test и другие --КОМАНДА.
+Справка и версия не требуют sudo; остальные команды запрашивают права.
+Нет kill switch: при отключении VPN возможен прямой интернет.""".replace('@VERSION@', VERSION)
+
+def parse_command(argv):
+    if argv == ['_serve']:
+        return '_serve', []  # internal launchd entry, not a public CLI command
+    command = argv[0] if argv else 'status'
+    args = list(argv[1:])
+    command = {'-h': 'help', '-V': 'version'}.get(command, command)
+    if command.startswith('--'):
+        command = command[2:]
+    if command not in COMMAND_ARITIES or len(args) != COMMAND_ARITIES[command]:
+        raise UsageError('Неизвестная команда или неверное число аргументов. Справка: vpn-bigsur --help')
+    return command, args
+
 CLI = '''#!/bin/bash
 set +x
 set -euo pipefail
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 unset PYTHONPATH PYTHONHOME BASH_ENV ENV CDPATH
-if [ "$EUID" -ne 0 ]; then exec /usr/bin/sudo /bin/bash /Library/BigSurVPN/vpn-bigsur.sh "$@"; fi
-exec /usr/bin/python -E -s -B /Library/BigSurVPN/current/vpn-runtime.py "${@:-status}"
-'''
+if [ "$#" -eq 0 ]; then set -- status; fi
+command=$1
+shift
+case "$command" in
+  -h) command=help ;;
+  -V) command=version ;;
+  --*) command=${command#--} ;;
+esac
+case "$command" in
+  setup|select) expected=1 ;;
+  on|off|status|test|speed|list|update|report|logs|uninstall|help|version) expected=0 ;;
+  *) printf '%s\\n' 'ОШИБКА команды. Справка: vpn-bigsur --help' >&2; exit 2 ;;
+esac
+if [ "$#" -ne "$expected" ]; then
+  printf '%s\\n' 'ОШИБКА числа аргументов. Справка: vpn-bigsur --help' >&2
+  exit 2
+fi
+case "$command" in
+  help) printf '%s\\n' '@HELP@'; exit 0 ;;
+  version) printf '%s\\n' 'BigSurVPN @VERSION@'; exit 0 ;;
+esac
+if [ "$EUID" -ne 0 ]; then
+  exec /usr/bin/sudo /bin/bash /Library/BigSurVPN/vpn-bigsur.sh "$command" "$@"
+fi
+exec /usr/bin/python -E -s -B /Library/BigSurVPN/current/vpn-runtime.py "$command" "$@"
+'''.replace('@VERSION@', VERSION).replace('@HELP@', HELP)
 
 def extract_core(archive, output):
     with tarfile.open(archive, 'r:gz') as tf:
@@ -1167,14 +1261,7 @@ def stage_install(profile_path, report):
 
 def activate_install(stage, state, profile, meta, report):
     # New release installed beside previous releases. The old release is retained.
-    cli_path = '/usr/local/bin/vpn-bigsur'
-    if os.path.lexists(cli_path) and not (os.path.islink(cli_path) and os.readlink(cli_path) == BASE + '/vpn-bigsur.sh'):
-        raise VPNError('Имя /usr/local/bin/vpn-bigsur уже занято; чужой файл не перезаписываю.')
-    for path in ('/usr/local','/usr/local/bin'):
-        if os.path.islink(path):
-            raise VPNError(path + ' является ссылкой; установка команды отменена.')
-    if os.path.lexists(CURRENT) and not os.path.islink(CURRENT):
-        raise VPNError('current должен быть ссылкой управляемой установки.')
+    cli_path = check_activation_paths()
     release = BASE + '/releases/' + VERSION + '-' + meta['hashes']['vpn-runtime.py'][:12] + '-' + binascii.hexlify(os.urandom(3)).decode('ascii')
     os.rename(stage, release)
     # Preserve a bounded backup of private configuration, never source arbitrary data.
@@ -1195,8 +1282,6 @@ def activate_install(stage, state, profile, meta, report):
     link = BASE + '/.current-' + binascii.hexlify(os.urandom(8)).decode('ascii')
     os.symlink('releases/' + os.path.basename(release), link)
     os.rename(link, CURRENT)
-    if not os.path.isdir('/usr/local/bin'):
-        os.makedirs('/usr/local/bin', 0o755)
     if not os.path.lexists(cli_path):
         os.symlink(BASE + '/vpn-bigsur.sh', cli_path)
     atomic_bytes(BASE + '/VERSION', b(VERSION + '\n'), 0o644)
@@ -1224,17 +1309,14 @@ def finish_connected(base, report):
 
 def setup(profile_path, report):
     validate_profile(read_json(profile_path))
+    check_activation_paths()
     try:
         installed = check_install()
     except (VPNError, IOError, OSError, ValueError, KeyError):
         installed = None
     same = installed and installed.get('version') == VERSION and installed['hashes']['vpn-runtime.py'] == digest(os.path.realpath(__file__)) and installed.get('profile_sha256') == digest(profile_path)
-    if same and alive() and os.path.isfile(ACTIVE):
-        report.mark('REUSE', 'PASS', 'Установка не менялась и служба запущена. Проверяю её без отключения.')
-        base = read_json(ACTIVE).get('baseline', {})
-        report.data['baseline'] = base
-        verify(base, report)
-        return finish_connected(base, report)
+    # Re-running the one-command installer always recreates its connection.
+    # Reuse verified program files, never an old active session or baseline.
     staged = None
     existing_job = bool(info())
     base = None if existing_job else baseline(report)
@@ -1310,6 +1392,13 @@ def interrupt(signum, frame):
     raise KeyboardInterrupt()
 
 def main():
+    cmd, args = parse_command(sys.argv[1:])
+    if cmd == 'help':
+        say(HELP)
+        return 0
+    if cmd == 'version':
+        say('BigSurVPN ' + VERSION)
+        return 0
     signal.signal(signal.SIGTERM, interrupt)
     signal.signal(signal.SIGHUP, interrupt)
     os.umask(0o077)
@@ -1320,19 +1409,13 @@ def main():
     if not os.path.isdir('/System/Volumes/Data'):
         raise VPNError('Internet Recovery не поддерживается.')
     prepare_dirs()
-    if sys.argv[1:] == ['_serve']:
+    if cmd == '_serve':
         return serve()
     with open(PRIVATE + '/command.lock','a') as lock:
         try:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except IOError:
             raise VPNError('Другая команда VPN ещё выполняется.')
-        cmd = sys.argv[1] if len(sys.argv) > 1 else 'status'
-        args = sys.argv[2:]
-        arities = {'setup': 1, 'select': 1, 'on': 0, 'off': 0, 'status': 0, 'test': 0, 'speed': 0,
-                   'list': 0, 'update': 0, 'report': 0, 'logs': 0, 'uninstall': 0}
-        if cmd not in arities or len(args) != arities[cmd]:
-            raise VPNError('Неизвестная команда или неверное число аргументов. Пример: vpn-bigsur select 2')
         if cmd == 'report':
             say(json.dumps(read_json(REPORT), ensure_ascii=False, indent=2))
             return 0
@@ -1353,7 +1436,7 @@ def main():
         if cmd == 'uninstall':
             check_install()
             stop()
-            link = '/usr/local/bin/vpn-bigsur'
+            link = COMMAND_LINK
             if os.path.islink(link) and os.readlink(link) == BASE + '/vpn-bigsur.sh':
                 os.unlink(link)
             shutil.rmtree(BASE)
@@ -1402,6 +1485,9 @@ def main():
 if __name__ == '__main__':
     try:
         sys.exit(main())
+    except UsageError as e:
+        say('ОШИБКА команды: ' + text_type(e))
+        sys.exit(2)
     except VPNError as e:
         say('ОШИБКА: ' + text_type(e))
         sys.exit(1)
