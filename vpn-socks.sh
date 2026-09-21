@@ -19,7 +19,14 @@ SELF="$BASE/vpn-socks.sh"
 LINK=/usr/local/bin/vpn-bigsur
 say(){ printf '%s\\n' "$*"; }
 die(){ say "ОШИБКА: $*" >&2; exit 1; }
-need_root(){ if [ "$EUID" -ne 0 ]; then exec /usr/bin/sudo /bin/bash "$SELF" "$@"; fi; }
+need_root(){
+  if [ "$EUID" -ne 0 ]; then
+    if [ -f "$SELF" ] && [ ! -L "$SELF" ]; then
+      exec /usr/bin/sudo /bin/bash "$SELF" "$@"
+    fi
+    exec /usr/bin/sudo /bin/bash "$0" "$@"
+  fi
+}
 service_for_default_route(){
   local dev svc
   dev=$(/sbin/route -n get default 2>/dev/null | /usr/bin/awk '/^[[:space:]]*interface:/{print $2;exit}')
