@@ -1,5 +1,5 @@
 #!/bin/bash
-# BigSurVPN 2.1.1. One command: download -> configure -> launch -> verify -> speed.
+# BigSurVPN 2.1.2. One command: download -> configure -> launch -> verify -> speed.
 # Usage: curl -fL https://raw.githubusercontent.com/pioner22/MacOS/main/vpn.sh | bash
 # PERSONAL PUBLIC PRESET: the owner explicitly requested embedded VPN access.
 # Anyone able to download vpn-profile.json can use its subscription/credentials.
@@ -11,12 +11,12 @@ bigsur_vpn_bootstrap() (
   export LC_ALL=C
   unset BASH_ENV ENV CDPATH PYTHONHOME PYTHONPATH VPN_INSTALL_KEY
   umask 077
-  local runtime_ref=f5e929b063b5df88d3dd58511252c4787af67c44
-  local runtime_sha=15922c08ce2c4e0fb0f22bc0256c6cd081e07a19ecdb94c7b32ff7964c35103a
+  local runtime_ref=e6cd152f25d0b254667706950a025a881520e3d6
+  local runtime_sha=eb1d89d5c2b3a827064af4b970bb875f73ec159e8fcb76d00cc6927336ab89e5
   local profile_ref=93ccab1365bab351dd10bdf861a5facc53e6a642
   local profile_sha=0d45033f165b47595e78e5127233d8e1e802e7be3391afa7d325702af89524ad
   local work runner
-  printf '%s\n' 'BigSurVPN 2.1.1 — выбор Xray или SOCKS5, установка/обновление и проверка.'
+  printf '%s\n' 'BigSurVPN 2.1.2 — выбор Xray или SOCKS5, установка/обновление и проверка.'
   printf '%s\n' 'При повторном запуске VPN переподключается; временно возможен прямой интернет.'
   printf '%s\n' 'VPN-данные встроены в отдельный публичный профиль. Ключ установки не нужен.'
   [ "$(/usr/bin/uname -s)" = Darwin ] || { printf '%s\n' 'ОШИБКА: требуется macOS.' >&2; exit 1; }
