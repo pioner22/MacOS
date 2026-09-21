@@ -114,7 +114,7 @@ class MenuTests(unittest.TestCase):
         with self.assertRaises(KeyboardInterrupt): self.choose('0\n')
 
     def test_closed_input(self):
-        with self.assertRaises(v.UsageError): self.choose('')
+        with self.assertRaises(v.VPNError): self.choose('')
 
     def test_retries_are_bounded(self):
         with self.assertRaises(v.UsageError): self.choose('bad\nbad\nbad\n2\n')
