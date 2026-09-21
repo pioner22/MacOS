@@ -262,7 +262,21 @@ class PermissionTests(unittest.TestCase):
         self.assertEqual(self.mode(prefix), 0o711)
         self.assertEqual(self.mode(prefix / 'bin'), 0o711)
 
-    def test_user_owned_shared_dir_not_chowned(self):
+    def test_safe_user_owned_shared_dirs_are_accepted_not_chowned(self):
+        prefix = self.temp / 'local'
+        bindir = prefix / 'bin'
+        bindir.mkdir(parents=True)
+        prefix.chmod(0o755)
+        bindir.chmod(0o755)
+        os.chown(str(prefix), 65534, -1)
+        os.chown(str(bindir), 65534, -1)
+        vpn.prepare_command_dir(str(prefix))
+        self.assertEqual(prefix.stat().st_uid, 65534)
+        self.assertEqual(bindir.stat().st_uid, 65534)
+        self.assertEqual(self.mode(prefix), 0o755)
+        self.assertEqual(self.mode(bindir), 0o755)
+
+    def test_user_owned_private_shared_dir_rejected_not_chowned(self):
         prefix = self.temp / 'local'
         prefix.mkdir()
         os.chown(str(prefix), 65534, -1)
