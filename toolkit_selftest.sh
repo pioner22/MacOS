@@ -9,7 +9,7 @@ diag_entry(){
   trap 'exit 130' INT
   trap 'exit 143' TERM HUP
   curl -q -fsSL --retry 0 --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 120 --max-filesize 1048576 \
-    'https://raw.githubusercontent.com/pioner22/MacOS/14656dffb0644c417b72abe2d6bb090c56f70cc2/st.sh' -o "$tmp" || return 3
+    'https://raw.githubusercontent.com/pioner22/MacOS/a5f95d4c02497113c11c8a58f2c2834807053226/st.sh' -o "$tmp" || return 3
   if command -v sha256sum >/dev/null 2>&1;then got=$(sha256sum "$tmp") || return 3
   elif command -v shasum >/dev/null 2>&1;then got=$(shasum -a 256 "$tmp") || return 3
   else return 3;fi

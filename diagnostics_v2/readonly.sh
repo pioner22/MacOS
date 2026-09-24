@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Metadata is obtained twice; the scanner opens only O_RDONLY. No repair/unmount.
 readonly_preflight(){
-  local disk xml contract extra
+  local disk xml contract extra disk_pattern='^disk(0|[1-9][0-9]{0,3})$'
   disk=$1
   case "$disk" in disk0|disk[1-9]*) ;;*)unknown READONLY_DEVICE_INVALID;return 3;;esac
-  [[ "$disk" =~ ^disk(0|[1-9][0-9]{0,3})$ ]] || { unknown READONLY_DEVICE_INVALID;return 3; }
+  # A variable avoids the early Bash 3.2 parser treating ERE parentheses as
+  # shell tokens; the same anchored disk-ID restriction remains in force.
+  [[ "$disk" =~ $disk_pattern ]] || { unknown READONLY_DEVICE_INVALID;return 3; }
   xml=$(pf_read 12 "${DIAG_DISKUTIL:-diskutil}" info -plist "/dev/$disk") || { unknown READONLY_METADATA_UNAVAILABLE;return 3; }
   printf '%s\n' "$xml" > "$STEP_DIR/read-target.plist" || return 3
   contract=$(perl "$ROOT/storage_readonly.pl" --metadata "$disk" < "$STEP_DIR/read-target.plist") || {

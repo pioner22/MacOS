@@ -3,56 +3,56 @@
 # Text reports only; no automatic upload, repair verdict, or unverified PASS.
 next_step(){
   if [ "${2:-}" = PASS ];then
-    say 'RU: Завершён только указанный этап и объём. Остальные проверки не заменены.'
-    say 'EN: Only the stated stage and coverage completed; other checks are not replaced.'
+    say 'RU: Завершён только указанный этап и объём. Остальные проверки не заменены.' || return 3
+    say 'EN: Only the stated stage and coverage completed; other checks are not replaced.' || return 3
     return 0
   fi
   case "$1" in
     READONLY_NOT_AUTHORIZED|READONLY_PROFILE_UNAVAILABLE|READONLY_TOOLS_UNAVAILABLE|READONLY_PERL_CAPABILITY_UNAVAILABLE|READONLY_DEVICE_LIST_UNAVAILABLE|READONLY_DEVICE_INVALID|READONLY_METADATA_UNAVAILABLE|READONLY_PHYSICAL_WHOLE_DISK_NOT_CONFIRMED|READONLY_METADATA_INVALID|READONLY_TARGET_CHANGED)
-      say 'RU: Чтение накопителя не начиналось: нет подтверждения или не пройдена предварительная проверка. Данные на диске этим этапом не проверены.'
-      say 'EN: Drive reading did not start: consent or preflight is missing. This stage did not test disk contents.';;
+      say 'RU: Чтение накопителя не начиналось: нет подтверждения или не пройдена предварительная проверка. Данные на диске этим этапом не проверены.' || return 3
+      say 'EN: Drive reading did not start: consent or preflight is missing. This stage did not test disk contents.' || return 3;;
     READONLY_*)
-      say 'RU: Проверено только чтение выбранных диапазонов. Смотрите раздел HDD/SSD READ ONLY, engine.log и read-target.tsv. Данные не исправлялись; при ошибке сохраните важные файлы, не запускайте повторную нагрузку.'
-      say 'EN: Only selected-range readability was tested. See HDD/SSD READ ONLY, engine.log and read-target.tsv. No repair was performed; preserve valuable data and avoid repeated load after errors.';;
+      say 'RU: Проверено только чтение выбранных диапазонов. Смотрите раздел HDD/SSD READ ONLY, engine.log и read-target.tsv. Данные не исправлялись; при ошибке сохраните важные файлы, не запускайте повторную нагрузку.' || return 3
+      say 'EN: Only selected-range readability was tested. See HDD/SSD READ ONLY, engine.log and read-target.tsv. No repair was performed; preserve valuable data and avoid repeated load after errors.' || return 3;;
     *COVERAGE*|*BUDGET*|RAM_MAP_REQUIRES_NATIVE)
-      say 'RU: См. coverage.tsv: исходный план не выполнен либо карта недоступна. Уменьшенный объём не даёт RAM PASS.'
-      say 'EN: See coverage.tsv: the original plan is incomplete or mapping unavailable. Reduced coverage cannot pass the RAM plan.';;
+      say 'RU: См. coverage.tsv: исходный план не выполнен либо карта недоступна. Уменьшенный объём не даёт RAM PASS.' || return 3
+      say 'EN: See coverage.tsv: the original plan is incomplete or mapping unavailable. Reduced coverage cannot pass the RAM plan.' || return 3;;
     *UNAVAILABLE*|*INVALID*|*UNKNOWN*|*MISSING*|SUPPORT_NO_*)
-      say 'RU: Не выполнены условия запуска. Смотрите причину и probes.log; аппаратная неисправность не установлена.'
-      say 'EN: A prerequisite is unavailable. Inspect the reason and probes.log; no hardware diagnosis is established.';;
+      say 'RU: Не выполнены условия запуска. Смотрите причину и probes.log; аппаратная неисправность не установлена.' || return 3
+      say 'EN: A prerequisite is unavailable. Inspect the reason and probes.log; no hardware diagnosis is established.' || return 3;;
     *SCREEN_CLEAN*)
-      say 'RU: Скрининг не нашёл несовпадений, но нативное полное покрытие не получено. INCONCLUSIVE здесь не означает поломку.'
-      say 'EN: Screening found no mismatch but native coverage is missing. INCONCLUSIVE here does not mean faulty hardware.';;
+      say 'RU: Скрининг не нашёл несовпадений, но нативное полное покрытие не получено. INCONCLUSIVE здесь не означает поломку.' || return 3
+      say 'EN: Screening found no mismatch but native coverage is missing. INCONCLUSIVE here does not mean faulty hardware.' || return 3;;
     *COMPILER*|*BUILD*|*CLANG*|*TOOLCHAIN*)
-      say 'RU: Нативному движку нужен рабочий совместимый компилятор или проверенный бинарник. В Recovery используйте доступный ограниченный скрининг. Ошибка сборки не доказывает дефект оборудования.'
-      say 'EN: A native engine needs a compatible toolchain or verified binary; Recovery may offer limited screening. A build error is not a hardware diagnosis.';;
+      say 'RU: Нативному движку нужен рабочий совместимый компилятор или проверенный бинарник. В Recovery используйте доступный ограниченный скрининг. Ошибка сборки не доказывает дефект оборудования.' || return 3
+      say 'EN: A native engine needs a compatible toolchain or verified binary; Recovery may offer limited screening. A build error is not a hardware diagnosis.' || return 3;;
     *RESOURCE*|*RAM_INCOMPLETE*|*MLOCK*)
-      say 'RU: Смотрите engine.log: mlock, нехватка ресурсов или тайм-аут. Закройте приложения; не считайте это битой RAM.'
-      say 'EN: Inspect engine.log for mlock, resource limits or timeout. Close applications; do not diagnose faulty RAM from this alone.';;
+      say 'RU: Смотрите engine.log: mlock, нехватка ресурсов или тайм-аут. Закройте приложения; не считайте это битой RAM.' || return 3
+      say 'EN: Inspect engine.log for mlock, resource limits or timeout. Close applications; do not diagnose faulty RAM from this alone.' || return 3;;
     *INTERRUPT*)
-      say 'RU: Тест остановлен. Незавершённые этапы не пройдены; повторный запуск — отдельный сеанс.'
-      say 'EN: Test stopped. Unfinished stages are not passes; a retry is a separate session.';;
+      say 'RU: Тест остановлен. Незавершённые этапы не пройдены; повторный запуск — отдельный сеанс.' || return 3
+      say 'EN: Test stopped. Unfinished stages are not passes; a retry is a separate session.' || return 3;;
     *RAM_DATA*|*CPU_RAM*)
-      say 'RU: Нагрузка остановлена. Сохраните журнал и подтвердите несовпадение независимым инструментом перед ремонтом платы.'
-      say 'EN: Load stopped. Preserve the log and confirm the mismatch independently before board repair.';;
+      say 'RU: Нагрузка остановлена. Сохраните журнал и подтвердите несовпадение независимым инструментом перед ремонтом платы.' || return 3
+      say 'EN: Load stopped. Preserve the log and confirm the mismatch independently before board repair.' || return 3;;
     *DOWNLOAD*|*HTTPS*|*REMOTE*)
-      say 'RU: Проверьте HTTP/curl и наличие эталонного файла; повторите через другую сеть. Не назначайте виновным SSD или RAM по сетевой ошибке.'
-      say 'EN: Check HTTP/curl and fixture availability; retry on another network. A network error alone does not identify SSD or RAM faults.';;
+      say 'RU: Проверьте HTTP/curl и наличие эталонного файла; повторите через другую сеть. Не назначайте виновным SSD или RAM по сетевой ошибке.' || return 3
+      say 'EN: Check HTTP/curl and fixture availability; retry on another network. A network error alone does not identify SSD or RAM faults.' || return 3;;
     *AUTHORIZ*|*CONSENT*)
-      say 'RU: Запись не разрешена и не запускалась. Для файлового этапа нужен отдельный выбор каталога и подтверждение.'
-      say 'EN: Writing was not authorized or started. File testing needs a selected directory and explicit consent.';;
+      say 'RU: Запись не разрешена и не запускалась. Для файлового этапа нужен отдельный выбор каталога и подтверждение.' || return 3
+      say 'EN: Writing was not authorized or started. File testing needs a selected directory and explicit consent.' || return 3;;
     *FULL*MACOS*|*NON_MACOS*|*PROFILE*)
-      say 'RU: Проверьте фактически загруженную ОС и профиль. Recovery выбирает сценарии по доступным инструментам; не подменяйте загруженную ОС целевым установщиком.'
-      say 'EN: Check the running OS and profile. Recovery chooses capability-based scenarios; do not substitute an installer target for the running OS.';;
+      say 'RU: Проверьте фактически загруженную ОС и профиль. Recovery выбирает сценарии по доступным инструментам; не подменяйте загруженную ОС целевым установщиком.' || return 3
+      say 'EN: Check the running OS and profile. Recovery chooses capability-based scenarios; do not substitute an installer target for the running OS.' || return 3;;
     *GPU*)
-      say 'RU: Сохраните журнал сборки и Metal. Этот тест охватывает путь GPU/драйвер/RAM, а не отдельную микросхему VRAM.'
-      say 'EN: Keep the build and Metal logs. This tests the GPU/driver/RAM path, not an isolated VRAM chip.';;
+      say 'RU: Сохраните журнал сборки и Metal. Этот тест охватывает путь GPU/драйвер/RAM, а не отдельную микросхему VRAM.' || return 3
+      say 'EN: Keep the build and Metal logs. This tests the GPU/driver/RAM path, not an isolated VRAM chip.' || return 3;;
     *FILE*|*IO_PATH*)
-      say 'RU: Сохраните engine.log и оставленный тестовый файл. Проверьте том, свободное место, кабель и независимый RAM-тест.'
-      say 'EN: Preserve engine.log and any retained test file. Check the volume, free space, cable and independent RAM results.';;
+      say 'RU: Сохраните engine.log и оставленный тестовый файл. Проверьте том, свободное место, кабель и независимый RAM-тест.' || return 3
+      say 'EN: Preserve engine.log and any retained test file. Check the volume, free space, cable and independent RAM results.' || return 3;;
     *)
-      say 'RU: Ориентируйтесь на состояние и причину этого этапа. Неполный результат не является PASS; сведения не являются тестом железа.'
-      say 'EN: Follow this stage state and reason. An incomplete result is not PASS; inventory is not a hardware test.';;
+      say 'RU: Ориентируйтесь на состояние и причину этого этапа. Неполный результат не является PASS; сведения не являются тестом железа.' || return 3
+      say 'EN: Follow this stage state and reason. An incomplete result is not PASS; inventory is not a hardware test.' || return 3;;
   esac
 }
 report_render(){
@@ -60,83 +60,89 @@ report_render(){
   final=${1:-RUNNING}
   [ -n "${SESSION:-}" ] && [ -f "$SESSION/summary.tsv" ] || return 3
   {
-    printf '# Mac Hardware Diagnostics %s — RU / EN\n\n' "$DIAG_VERSION"
-    printf 'Состояние / State: **%s**\n\n' "$final"
-    printf 'Исполнение / Execution: **%s**\n\n' "${SESSION_EXECUTION_STATE:-RUNNING}"
+    printf '# Mac Hardware Diagnostics %s — RU / EN\n\n' "$DIAG_VERSION" || return 3
+    printf 'Состояние / State: **%s**\n\n' "$final" || return 3
+    printf 'Исполнение / Execution: **%s**\n\n' "${SESSION_EXECUTION_STATE:-RUNNING}" || return 3
     if [ "${MODE:-}" = selftest ];then
-      printf 'Область: только программный комплект; оборудование не проверялось.\nScope: software toolkit only; hardware was not tested.\n\n'
+      printf 'Область: только программный комплект; оборудование не проверялось.\nScope: software toolkit only; hardware was not tested.\n\n' || return 3
     fi
-    printf 'CLOCK_TRUST=UNVERIFIED: системное время не удостоверено / wall clock not authenticated.\n\n'
-    printf 'После завершения: выход из программы; следующий запуск — новый сеанс.\nAfter completion: exit; the next launch starts a new session.\n\n'
-    printf 'Режим / Mode: `%s`  \nРевизия / Code revision: `%s`\n\n' "${MODE:-unknown}" "${MACDIAG_CODE_REF:-LOCAL_UNPINNED}"
-    printf 'Начало UTC / Started UTC: %s  \nОбновлено UTC / Updated UTC: %s\n\n' "${SESSION_STARTED:-unknown}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf 'Это отчёт о выполненных проверках, не сертификат исправности.\nThis reports completed checks, not whole-machine certification.\n\n'
-    printf '```text\n';cat "$SESSION/profile.txt" 2>/dev/null;printf '\n```\n\n'
+    printf 'CLOCK_TRUST=UNVERIFIED: системное время не удостоверено / wall clock not authenticated.\n\n' || return 3
+    printf 'После завершения: выход из программы; следующий запуск — новый сеанс.\nAfter completion: exit; the next launch starts a new session.\n\n' || return 3
+    printf 'Режим / Mode: `%s`  \nРевизия / Code revision: `%s`\n\n' "${MODE:-unknown}" "${MACDIAG_CODE_REF:-LOCAL_UNPINNED}" || return 3
+    printf 'Начало UTC / Started UTC: %s  \nОбновлено UTC / Updated UTC: %s\n\n' "${SESSION_STARTED:-unknown}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" || return 3
+    printf 'Это отчёт о выполненных проверках, не сертификат исправности.\nThis reports completed checks, not whole-machine certification.\n\n' || return 3
+    printf '```text\n' || return 3
+    cat "$SESSION/profile.txt" 2>/dev/null || return 3
+    printf '\n```\n\n' || return 3
     if [ -f "$SESSION/capabilities.tsv" ];then
-      printf '## Возможности среды / Environment capabilities\n\n```text\n'
-      cat "$SESSION/capabilities.tsv";printf '```\n\n'
+      printf '## Возможности среды / Environment capabilities\n\n```text\n' || return 3
+      cat "$SESSION/capabilities.tsv" || return 3
+      printf '```\n\n' || return 3
     fi
     if [ -f "$SESSION/dispatch-plan.tsv" ];then
-      printf '## Совместимость / Compatibility — NOT test results\n\n```text\n'
-      cat "$SESSION/registry-selection.txt" "$SESSION/tool-capabilities.tsv" "$SESSION/dispatch-plan.tsv"
-      printf '\n```\n\n'
+      printf '## Совместимость / Compatibility — NOT test results\n\n```text\n' || return 3
+      cat "$SESSION/registry-selection.txt" "$SESSION/tool-capabilities.tsv" "$SESSION/dispatch-plan.tsv" || return 3
+      printf '\n```\n\n' || return 3
     fi
-    printf '| Этап / Stage | Состояние / State | Причина / Reason |\n|---|---|---|\n'
+    printf '| Этап / Stage | Состояние / State | Причина / Reason |\n|---|---|---|\n' || return 3
     while IFS=$'\t' read -r stage state reason location;do
       [ -n "$stage" ] || continue
-      printf '| %s | %s | %s |\n' "$stage" "$state" "$reason"
-    done < "$SESSION/summary.tsv"
+      printf '| %s | %s | %s |\n' "$stage" "$state" "$reason" || return 3
+    done < "$SESSION/summary.tsv" || return 3
     if [ -f "$SESSION/plan.txt" ];then
       while IFS= read -r name;do
         [ -n "$name" ] || continue
         if ! awk -F '\t' -v n="$name" '$1==n{ok=1} END{exit ok?0:1}' "$SESSION/summary.tsv";then
-          printf '| %s | NOT_RUN | Не выполнен / Not executed |\n' "$name"
+          printf '| %s | NOT_RUN | Не выполнен / Not executed |\n' "$name" || return 3
         fi
-      done < "$SESSION/plan.txt"
+      done < "$SESSION/plan.txt" || return 3
     fi
-    printf '\n## Покрытие RAM / RAM coverage\n\n'
-    printf 'completed_mib означает полностью завершённый набор шаблонов. Ноль при прерывании не означает отсутствия частичной работы.\ncompleted_mib counts a complete pattern set; zero on interruption does not mean no partial work.\n\n'
+    printf '\n## Покрытие RAM / RAM coverage\n\n' || return 3
+    printf 'completed_mib означает полностью завершённый набор шаблонов. Ноль при прерывании не означает отсутствия частичной работы.\ncompleted_mib counts a complete pattern set; zero on interruption does not mean no partial work.\n\n' || return 3
     while IFS=$'\t' read -r stage state reason location;do
       if [ -f "$location/coverage.tsv" ];then
-        printf '\n### %s\n\n```text\n' "$stage"
-        cat "$location/coverage.tsv";printf '```\n'
+        printf '\n### %s\n\n```text\n' "$stage" || return 3
+        cat "$location/coverage.tsv" || return 3
+        printf '```\n' || return 3
       fi
-    done < "$SESSION/summary.tsv"
+    done < "$SESSION/summary.tsv" || return 3
     while IFS=$'\t' read -r stage state reason location;do
       if [ "$stage" = STORAGE_READONLY ] && [ -f "$location/read-target.tsv" ];then
-        printf '\n## HDD/SSD READ ONLY — только чтение\n\n'
-        printf 'No test data are written. PASS only covers readability, not correctness of existing files, write ability or filesystem consistency.\n'
-        printf 'PASS означает только чтение указанного объёма, не исправность всех узлов и не проверку записи. ОС и журналы могут писать отдельно.\n\n```text\n'
-        cat "$location/read-target.tsv"
+        printf '\n## HDD/SSD READ ONLY — только чтение\n\n' || return 3
+        printf 'No test data are written. PASS only covers readability, not correctness of existing files, write ability or filesystem consistency.\n' || return 3
+        printf 'PASS означает только чтение указанного объёма, не исправность всех узлов и не проверку записи. ОС и журналы могут писать отдельно.\n\n```text\n' || return 3
+        cat "$location/read-target.tsv" || return 3
         if [ -f "$location/engine.log" ];then
-          awk '/^READ_PROGRESS/{last=$0} /^(READONLY_(SCOPE|CLOCK|BEGIN|SUMMARY)|READ_(IO_ERROR|SEEK_ERROR|UNEXPECTED_EOF))/{print} END{if(last!="")print last}' "$location/engine.log" || :
+          awk '/^READ_PROGRESS/{last=$0} /^(READONLY_(SCOPE|CLOCK|BEGIN|SUMMARY)|READ_(IO_ERROR|SEEK_ERROR|UNEXPECTED_EOF))/{print} END{if(last!="")print last}' "$location/engine.log" || return 3
         fi
-        printf '```\n'
+        printf '```\n' || return 3
       fi
-    done < "$SESSION/summary.tsv"
-    printf '\n## Действия / Next steps\n\n'
+    done < "$SESSION/summary.tsv" || return 3
+    printf '\n## Действия / Next steps\n\n' || return 3
     while IFS=$'\t' read -r stage state reason location;do
       [ -n "$stage" ] && [ "$state" != NOT_RUN ] || continue
-      printf '\n### %s — %s\n\n' "$stage" "$state"
+      printf '\n### %s — %s\n\n' "$stage" "$state" || return 3
       # A child's earlier PASS description is not the final conclusion after
       # a crash, log error or signal. Keep the original file as private evidence.
       if [ -f "$location/explanation.txt" ] && [ -f "$location/result.tsv" ] &&
          awk -F '\t' -v s="$state" -v r="$reason" 'NR==1 && NF==3 && $1==s && $3==r {ok=1} END{exit (NR==1&&ok)?0:1}' "$location/result.tsv";then
-        cat "$location/explanation.txt"
+        cat "$location/explanation.txt" || return 3
       else
-        printf 'RU: Итог определён по завершению процесса и журналу; раннее сообщение движка не заменяет этот результат.\nEN: Final state follows process completion and logging; an earlier engine message does not override it.\n'
+        printf 'RU: Итог определён по завершению процесса и журналу; раннее сообщение движка не заменяет этот результат.\nEN: Final state follows process completion and logging; an earlier engine message does not override it.\n' || return 3
       fi
-      next_step "$reason" "$state"
-      [ ! -f "$location/leftover-files.txt" ] || cat "$location/leftover-files.txt"
-      printf '\nЖурнал / Log: `%s/output.log`\n' "$location"
-    done < "$SESSION/summary.tsv"
-    printf '\n## Ограничения / Limits\n\n'
-    printf 'NOT_RUN, INCONCLUSIVE и прерывание не являются PASS. FAIL обозначает ошибку проверяемого пути, не локализует микросхему.\n'
-    printf 'NOT_RUN, INCONCLUSIVE and interruption are not passes. FAIL identifies a tested-path error, not a specific component.\n\n'
-    printf 'Файловая проверка не охватывает весь SSD. GPU: 256 МиБ на устройство. Адрес RAM — смещение выделения, не адрес чипа.\n'
-    printf 'File testing does not cover the entire SSD. GPU: 256 MiB per device. RAM offsets are allocation-relative, not chip addresses.\n\n'
-    printf 'Логи могут содержать идентификаторы оборудования. Автоматическая отправка отсутствует. При потере питания возможна потеря конца журнала.\n'
-    printf 'Logs may contain hardware identifiers. No automatic upload. Sudden power loss can lose buffered output.\n'
+      next_step "$reason" "$state" || return 3
+      if [ -f "$location/leftover-files.txt" ];then
+        cat "$location/leftover-files.txt" || return 3
+      fi
+      printf '\nЖурнал / Log: `%s/output.log`\n' "$location" || return 3
+    done < "$SESSION/summary.tsv" || return 3
+    printf '\n## Ограничения / Limits\n\n' || return 3
+    printf 'NOT_RUN, INCONCLUSIVE и прерывание не являются PASS. FAIL обозначает ошибку проверяемого пути, не локализует микросхему.\n' || return 3
+    printf 'NOT_RUN, INCONCLUSIVE and interruption are not passes. FAIL identifies a tested-path error, not a specific component.\n\n' || return 3
+    printf 'Файловая проверка не охватывает весь SSD. GPU: 256 МиБ на устройство. Адрес RAM — смещение выделения, не адрес чипа.\n' || return 3
+    printf 'File testing does not cover the entire SSD. GPU: 256 MiB per device. RAM offsets are allocation-relative, not chip addresses.\n\n' || return 3
+    printf 'Логи могут содержать идентификаторы оборудования. Автоматическая отправка отсутствует. При потере питания возможна потеря конца журнала.\n' || return 3
+    printf 'Logs may contain hardware identifiers. No automatic upload. Sudden power loss can lose buffered output.\n' || return 3
   } > "$SESSION/report.tmp" || return 3
   mv "$SESSION/report.tmp" "$SESSION/REPORT_RU_EN.md"
 }
