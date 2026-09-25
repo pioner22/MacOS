@@ -1,0 +1,8 @@
+{
+  "version": "0.1.0",
+  "build": 1,
+  "minimum_system_version": "11.0.0",
+  "architecture": "x86_64",
+  "bundle_id": "ru.pioner22.BigSurVPN",
+  "feed_url": "https://raw.githubusercontent.com/pioner22/MacOS/main/vpn-app/updates/appcast.xml"
+}
