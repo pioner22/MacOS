@@ -7,7 +7,7 @@ var dependencies: [Package.Dependency] = []
 var products: [Product] = [.library(name: "UpdatePolicy", targets: ["UpdatePolicy"])]
 var targets: [Target] = [
     .target(name: "UpdatePolicy"),
-    .testTarget(name: "UpdatePolicyTests", dependencies: ["UpdatePolicy"])
+    .testTarget(name: "UpdatePolicyTests", dependencies: ["UpdatePolicy"], path: "SwiftTests/UpdatePolicyTests")
 ]
 #if os(macOS)
 dependencies.append(.package(
