@@ -1,0 +1,43 @@
+name: BigSurVPN app updater
+on:
+  pull_request:
+    paths:
+      - 'vpn-app/**'
+      - '.github/workflows/vpn-app.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vpn-app-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Release metadata and safety checks
+        run: python3 -m unittest discover -s vpn-app/tests -v
+  native-build:
+    runs-on: macos-15-intel
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Record toolchain
+        run: |
+          xcodebuild -version
+          xcrun swift --version
+      - name: Build development application and run Swift tests
+        run: python3 vpn-app/tools/build_release.py build --development --output "$RUNNER_TEMP/BigSurVPN.app"
+      - name: Archive development application preserving signatures and symlinks
+        run: ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/BigSurVPN.app" "$RUNNER_TEMP/BigSurVPN-development.zip"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: BigSurVPN-development-NOT-A-SIGNED-RELEASE
+          path: ${{ runner.temp }}/BigSurVPN-development.zip
+          if-no-files-found: error
+          retention-days: 7
