@@ -182,6 +182,24 @@ def prepare(args):
     print('Prepared, not published. Test N -> N+1 on Big Sur before publishing the signed feed.')
 
 
+def report_compiler_failure(error):
+    """Expose bounded Swift diagnostics without printing signing arguments/env."""
+    if not isinstance(error, (subprocess.CalledProcessError, subprocess.TimeoutExpired)):
+        return
+    command = error.cmd
+    if not isinstance(command, (list, tuple)) or list(command[:2]) != ['/usr/bin/xcrun', 'swift']:
+        return  # do not echo signing, keychain or notarization output
+    for label, text in [('Swift stdout', error.stdout), ('Swift stderr', error.stderr)]:
+        if isinstance(text, bytes):
+            text = text.decode('utf-8', 'replace')
+        if not text:
+            continue
+        # Remove ANSI/control sequences before writing a bounded excerpt to CI.
+        text = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', text[-16000:])
+        text = re.sub(r'[\x00-\x08\x0b-\x1f\x7f-\x9f]', '', text)
+        print(label + ':\n' + text, file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='action', required=True)
@@ -208,6 +226,7 @@ def main():
         # Never dump command-line/environment credentials or unbounded build logs.
         message = str(error) if isinstance(error, ValueError) else type(error).__name__
         print('ERROR: ' + message, file=sys.stderr)
+        report_compiler_failure(error)
         return 1
     return 0
 

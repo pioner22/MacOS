@@ -10,6 +10,9 @@ struct BigSurVPNApp: App {
         WindowGroup("BigSurVPN") {
             UpdatesView(updates: updates)
                 .frame(minWidth: 640, minHeight: 440)
+                .onAppear {
+                    DevelopmentSmokeCheck.finishIfRequested(updates: updates)
+                }
         }
         .commands {
             CommandGroup(after: .appInfo) {
@@ -84,6 +87,32 @@ private struct UpdatesView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(28).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+}
+
+/// Used only by the native CI smoke test. A release build cannot report success
+/// through this path. No VPN command, profile or network setting is accessed.
+@MainActor
+private enum DevelopmentSmokeCheck {
+    private static var finished = false
+
+    static func finishIfRequested(updates: UpdateCenter) {
+        guard ProcessInfo.processInfo.environment["BIGSURVPN_SMOKE_TEST"] == "1",
+              !finished else { return }
+        finished = true
+        guard geteuid() != 0,
+              Bundle.main.object(forInfoDictionaryKey: "VPNReleaseBuild") as? Bool == false,
+              updates.configurationProblem != nil,
+              !updates.buttonEnabled else {
+            FileHandle.standardError.write(Data("BIGSURVPN_NATIVE_SMOKE_FAILED\n".utf8))
+            exit(1)
+        }
+        // onAppear confirms construction of the actual SwiftUI/AppKit window,
+        // including loading the linked Sparkle framework, not just CLI parsing.
+        FileHandle.standardOutput.write(Data("BIGSURVPN_NATIVE_UI_READY_UPDATER_DISABLED\n".utf8))
+        DispatchQueue.main.async {
+            NSApplication.shared.terminate(nil)
         }
     }
 }
