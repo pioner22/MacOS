@@ -4,7 +4,7 @@
 set -e
 REPO='pioner22/MacOS'
 TAG='diagnostic-fixtures-v1'
-BASE='https://raw.githubusercontent.com/pioner22/MacOS/main'
+BASE='https://raw.githubusercontent.com/pioner22/MacOS/main/diagnostics'
 WORK="${TMPDIR:-/tmp}/macos-network-fixtures-$$"
 mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT INT TERM

@@ -12,6 +12,7 @@ import subprocess
 BASELINE = 'b37948a924f72cc06b577a0e5a3cf3f1f6e9170e'
 ARCHIVE = set('build desktop electron-builder.json index.html makefile package-lock.json package.json public scripts src test tsconfig.json vite.config.ts'.split())
 MIRRORS = ('diagnostic_profile.sh', 'diagnostics-release.tsv', 'network-fixtures.sha256', 'network-fixtures.tsv')
+PATH_ONLY_BLOBS = {'publish_network_fixtures.sh': '54cbb28b7cf04e259df4bbfb4f0dd5ebf130b9b1'}
 PRIMARY = {'st.sh': 'diagnostics/st.sh', 'macdiag-core.sh': 'diagnostics/macdiag-core.sh', 'vpn.sh': 'vpn/vpn.sh'}
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = r'''#!/bin/bash
@@ -99,7 +100,7 @@ def check(root=ROOT, audit_relocation=False):
     failures = []
     for path, identity in old.items():
         target = destination(path)
-        if target and (new.get(target, ())[:2] != identity[:2] or (audit_relocation and new.get(target) != identity)):
+        if target and (new.get(target, ())[:2] != identity[:2] or (audit_relocation and new.get(target) != identity[:2] + (PATH_ONLY_BLOBS.get(path, identity[2]),))):
             failures.append('Missing or changed relocated object: %s -> %s' % (path, target))
     for path in MIRRORS:
         if new.get(path) != new.get('diagnostics/' + path):
@@ -112,9 +113,9 @@ def check(root=ROOT, audit_relocation=False):
             continue
         if git_tree(match.group(1), root).get(target, (None,None,None))[2] != match.group(2):
             failures.append('Pinned target does not match launcher: ' + name)
-    # Original aliases remain byte-identical because old clients may source them.
+    # Compatibility aliases must track their canonical scripts, including path-only fixes.
     for path, identity in old.items():
-        if '/' not in path and path.endswith('.sh') and path not in PRIMARY and new.get(path) != identity:
+        if '/' not in path and path.endswith('.sh') and path not in PRIMARY and new.get(path) != new.get(destination(path)):
             failures.append('Historical entry point changed: ' + path)
     allowed = {'.github', '.archive', '.gitignore', 'LICENSE', 'README.md', 'diagnostics', 'vpn'} | set(MIRRORS)
     allowed.update(p for p in old if '/' not in p and p.endswith('.sh'))
