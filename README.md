@@ -1,68 +1,52 @@
-# Yagodka macOS Client
+# MacOS — диагностика и VPN
 
-macOS/Electron клиент Ягодки. Репозиторий содержит desktop shell, update feed tooling и общий web runtime, который пакуется в приложение.
+Два основных проекта: **[диагностика Mac](diagnostics/)** и **[BigSurVPN](vpn/)**.
+Исходники, документация, тесты и служебные материалы каждого проекта находятся внутри его папки.
 
-## Что внутри
+## Запуск
 
-- `src/`, `public/`, `scripts/` - общий клиентский UI/runtime и сборка web assets.
-- `desktop/` - Electron main/preload runtime.
-- `electron-builder.json` - конфигурация desktop сборки.
-- `build/` - macOS entitlements.
-- `test/` - web + desktop/Electron regression tests.
+| Задача | Постоянная команда |
+| --- | --- |
+| Диагностика оборудования и среды, меню | `curl -fL https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh \| bash` |
+| Только паспорт среды MacDiag Core; не устанавливает VPN | `curl -fL https://raw.githubusercontent.com/pioner22/MacOS/main/macdiag-core.sh \| bash` |
+| Установка/обновление BigSurVPN, выбор Xray или SOCKS5 | `curl -fL https://raw.githubusercontent.com/pioner22/MacOS/main/vpn.sh \| bash` |
 
-## Локальная разработка
+Диагностические режимы не заменяют аппаратную приёмку. Перед запуском прочитайте ограничения в документации проекта.
+VPN CLI: установленная macOS Big Sur 11.x Intel, не Recovery. Повторная установка может прервать туннель; автоматической блокировки прямого трафика в CLI 2.1.3 нет.
 
-```bash
-npm install
-npm run dev
-```
-
-Во втором терминале:
-
-```bash
-npm run desktop:dev
-```
-
-## Проверки и сборка
-
-```bash
-npm run typecheck
-npm run test
-npm run desktop:build
-```
-
-Unsigned macOS ZIP и update feed для тестирования:
-
-```bash
-npm run desktop:dist:mac:unsigned
-```
-
-## Auto-update
-
-Desktop auto-update использует `electron-updater` и generic feed. Production feed по умолчанию:
+## Структура
 
 ```text
-https://yagodka.org/desktop-updates/mac/
+diagnostics/                Диагностика, Recovery, профили устройств, документация, тесты
+vpn/                        VPN CLI, конфигурация поставки, документация, тесты
+  app/                      Навигация к разрабатываемому нативному приложению (PR #19)
+.archive/yagodka-client/     Сохранённый прежний Electron-клиент, не часть этих двух проектов
+.github/                    Автопроверки, сборки и проверка структуры репозитория
+st.sh                       Совместимый запуск диагностики
+macdiag-core.sh              Совместимый запуск паспорта среды
+vpn.sh                      Совместимый установщик VPN
 ```
 
-Перед публичным signed release нужны Apple signing/notarization secrets. Они не хранятся в репозитории.
+Остальные корневые `.sh` сохранены без изменения содержимого как исторические точки входа по ранее выданным ссылкам; их материалы также находятся внутри папок проектов. Это не дополнительные приложения.
+`diagnostic_profile.sh` и три небольших файла описаний выпуска/сетевых образцов сохранены в корне для старых загрузчиков, читающих их как данные. GitHub Raw не перенаправляет символические ссылки, поэтому это намеренные совместимые копии, а не symlink.
 
-## MacBook Hardware Diagnostics — 2.0.0-rc3
+## Управление установленным VPN
 
-Отдельный RU/EN комплекс с приоритетом Recovery без установленной ОС. Активная реализация: `diagnostics_v2/`. Постоянная команда:
-
-```bash
-curl -fL https://raw.githubusercontent.com/pioner22/MacOS/main/st.sh | bash
+```sh
+vpn-bigsur status
+vpn-bigsur test
+vpn-bigsur report
+vpn-bigsur off
+vpn-bigsur on
 ```
 
-Сначала определяются аппаратная платформа, загруженная ОС/среда, консоль и работающие инструменты; затем выбирается и сохраняется профиль, после чего показывается меню. Recovery без компилятора использует ограниченные Perl-сценарии, если доступны их зависимости. Чистый ограниченный RAM/file screen — INCONCLUSIVE, не полный аппаратный PASS. Нативные большие проверки сохраняют обязательный mlock. Готовые проверенные Recovery-бинарники этим RC ещё не поставляются.
+Перенос файлов не выпускает новую версию VPN: действующая CLI остаётся 2.1.3. В ней `update` обновляет подписку, не саму программу.
+Нативное приложение и единая кнопка обновления разрабатываются в [PR #19](https://github.com/pioner22/MacOS/pull/19); готовое `.app` этим изменением не публикуется.
 
-14 — self-test комплекта, 15 — профиль, 16 — адаптивная приёмка без стирания, 17 — новый тестовый файл, 18 — отдельный native 40-GiB RAM→RESCUE, 19 — локальный минимальный пакет обратной связи. Никаких автоматических отправок полных логов и встроенных upload-токенов.
+## Разработка и сохранность
 
-**Старые разрушительные пункты 1/13 и ssd_test.sh заблокированы.** Не собирайте legacy mhdd_v2.part* вручную. Файловый тест не проверяет весь SSD; сведения о питании не являются аппаратным PASS. Приёмка требует независимой и ручной проверки.
+Работайте из папки соответствующего проекта. [Диагностика](diagnostics/README.md) · [VPN](vpn/README.md) · [Правила структуры](.github/REPOSITORY_LAYOUT.md).
+Прежний клиент Yagodka сохранён отдельно, без удаления его файлов. История Git не переписана.
+Три основных корневых запускатора используют локальную папку проекта при запуске из клона; при `curl | bash` скачивают целиком закреплённый Git-объект и проверяют его идентичность. Это не подпись издателя. Внутренние SHA-256-проверки VPN/Core и старые закреплённые ревизии не изменены.
 
-Подробности: [DIAGNOSTICS.md](DIAGNOSTICS.md), [Recovery-first архитектура и обратная связь](docs/diagnostics/RECOVERY_PRODUCT_RU.md), [фактическая проверка rc3](docs/diagnostics/RC3_QA.md).
-
-## License
-
-GPL-3.0-or-later. См. `LICENSE`.
+Лицензия: [GPL-3.0-or-later](LICENSE).

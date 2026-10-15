@@ -1,0 +1,21 @@
+name: Repository layout and compatible entry points
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  layout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Check moved objects and immutable entry points
+        run: python3 .github/repository_layout.py
+      - name: Test dispatcher without touching VPN or network
+        run: python3 -m unittest discover -s .github/tests -v
