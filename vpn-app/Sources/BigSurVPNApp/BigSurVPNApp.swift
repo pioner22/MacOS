@@ -27,7 +27,7 @@ struct BigSurVPNApp: App {
 private struct CheckForUpdatesMenu: View {
     @ObservedObject var updates: UpdateCenter
     var body: some View {
-        Button("Проверить обновления…", action: updates.checkForUpdates)
+        Button("Обновить приложение и подписку…", action: updates.checkForUpdates)
             .disabled(!updates.buttonEnabled)
     }
 }
@@ -64,7 +64,7 @@ private struct UpdatesView: View {
                 Divider()
                 Text("Новые версии и исправления — по одной кнопке.")
                     .font(.headline)
-                Text("Проверка, список изменений, загрузка и установка с подтверждением. Пароли и профили не включаются в пакет обновления.")
+                Text("Сначала проверяется и при необходимости обновляется приложение. Только в актуальной версии обновляется подписка. После перезапуска процесс продолжится автоматически.")
                     .fixedSize(horizontal: false, vertical: true)
                 if let problem = updates.configurationProblem {
                     Label(problem, systemImage: "exclamationmark.triangle")
@@ -72,17 +72,20 @@ private struct UpdatesView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Button(action: updates.checkForUpdates) {
-                    Label("Проверить обновления", systemImage: "arrow.clockwise")
+                    Label("Обновить", systemImage: "arrow.clockwise")
                         .padding(.horizontal, 8).padding(.vertical, 4)
                 }
                 .disabled(!updates.buttonEnabled)
+                Text(updates.statusText)
+                    .fixedSize(horizontal: false, vertical: true)
+                if updates.busy { ProgressView().scaleEffect(0.8) }
                 if let date = updates.requestedAt {
                     Text("Последний запрос: \(date, style: .date), \(date, style: .time)")
                         .font(.caption).foregroundColor(.secondary)
                 }
                 Spacer(minLength: 0)
                 Divider()
-                Text("Этот модуль обновляет приложение. Существующая служба vpn-bigsur и её конфигурация не изменяются. Управление туннелем подключается отдельно.")
+                Text("Подписка обновляется через установленную совместимую службу BigSurVPN 2.1.3. Для SOCKS5 она не требуется. Переключение и переустановка туннеля этой кнопкой не выполняются.")
                     .font(.caption).foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -91,28 +94,19 @@ private struct UpdatesView: View {
     }
 }
 
-/// Used only by the native CI smoke test. A release build cannot report success
-/// through this path. No VPN command, profile or network setting is accessed.
+/// Development-only native UI readiness probe; never touches a VPN profile.
 @MainActor
 private enum DevelopmentSmokeCheck {
     private static var finished = false
-
     static func finishIfRequested(updates: UpdateCenter) {
-        guard ProcessInfo.processInfo.environment["BIGSURVPN_SMOKE_TEST"] == "1",
-              !finished else { return }
+        guard ProcessInfo.processInfo.environment["BIGSURVPN_SMOKE_TEST"] == "1", !finished else { return }
         finished = true
         guard geteuid() != 0,
               Bundle.main.object(forInfoDictionaryKey: "VPNReleaseBuild") as? Bool == false,
-              updates.configurationProblem != nil,
-              !updates.buttonEnabled else {
-            FileHandle.standardError.write(Data("BIGSURVPN_NATIVE_SMOKE_FAILED\n".utf8))
-            exit(1)
+              updates.configurationProblem != nil, !updates.buttonEnabled else {
+            FileHandle.standardError.write(Data("BIGSURVPN_NATIVE_SMOKE_FAILED\n".utf8)); exit(1)
         }
-        // onAppear confirms construction of the actual SwiftUI/AppKit window,
-        // including loading the linked Sparkle framework, not just CLI parsing.
         FileHandle.standardOutput.write(Data("BIGSURVPN_NATIVE_UI_READY_UPDATER_DISABLED\n".utf8))
-        DispatchQueue.main.async {
-            NSApplication.shared.terminate(nil)
-        }
+        DispatchQueue.main.async { NSApplication.shared.terminate(nil) }
     }
 }

@@ -97,6 +97,8 @@ def build(args):
         copy_bundle(frameworks[0], app / 'Contents/Frameworks/Sparkle.framework')
         (app / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
         (app / 'Contents/PkgInfo').write_bytes(b'APPL????')
+        shutil.copy2(ROOT / 'Resources/refresh_legacy_subscription.py',
+                     app / 'Contents/Resources/refresh_legacy_subscription.py')
         run(['/usr/bin/lipo', '-verify_arch', 'x86_64', app / 'Contents/MacOS/BigSurVPNApp'])
         check_deployment(app)
         code_sign(app, identity, args.development)

@@ -66,4 +66,45 @@ final class ReleaseConfigurationTests: XCTestCase {
             XCTAssertFalse(state.allowsApplicationUpdate)
         }
     }
+    func testMaximumBuildIsAccepted() throws {
+        var info = valid(); info["CFBundleVersion"] = "2147483647"
+        XCTAssertEqual(try ReleaseConfiguration(info: info).build, 2_147_483_647)
+    }
+    func testNontrivialBuildAndVersionArePreserved() throws {
+        var info = valid(); info["CFBundleVersion"] = "42"
+        info["CFBundleShortVersionString"] = "10.20.30"
+        let result = try ReleaseConfiguration(info: info)
+        XCTAssertEqual(result.build, 42)
+        XCTAssertEqual(result.version, "10.20.30")
+    }
+    func testPublicKeyIsPreserved() throws {
+        let info = valid()
+        XCTAssertEqual(try ReleaseConfiguration(info: info).publicKey, info["SUPublicEDKey"] as? String)
+    }
+    func testTwoByteValuesAreNotADummyKey() throws {
+        var info = valid()
+        var key = Data(repeating: 0, count: 32); key[31] = 1
+        info["SUPublicEDKey"] = key.base64EncodedString()
+        _ = try ReleaseConfiguration(info: info)
+    }
+    func testNoncanonicalKeyRejected() {
+        var info = valid()
+        let canonical = Data(0..<32).base64EncodedString()
+        let alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
+        var chars = Array(canonical)
+        chars[chars.count - 2] = alphabet[alphabet.firstIndex(of: chars[chars.count - 2])! + 1]
+        let noncanonical = String(chars)
+        XCTAssertEqual(Data(base64Encoded: canonical), Data(base64Encoded: noncanonical))
+        info["SUPublicEDKey"] = noncanonical
+        XCTAssertThrowsError(try ReleaseConfiguration(info: info))
+    }
+
+    func testNonDummyWrongKeySizesRejected() {
+        for count in [31, 33, 64] {
+            var info = valid()
+            info["SUPublicEDKey"] = Data((0..<count).map { UInt8($0) }).base64EncodedString()
+            XCTAssertThrowsError(try ReleaseConfiguration(info: info))
+        }
+    }
+
 }

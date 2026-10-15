@@ -80,6 +80,9 @@ def smoke(app, timeout=25):
                     if os.fstat(out.fileno()).st_size > LIMIT or os.fstat(err.fileno()).st_size > LIMIT:
                         raise ValueError('Native smoke test output exceeded the bounded log size')
                     time.sleep(0.05)
+                # The process may exit before the polling loop sees its final stderr.
+                if os.fstat(err.fileno()).st_size > LIMIT:
+                    raise ValueError('Native smoke test output exceeded the bounded log size')
                 out.seek(0)
                 stdout = out.read(LIMIT + 1)
                 if len(stdout) > LIMIT:
