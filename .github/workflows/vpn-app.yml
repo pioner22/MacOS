@@ -31,6 +31,8 @@ jobs:
         run: |
           xcodebuild -version
           xcrun swift --version
+      - name: Test automatic failover decision policy
+        run: xcrun swift test --package-path vpn-app/failover
       - name: Build development application and run Swift tests
         run: python3 vpn-app/tools/build_release.py build --development --output "$RUNNER_TEMP/BigSurVPN.app"
       - name: Launch native window and verify disabled development updater
