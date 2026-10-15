@@ -1,10 +1,10 @@
 name: Diagnostics v2 software regression
 on:
   pull_request:
-    paths: ['diagnostics_v2/**', 'tests/diagnostics_v2/**', 'tools/build_diagnostics_v2*', '*.sh', 'diagnostics-release.tsv', '.github/workflows/diagnostics-v2.yml']
+    paths: ['diagnostics/**', '*.sh', 'diagnostics-release.tsv', '.github/workflows/diagnostics-v2.yml']
   push:
     branches: [main]
-    paths: ['diagnostics_v2/**', 'tests/diagnostics_v2/**', 'tools/build_diagnostics_v2*', '*.sh', 'diagnostics-release.tsv', '.github/workflows/diagnostics-v2.yml']
+    paths: ['diagnostics/**', '*.sh', 'diagnostics-release.tsv', '.github/workflows/diagnostics-v2.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,6 +21,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" > source.tar.gz
           tar -xzf source.tar.gz --strip-components=1
       - name: Check stable bootstrap syntax and ShellCheck warnings
+        working-directory: diagnostics
         run: |
           set -euo pipefail
           bash -n st.sh
@@ -30,6 +31,7 @@ jobs:
       - name: Install PTY regression dependency
         run: python3 -m pip install 'pexpect==4.9.0'
       - name: Run software regressions, not Mac hardware validation
+        working-directory: diagnostics
         run: |
           set -euo pipefail
           ulimit -l

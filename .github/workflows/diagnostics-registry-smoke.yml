@@ -1,7 +1,7 @@
 name: Diagnostic registry macOS compatibility smoke
 on:
   pull_request:
-    paths: ['diagnostics_v2/**', 'registry/**', 'st.sh', '.github/workflows/diagnostics-registry-smoke.yml']
+    paths: ['diagnostics/**', 'st.sh', '.github/workflows/diagnostics-registry-smoke.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,6 +22,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" > source.tar.gz
           tar -xzf source.tar.gz --strip-components=1
       - name: System Bash syntax and read-only profile smoke
+        working-directory: diagnostics
         shell: /bin/bash --noprofile --norc {0}
         run: |
           set -euo pipefail
@@ -34,6 +35,7 @@ jobs:
           set -e
           test "$rc" -eq 5
       - name: Compile native engines without running stress
+        working-directory: diagnostics
         run: |
           set -euo pipefail
           xcrun clang -std=c11 -O2 -Wall -Wextra -Werror diagnostics_v2/ram_native.c -o /tmp/ram-qa

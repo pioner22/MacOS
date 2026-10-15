@@ -6,9 +6,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/network-fixtures.yml'
-      - 'tools/generate_network_fixtures.py'
-      - 'network-fixtures.sha256'
-      - 'network-fixtures.tsv'
+      - 'diagnostics/tools/generate_network_fixtures.py'
+      - 'diagnostics/network-fixtures.sha256'
+      - 'diagnostics/network-fixtures.tsv'
 
 permissions:
   contents: write
@@ -20,7 +20,7 @@ jobs:
       - name: Fetch generator and manifests from exact commit
         run: |
           set -euo pipefail
-          BASE="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}"
+          BASE="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/diagnostics"
           curl -fsSL "$BASE/tools/generate_network_fixtures.py" -o /tmp/generate_network_fixtures.py
           curl -fsSL "$BASE/network-fixtures.sha256" -o /tmp/network-fixtures.sha256
           curl -fsSL "$BASE/network-fixtures.tsv" -o /tmp/network-fixtures.tsv
@@ -44,6 +44,6 @@ jobs:
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
               --title 'MacBook Diagnostic Network Fixtures v1' \
-              --notes 'Deterministic network integrity assets: 1, 8, 32, 128 and 512 MiB. Expected SHA-256 values are versioned in network-fixtures.sha256.'
+              --notes 'Deterministic network integrity assets: 1, 8, 32, 128 and 512 MiB. Expected SHA-256 values are versioned in diagnostics/network-fixtures.sha256.'
           fi
           gh release upload "$TAG" "$GITHUB_WORKSPACE"/dist/network-fixtures/* --repo "$GITHUB_REPOSITORY" --clobber
