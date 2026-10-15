@@ -1,0 +1,185 @@
+
+hash_expected_stream(){
+  PAT=$1; IDX=$2; NSECS=$3
+  : > "$HASHOUT"
+  case "$SHA_TOOL" in
+    sha256sum) gen_pattern "$PAT" "$IDX" "$NSECS" | sha256sum > "$HASHOUT";;
+    shasum) gen_pattern "$PAT" "$IDX" "$NSECS" | shasum -a 256 > "$HASHOUT";;
+  esac
+  P=("${PIPESTATUS[@]}")
+  EXP_GEN_RC=${P[0]:-99}; EXP_HASH_RC=${P[1]:-99}
+  EXPECT_HASH=$(hashout_value)
+}
+
+hash_expected_chunk0(){
+  PAT=$1; NSECS=$2; STATE=$3; BOOTVAL=$4
+  rm -f "$EXPECT"
+  gen_pattern "$PAT" 0 "$NSECS" > "$EXPECT" || return 1
+  make_marker "$STATE" "$PAT" "$BOOTVAL" || return 1
+  dd if="$MARKER" of="$EXPECT" bs=4096 count=1 conv=notrunc 2>/dev/null || return 1
+  EXPECT_HASH=$(sha_file "$EXPECT")
+  EXP_GEN_RC=0; EXP_HASH_RC=0
+  return 0
+}
+
+hash_actual_chunk(){
+  IDX=$1; NSECS=$2
+  : > "$HASHOUT"
+  if [ "$NSECS" -eq "$CHUNK_SECTORS" ]; then
+    SKIPM=$((IDX*CHUNK_MIB))
+    case "$SHA_TOOL" in
+      sha256sum) dd if="$RAW" bs=1048576 skip="$SKIPM" count="$CHUNK_MIB" 2>>"$LOG" | sha256sum > "$HASHOUT";;
+      shasum) dd if="$RAW" bs=1048576 skip="$SKIPM" count="$CHUNK_MIB" 2>>"$LOG" | shasum -a 256 > "$HASHOUT";;
+    esac
+  else
+    STARTSEC=$((IDX*CHUNK_SECTORS))
+    case "$SHA_TOOL" in
+      sha256sum) dd if="$RAW" bs=4096 skip="$STARTSEC" count="$NSECS" 2>>"$LOG" | sha256sum > "$HASHOUT";;
+      shasum) dd if="$RAW" bs=4096 skip="$STARTSEC" count="$NSECS" 2>>"$LOG" | shasum -a 256 > "$HASHOUT";;
+    esac
+  fi
+  P=("${PIPESTATUS[@]}")
+  ACT_READ_RC=${P[0]:-99}; ACT_HASH_RC=${P[1]:-99}; ACTUAL_HASH=$(hashout_value)
+}
+
+build_expected_file(){
+  PAT=$1; IDX=$2; NSECS=$3; HEADSTATE=$4; HEADBOOT=$5
+  rm -f "$EXPECT"
+  gen_pattern "$PAT" "$IDX" "$NSECS" > "$EXPECT" || return 1
+  if [ "$IDX" -eq 0 ]; then
+    make_marker "$HEADSTATE" "$PAT" "$HEADBOOT" || return 1
+    dd if="$MARKER" of="$EXPECT" bs=4096 count=1 conv=notrunc 2>/dev/null || return 1
+  fi
+  return 0
+}
+
+localize_chunk(){
+  PAT=$1; IDX=$2; NSECS=$3; HEADSTATE=$4; HEADBOOT=$5
+  say "LOCALIZE_START pattern=$PAT chunk=$IDX lba4k_start=$((IDX*CHUNK_SECTORS)) sectors=$NSECS"
+  build_expected_file "$PAT" "$IDX" "$NSECS" "$HEADSTATE" "$HEADBOOT" || { err 'LOCALIZE_EXPECTED_GENERATION_FAILED'; return; }
+  rm -f "$ACTUAL"
+  STARTSEC=$((IDX*CHUNK_SECTORS))
+  dd if="$RAW" of="$ACTUAL" bs=4096 skip="$STARTSEC" count="$NSECS" 2>>"$LOG"
+  RRC=$?
+  [ "$RRC" -eq 0 ] || err "LOCALIZE_RAW_READ_ERROR rc=$RRC"
+  perl - "$EXPECT" "$ACTUAL" "$STARTSEC" "$MAX_LOCALIZE_PRINT" <<'PERL' | tee -a "$LOG" "$ERRLOG"
+use strict;
+use warnings;
+my ($e,$a,$base,$maxprint)=@ARGV;
+open my $E,'<:raw',$e or die "expected open: $!\n";
+open my $A,'<:raw',$a or die "actual open: $!\n";
+my ($idx,$bad,$printed)=(0,0,0);
+while (1) {
+  my ($eb,$ab)=('','');
+  my $er=read($E,$eb,4096); my $ar=read($A,$ab,4096);
+  last if (!$er && !$ar);
+  if (!defined($er) || !defined($ar) || $er != $ar || $eb ne $ab) {
+    $bad++;
+    if ($printed < $maxprint) {
+      my $le=length($eb); my $la=length($ab);
+      my $min=$le<$la?$le:$la;
+      my $xor=substr($eb,0,$min) ^ substr($ab,0,$min);
+      my $diff=($xor =~ tr/\0//c) + abs($le-$la);
+      my $lba=$base+$idx;
+      my $off=$lba*4096;
+      print "BAD_LBA4K=$lba byte_offset=$off sector_in_chunk=$idx differing_bytes=$diff\n";
+      $printed++;
+    }
+  }
+  $idx++;
+}
+print "LOCALIZE_BAD_SECTORS=$bad printed=$printed\n";
+PERL
+  rm -f "$EXPECT" "$ACTUAL"
+}
+
+# BSD/macOS dd itself reports sub-second elapsed time and bytes/sec even when
+# Perl Time::HiRes is absent. Parse that output instead of the 1-second shell clock.
+dd_rate_mibs(){
+  F=$1
+  BPS=$(sed -n 's/.*(\([0-9][0-9]*\) bytes\/sec).*/\1/p' "$F" | sed -n '1p')
+  if [ -n "$BPS" ]; then awk -v b="$BPS" 'BEGIN{printf "%.0f",b/1048576.0}'; else printf '0'; fi
+}
+dd_elapsed_secs(){
+  F=$1
+  V=$(sed -n 's/.* transferred in \([0-9][0-9.]*\) secs.*/\1/p' "$F" | sed -n '1p')
+  [ -n "$V" ] && printf '%s' "$V" || printf 'NA'
+}
+
+raw_sequential_scan(){
+  LABEL=$1
+  say "--- $LABEL: 64MiB RAW READ THROUGHPUT SCAN (native dd timing) ---"
+  throughput_reset; SCAN_IOERR=0; TIMING_PARSE_ERRORS=0
+  DDSTAT="/tmp/ssd-mhdd-ddstat-$$"
+  I=0
+  while [ "$I" -lt "$TOTAL_CHUNKS" ]; do
+    OFFSET=$((I*CHUNK_BYTES)); REM=$((BYTES-OFFSET)); THIS=$CHUNK_BYTES; [ "$REM" -lt "$THIS" ] && THIS=$REM
+    : > "$DDSTAT"
+    if [ "$THIS" -eq "$CHUNK_BYTES" ]; then
+      dd if="$RAW" of=/dev/null bs=1048576 skip=$((I*CHUNK_MIB)) count="$CHUNK_MIB" 2>"$DDSTAT"
+    else
+      NSECS=$((THIS/SECTOR_BYTES)); dd if="$RAW" of=/dev/null bs=4096 skip=$((I*CHUNK_SECTORS)) count="$NSECS" 2>"$DDSTAT"
+    fi
+    RC=$?
+    cat "$DDSTAT" >> "$LOG"
+    RATE=$(dd_rate_mibs "$DDSTAT")
+    ELAPSED=$(dd_elapsed_secs "$DDSTAT")
+    if [ "$RATE" -gt 0 ]; then
+      CLASS=$(throughput_class "$RATE"); throughput_add "$RATE"
+    else
+      CLASS=UNMEASURED; TIMING_PARSE_ERRORS=$((TIMING_PARSE_ERRORS+1))
+    fi
+    [ "$RC" -eq 0 ] || { SCAN_IOERR=$((SCAN_IOERR+1)); err "$LABEL READ_IO_ERROR chunk=$I offset=$OFFSET rc=$RC rate=${RATE}MiB/s"; }
+    if [ "$RATE" -gt 0 ] && [ "$RATE" -lt 100 ]; then
+      say "$LABEL READ_DEVIATION chunk=$I offset=$OFFSET class=$CLASS rate=${RATE}MiB/s elapsed=${ELAPSED}s"
+    fi
+    [ $((I%128)) -ne 0 ] || say "$LABEL PROGRESS chunk=$I/$TOTAL_CHUNKS rate=${RATE}MiB/s class=$CLASS elapsed=${ELAPSED}s"
+    I=$((I+1))
+  done
+  rm -f "$DDSTAT"
+  throughput_summary
+  say "$LABEL TIMING_PARSE_ERRORS=$TIMING_PARSE_ERRORS"
+  say "$LABEL IO_ERRORS=$SCAN_IOERR"
+}
+
+# Repeated probe for the one severe prewrite anomaly observed at chunk 8233
+# (offset 552507277312, LBA4K 134889472). Reads neighbors too, verifies SHA-256
+# against the deterministic pattern, and records repeat latency. This runs only
+# after a complete known pattern exists on disk.
+targeted_anomaly_probe(){
+  PAT=$1
+  LABEL=$2
+  say "--- $LABEL: TARGETED ANOMALY PROBE around chunk 8233 / LBA4K 134889472 ---"
+  PROBE_HASHERR=0; PROBE_IOERR=0; PROBE_SLOW=0; PROBE_READS=0
+  DDSTAT="/tmp/ssd-mhdd-probe-dd-$$"
+  for C in 8232 8233 8234; do
+    hash_expected_stream "$PAT" "$C" "$CHUNK_SECTORS"
+    EXP="$EXPECT_HASH"
+    R=1
+    while [ "$R" -le 12 ]; do
+      : > "$DDSTAT"; : > "$HASHOUT"
+      case "$SHA_TOOL" in
+        sha256sum) dd if="$RAW" bs=1048576 skip=$((C*CHUNK_MIB)) count="$CHUNK_MIB" 2>"$DDSTAT" | sha256sum > "$HASHOUT";;
+        shasum) dd if="$RAW" bs=1048576 skip=$((C*CHUNK_MIB)) count="$CHUNK_MIB" 2>"$DDSTAT" | shasum -a 256 > "$HASHOUT";;
+      esac
+      P=("${PIPESTATUS[@]}"); DRC=${P[0]:-99}; HRC=${P[1]:-99}; GOT=$(hashout_value)
+      RATE=$(dd_rate_mibs "$DDSTAT"); ELAPSED=$(dd_elapsed_secs "$DDSTAT")
+      PROBE_READS=$((PROBE_READS+1))
+      [ "$DRC" -eq 0 ] && [ "$HRC" -eq 0 ] || { PROBE_IOERR=$((PROBE_IOERR+1)); err "$LABEL PROBE_IO_ERROR chunk=$C repeat=$R rc=$DRC/$HRC"; }
+      [ "$GOT" = "$EXP" ] || { PROBE_HASHERR=$((PROBE_HASHERR+1)); err "$LABEL PROBE_HASH_MISMATCH chunk=$C repeat=$R got=$GOT expected=$EXP"; }
+      if [ "$RATE" -gt 0 ] && [ "$RATE" -lt 100 ]; then PROBE_SLOW=$((PROBE_SLOW+1)); fi
+      say "$LABEL PROBE chunk=$C repeat=$R rate=${RATE}MiB/s elapsed=${ELAPSED}s hash=$([ "$GOT" = "$EXP" ] && echo PASS || echo FAIL)"
+      R=$((R+1))
+    done
+  done
+  rm -f "$DDSTAT"
+  say "$LABEL PROBE_SUMMARY reads=$PROBE_READS io_errors=$PROBE_IOERR hash_errors=$PROBE_HASHERR slow_under_100MiBps=$PROBE_SLOW"
+  if [ "$PROBE_HASHERR" -gt 0 ] || [ "$PROBE_IOERR" -gt 0 ]; then
+    fail "$LABEL targeted anomaly probe found data/I-O errors"
+  fi
+  if [ "$PROBE_SLOW" -ge 3 ]; then
+    err "$LABEL PERSISTENT_READ_LATENCY_ANOMALY slow_reads=$PROBE_SLOW/$PROBE_READS region_chunk=8233"
+  else
+    say "$LABEL TARGETED_ANOMALY_NOT_PERSISTENT slow_reads=$PROBE_SLOW/$PROBE_READS"
+  fi
+}

@@ -1,0 +1,88 @@
+/* Compact auth overrides that must load after the main auth partial. */
+@media (max-width: 860px) {
+  html.kbd-open.has-auth-pages .auth-entry-panel {
+    padding: calc(6px + env(safe-area-inset-top)) 0 calc(10px + var(--auth-safe-bottom));
+    gap: 4px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-panel-top,
+  html.kbd-open.has-auth-pages .modal-auth .auth-panel-top {
+    min-height: 48px;
+    padding-bottom: 0;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .auth-brand-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .auth-brand-text {
+    font-size: 18px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-panel-heading {
+    min-height: 32px;
+    gap: 0;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .auth-subtitle {
+    font-size: 19px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .auth-note {
+    min-height: 0;
+    max-height: 0;
+    opacity: 0;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .modal-tabs {
+    padding: 3px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .modal-tabs .btn {
+    min-height: 32px;
+    font-size: 12px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .modal-body,
+  html.kbd-open.has-auth-pages .modal-auth .auth-entry-form {
+    gap: 6px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .auth-entry-form-fixed {
+    grid-template-rows: 52px 52px 40px;
+    min-height: 156px;
+    margin-top: 2px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-field-stack {
+    min-height: 52px;
+    gap: 2px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .modal-label {
+    font-size: 9.5px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .modal-input {
+    min-height: 38px;
+    border-radius: 14px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .modal-actions .btn,
+  html.kbd-open.has-auth-pages .auth-entry-panel .auth-primary-cta {
+    min-height: 40px;
+    border-radius: 14px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .auth-entry-notice {
+    min-height: 20px;
+    max-height: 20px;
+    font-size: 11px;
+  }
+
+  html.kbd-open.has-auth-pages .auth-entry-panel .modal-warn {
+    min-height: 24px;
+    padding: 4px 6px;
+  }
+}

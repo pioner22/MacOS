@@ -1,0 +1,55 @@
+#!/bin/bash
+# Manual fallback publisher for deterministic network diagnostic fixtures.
+# Works on Linux (sha256sum) and stock macOS (shasum -a 256).
+set -e
+REPO='pioner22/MacOS'
+TAG='diagnostic-fixtures-v1'
+BASE='https://raw.githubusercontent.com/pioner22/MacOS/main'
+WORK="${TMPDIR:-/tmp}/macos-network-fixtures-$$"
+mkdir -p "$WORK"
+trap 'rm -rf "$WORK"' EXIT INT TERM
+
+for c in curl python3 gh; do
+  command -v "$c" >/dev/null 2>&1 || { echo "Missing command: $c" >&2; exit 1; }
+done
+if command -v sha256sum >/dev/null 2>&1; then
+  HASHCHECK='sha256sum'
+elif command -v shasum >/dev/null 2>&1; then
+  HASHCHECK='shasum'
+else
+  echo 'Missing SHA-256 tool (sha256sum or shasum)' >&2
+  exit 1
+fi
+
+echo 'Fetching fixture generator and manifests...'
+curl -fsSL "$BASE/tools/generate_network_fixtures.py" -o "$WORK/generate.py"
+curl -fsSL "$BASE/network-fixtures.sha256" -o "$WORK/network-fixtures.sha256"
+curl -fsSL "$BASE/network-fixtures.tsv" -o "$WORK/network-fixtures.tsv"
+
+mkdir -p "$WORK/out"
+FIXTURE_OUT="$WORK/out" python3 "$WORK/generate.py"
+(
+  cd "$WORK/out"
+  if [ "$HASHCHECK" = sha256sum ]; then
+    sha256sum -c "$WORK/network-fixtures.sha256"
+  else
+    shasum -a 256 -c "$WORK/network-fixtures.sha256"
+  fi
+)
+cp "$WORK/network-fixtures.sha256" "$WORK/out/"
+cp "$WORK/network-fixtures.tsv" "$WORK/out/"
+
+if ! gh auth status >/dev/null 2>&1; then
+  echo 'GitHub CLI is not authenticated. Run: gh auth login' >&2
+  exit 1
+fi
+
+if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+  gh release create "$TAG" --repo "$REPO" \
+    --title 'MacBook Diagnostic Network Fixtures v1' \
+    --notes 'Deterministic 1/8/32/128/512 MiB assets for network/download integrity testing.'
+fi
+
+gh release upload "$TAG" "$WORK"/out/* --repo "$REPO" --clobber
+
+echo "Published: https://github.com/$REPO/releases/tag/$TAG"

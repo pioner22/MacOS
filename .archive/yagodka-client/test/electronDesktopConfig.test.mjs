@@ -1,0 +1,112 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+function readJson(relPath) {
+  return JSON.parse(fs.readFileSync(path.join(root, relPath), "utf8"));
+}
+
+test("desktop package scripts and entrypoint are wired", () => {
+  const pkg = readJson("package.json");
+  assert.equal(pkg.main, "desktop/main.cjs");
+  assert.match(pkg.dependencies["electron-updater"], /^\^6\./);
+  assert.equal(pkg.scripts["desktop:dev"], "electron desktop/main.cjs");
+  assert.match(pkg.scripts["desktop:build"], /electron-builder --dir/);
+  assert.match(pkg.scripts["desktop:build:unsigned"], /CSC_IDENTITY_AUTO_DISCOVERY=false/);
+  assert.match(pkg.scripts["desktop:dist:mac"], /--mac dmg zip/);
+  assert.match(pkg.scripts["desktop:dist:mac:unsigned"], /build_unsigned_mac_feed\.mjs/);
+  assert.match(pkg.scripts["desktop:publish:mac"], /--mac dmg zip --publish always/);
+  assert.match(pkg.scripts["desktop:dist:win"], /--win nsis/);
+  assert.match(pkg.scripts["desktop:dist:linux"], /--linux AppImage deb/);
+});
+
+test("electron-builder targets the web build and desktop shell", () => {
+  const config = readJson("electron-builder.json");
+  assert.equal(config.appId, "org.yagodka.desktop");
+  assert.equal(config.productName, "Yagodka");
+  assert.deepEqual(config.files, ["dist/**/*", "desktop/**/*", "public/icons/icon-512.png", "package.json"]);
+  assert.equal(config.extraMetadata.main, "desktop/main.cjs");
+  assert.equal(config.publish[0].provider, "generic");
+  assert.equal(config.publish[0].url, "https://yagodka.org/desktop-updates/mac");
+  assert.equal(config.publish[0].channel, "latest");
+  assert.equal(config.mac.identity, undefined);
+  assert.equal(config.mac.hardenedRuntime, true);
+  assert.equal(config.mac.notarize, true);
+  assert.match(config.mac.entitlements, /entitlements\.mac\.plist/);
+  assert.match(config.mac.entitlementsInherit, /entitlements\.mac\.inherit\.plist/);
+  assert.match(config.mac.extendInfo.NSCameraUsageDescription, /камере/);
+  assert.match(config.mac.extendInfo.NSMicrophoneUsageDescription, /микрофону/);
+  assert.deepEqual(config.mac.target, ["dmg", "zip"]);
+  assert.deepEqual(config.linux.target, ["AppImage", "deb"]);
+  assert.equal(config.win.target[0].target, "nsis");
+});
+
+test("electron shell keeps renderer privileges locked down", () => {
+  const main = fs.readFileSync(path.join(root, "desktop/main.cjs"), "utf8");
+  const preload = fs.readFileSync(path.join(root, "desktop/preload.cjs"), "utf8");
+  assert.match(main, /contextIsolation:\s*true/);
+  assert.match(main, /nodeIntegration:\s*false/);
+  assert.match(main, /sandbox:\s*true/);
+  assert.match(main, /acceptFirstMouse:\s*true/);
+  assert.match(main, /backgroundThrottling:\s*false/);
+  assert.ok(main.includes('DEFAULT_GATEWAY_URL = "wss://yagodka.org/ws"'));
+  assert.ok(main.includes('DEFAULT_PUBLIC_BASE_URL = "https://yagodka.org/"'));
+  assert.match(main, /YAGODKA_DESKTOP_GATEWAY_URL/);
+  assert.match(main, /YAGODKA_DESKTOP_PUBLIC_BASE_URL/);
+  assert.match(main, /YAGODKA_DESKTOP_MEET_URL/);
+  assert.match(main, /YAGODKA_DESKTOP_DISABLE_MAXIMIZE/);
+  assert.match(main, /require\("electron-updater"\)/);
+  assert.match(main, /DEFAULT_UPDATE_FEED_URL = "https:\/\/yagodka\.org\/desktop-updates\/mac\/"/);
+  assert.match(main, /YAGODKA_DESKTOP_UPDATE_FEED_URL/);
+  assert.match(main, /YAGODKA_DESKTOP_UPDATE_AUTO_CHECK/);
+  assert.match(main, /function parseOptionalBoolEnv/);
+  assert.match(main, /autoCheck:\s*autoCheckEnv === null \? true : autoCheckEnv/);
+  assert.match(main, /autoUpdater\.autoDownload = false/);
+  assert.match(main, /autoUpdater\.autoInstallOnAppQuit = false/);
+  assert.match(main, /yagodka:desktop-updates-check/);
+  assert.match(main, /yagodka:desktop-updates-download/);
+  assert.match(main, /yagodka:desktop-updates-install/);
+  assert.match(main, /function loadDesktopEntry/);
+  assert.match(main, /win\.loadFile\(path\.join\(__dirname,\s*"\.\.",\s*"dist",\s*"index\.html"\)/);
+  assert.match(main, /onBeforeSendHeaders/);
+  assert.match(main, /requestHeaders\.Origin = publicOrigin/);
+  assert.match(main, /screen\.getPrimaryDisplay\(\)\.workAreaSize/);
+  assert.match(main, /win\.maximize\(\)/);
+  assert.match(main, /render-process-gone/);
+  assert.match(main, /recoverDesktopRenderer\(win,\s*details\)/);
+  assert.match(main, /win\.on\("unresponsive"/);
+  assert.match(main, /DESKTOP_RENDERER_RECOVERY_MAX_ATTEMPTS\s*=\s*3/);
+  assert.match(main, /DESKTOP_RENDERER_RECOVERY_DELAY_MS\s*=\s*650/);
+  assert.match(main, /did-fail-load/);
+  assert.match(main, /load_failed_\$\{errorCode\}/);
+  assert.ok(main.includes('clearStorageData({ storages: ["serviceworkers", "cachestorage"] })'));
+  assert.ok(main.includes('clearData({ dataTypes: ["serviceWorkers", "cache"] })'));
+  assert.match(main, /setWindowOpenHandler/);
+  assert.match(main, /will-navigate/);
+  assert.match(main, /installDesktopMediaPermissions/);
+  assert.match(main, /setPermissionCheckHandler/);
+  assert.match(main, /setPermissionRequestHandler/);
+  assert.match(main, /permission !== "media"/);
+  assert.match(main, /systemPreferences\.getMediaAccessStatus/);
+  assert.match(main, /systemPreferences\.askForMediaAccess/);
+  assert.match(main, /mediaTypes/);
+  assert.match(main, /yagodka:media-permissions-status/);
+  assert.match(main, /yagodka:media-permissions-request/);
+  assert.match(main, /yagodka:media-open-settings/);
+  assert.match(preload, /contextBridge\.exposeInMainWorld\("yagodkaDesktop"/);
+  assert.match(preload, /config:\s*runtimeConfig/);
+  assert.match(preload, /updates:\s*{/);
+  assert.match(preload, /getStatus:\s*\(\)\s*=>\s*ipcRenderer\.invoke\("yagodka:desktop-updates-status"/);
+  assert.match(preload, /check:\s*\(\)\s*=>\s*ipcRenderer\.invoke\("yagodka:desktop-updates-check"/);
+  assert.match(preload, /download:\s*\(\)\s*=>\s*ipcRenderer\.invoke\("yagodka:desktop-updates-download"/);
+  assert.match(preload, /install:\s*\(\)\s*=>\s*ipcRenderer\.invoke\("yagodka:desktop-updates-install"/);
+  assert.match(preload, /onStatus:\s*\(callback\)/);
+  assert.match(preload, /mediaPermissions:\s*{/);
+  assert.match(preload, /getStatus:\s*\(kinds\)\s*=>\s*ipcRenderer\.invoke\("yagodka:media-permissions-status"/);
+  assert.match(preload, /request:\s*\(kinds\)\s*=>\s*ipcRenderer\.invoke\("yagodka:media-permissions-request"/);
+  assert.match(preload, /openSettings:\s*\(kind\)\s*=>\s*ipcRenderer\.invoke\("yagodka:media-open-settings"/);
+});

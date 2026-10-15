@@ -1,0 +1,12 @@
+bash_runtime	bash32	bash	bash-array-pipestatus	GNU_BASH
+bash_system	bash32	bash	bash-system-subset	GNU_BASH
+curl	https-cli	curl	curl-https-options	CURL_OPTIONS
+perl	perl-screen	perl	perl-pack32	PERL_CORE
+perl_supervisor	process-group	perl	perl-supervisor-modules	PERL_CORE
+perl_file	file-safe	perl	perl-file-modules	PERL_CORE
+perl64	offset64	perl	perl-64bit	PERL_CORE
+sha256	sha256-known-answer	auto	sha256-abc	SHA256_KAT
+diskutil	plist-read	diskutil	diskutil-root-plist	APPLE_DISKUTIL
+compiler	native-candidate	clang	installed-clang	APPLE_CLT
+awk	tsv-parser	awk	awk-tsv-numeric	POSIX_AWK
+tee	interrupt-log	tee	tee-ignore-int	POSIX_TEE

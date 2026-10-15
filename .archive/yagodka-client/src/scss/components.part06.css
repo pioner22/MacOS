@@ -1,0 +1,153 @@
+.chat:not(.chat-board) {
+  --msg-modern-outline-in: color-mix(in srgb, var(--msg-in-border-color) 72%, transparent);
+  --msg-modern-outline-out: color-mix(in srgb, var(--msg-out-border-color) 72%, transparent);
+  --msg-modern-time-chip-bg: transparent;
+  --msg-modern-time-chip-border: transparent;
+  --msg-modern-bubble-gloss: none;
+  --msg-meta-inline-pad: calc(var(--message-beside-button-size, 2.375rem) + 6px);
+  --msg-telegram-tail-size: 11px;
+  --msg-telegram-tail-height: 20px;
+  --msg-telegram-tail-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2011%2020%27%3E%3Cpath%20fill%3D%27black%27%20d%3D%27M1.00002881%2C1.03679295e-14%20L7%2C0%20L7%2C17%20C6.8069969%2C14.1607017%206.12380234%2C11.2332513%204.95041634%2C8.21764872%20C4.04604748%2C5.89342034%202.50413132%2C3.73337411%200.324667862%2C1.73751004%20L0.324652538%2C1.73752677%20C-0.0826597201%2C1.36452676%20-0.110475289%2C0.731958677%200.262524727%2C0.324646419%20C0.451952959%2C0.117792698%200.719544377%2C1.0985861e-14%201.00002881%2C1.04360964e-14%20Z%27/%3E%3C/svg%3E");
+}
+
+.chat:not(.chat-board) .msg-sys:not([data-msg-attach="action"]) {
+  justify-content: center;
+  padding: 3px 10px;
+}
+
+.chat:not(.chat-board) .msg-sys:not([data-msg-attach="action"]) .msg-body {
+  width: auto;
+  max-width: min(82%, 430px);
+  padding: 5px 11px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 58%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel2), transparent 42%);
+  color: color-mix(in srgb, var(--muted), var(--text) 18%);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  backdrop-filter: blur(10px) saturate(130%);
+}
+
+.chat:not(.chat-board) .msg-sys:not([data-msg-attach="action"]) .msg-text {
+  font-size: 12px;
+  font-weight: 680;
+  line-height: 1.28;
+  text-align: center;
+  color: inherit;
+}
+
+.msg-content-shell {
+  min-width: 0;
+  display: grid;
+  gap: var(--msg-content-gap, 4px);
+  align-self: stretch;
+}
+
+.msg-content-shell > .msg-text {
+  min-width: 0;
+}
+
+.chat:not(.chat-board) {
+  --msg-content-gap: calc(var(--sp-1) + 1px);
+}
+
+.chat:not(.chat-board) .msg-content-shell {
+  display: grid;
+  gap: var(--msg-content-gap, 4px);
+  min-width: 0;
+}
+
+.chat:not(.chat-board) .msg-content-shell .msg-meta {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.chat:not(.chat-board) .msg:not(.msg-sys):not(.msg-attach) .msg-body {
+  box-shadow: var(--msg-card-shadow), var(--msg-card-outline), var(--msg-modern-bubble-gloss);
+}
+
+.chat:not(.chat-board) .msg.msg-in:not(.msg-sys):not(.msg-attach) .msg-body {
+  border-color: var(--msg-modern-outline-in);
+}
+
+.chat:not(.chat-board) .msg.msg-out:not(.msg-sys):not(.msg-attach) .msg-body {
+  border-color: var(--msg-modern-outline-out);
+}
+
+.chat:not(.chat-board) .msg:not(.msg-attach) .msg-content-shell .msg-meta {
+  margin: 0;
+  min-height: 0;
+  padding: 0 1px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  align-self: flex-end;
+}
+
+.chat:not(.chat-board) .msg.msg-in:not(.msg-attach) .msg-content-shell .msg-meta {
+  color: var(--msg-time-color);
+}
+
+.chat:not(.chat-board) .msg.msg-out:not(.msg-attach) .msg-content-shell .msg-meta {
+  color: var(--msg-out-meta-color, var(--msg-time-color));
+}
+
+.chat:not(.chat-board) .msg:not(.msg-attach) .msg-content-shell .msg-meta-item + .msg-meta-item::before {
+  opacity: 0.38;
+}
+
+.chat:not(.chat-board) .msg.msg-in:not(.msg-attach) .msg-content-shell .msg-text {
+  color: var(--msg-text-in-color);
+}
+
+.chat:not(.chat-board) .msg.msg-out:not(.msg-attach) .msg-content-shell .msg-text {
+  color: var(--msg-text-out-color);
+}
+
+.chat:not(.chat-board)
+  .msg:not([data-msg-attach]):not([data-msg-has-ref]):not([data-msg-has-reacts]):not([data-msg-emoji-only])
+  .msg-text {
+  padding-right: var(--msg-meta-inline-pad);
+}
+
+.chat:not(.chat-board)
+  .msg:not([data-msg-attach]):not([data-msg-has-ref]):not([data-msg-has-reacts]):not([data-msg-emoji-only])
+  .msg-content-shell
+  .msg-meta {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  inset-inline-end: 6px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.chat:not(.chat-board) .msg-tail:not(.msg-attach) .msg-body::after {
+  display: block;
+  width: var(--msg-telegram-tail-size);
+  height: var(--msg-telegram-tail-height);
+  bottom: -1px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--msg-in-bg);
+  transform: none;
+  -webkit-mask: var(--msg-telegram-tail-mask) no-repeat center / contain;
+  mask: var(--msg-telegram-tail-mask) no-repeat center / contain;
+}
+
+.chat:not(.chat-board) .msg-tail.msg-in:not(.msg-attach) .msg-body::after {
+  inset-inline-start: -8px;
+  background: var(--msg-in-bg);
+  transform: none;
+}
+
+.chat:not(.chat-board) .msg-tail.msg-out:not(.msg-attach) .msg-body::after {
+  inset-inline-end: -8px;
+  background: var(--msg-out-bg);
+  transform: scaleX(-1);
+}

@@ -1,0 +1,10 @@
+# id	hardware	environment	policy (first matching row wins; never shell code)
+a2141-recovery	a2141	recovery	adaptive
+a2141-full	a2141	full	adaptive
+intel-recovery	intel_generic	recovery	adaptive
+intel-full	intel_generic	full	adaptive
+apple-recovery	apple_silicon	recovery	screen
+apple-full	apple_silicon	full	screen
+safe-mode	any	safe	screen
+installer-limited	any	installer_or_recovery	screen
+unknown-observation	any	any	observe

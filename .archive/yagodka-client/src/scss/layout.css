@@ -1,0 +1,848 @@
+.app {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  width: 100%;
+  max-width: var(--app-max-width);
+  margin: 0 auto;
+  border: var(--app-border-width) solid var(--app-border-color);
+  border-radius: var(--app-radius);
+  box-shadow: var(--app-shadow);
+  overflow: var(--app-overflow);
+  display: grid;
+  grid-template-rows: var(--app-row-header) var(--app-row-main) var(--app-row-footer);
+}
+
+.hdr {
+  background: var(--header-bg);
+  border-bottom: var(--header-border-width) solid var(--header-border-color);
+  box-shadow: var(--header-shadow);
+  padding: var(--header-pad-y) var(--header-pad-x);
+  padding-top: calc(var(--header-pad-y) + env(safe-area-inset-top));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(var(--header-topbar-height), auto) auto;
+  min-height: var(--header-topbar-height);
+  align-items: center;
+  gap: var(--header-gap-y) var(--header-gap-x);
+}
+
+.hdr-left {
+  color: var(--header-left-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.hdr-right {
+  color: var(--header-right-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: var(--header-right-max-width);
+  text-align: right;
+}
+
+.hotkeys {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--hotkeys-gap);
+  overflow-x: auto;
+  padding-bottom: var(--hotkeys-pad-b);
+}
+
+.grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--grid-cols);
+  gap: var(--grid-gap);
+  height: 100%;
+  min-height: 0;
+}
+
+body.has-right-col {
+  --grid-cols: var(--sidebar-width) minmax(0, 1fr) var(--right-column-width);
+}
+
+.chat-col {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.right-col {
+  display: none;
+  min-height: 0;
+  min-width: 0;
+  background:
+    linear-gradient(var(--layer-2), var(--layer-2)),
+    var(--right-column-bg);
+  border-left: var(--right-column-border-width) solid var(--right-column-border-color);
+  overflow: hidden;
+}
+
+body.has-right-col .right-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.right-col-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.right-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: var(--right-column-border-width) solid var(--right-column-border-color);
+  background: var(--right-column-bg);
+}
+
+.right-col-title {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.right-col-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-col > .chat {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sidebar {
+  --avatar-size: 54px;
+  --avatar-font-size: 20px;
+  --row-pad-x: 14px;
+  background:
+    linear-gradient(var(--layer-2), var(--layer-2)),
+    var(--sidebar-bg);
+  border-right: var(--sidebar-border-width) solid var(--sidebar-border-color);
+  padding: var(--sidebar-pad);
+  padding-bottom: 3px;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar .row {
+  padding-inline-end: var(--row-pad-x);
+}
+
+.sidebar.sidebar-collapsed {
+  --avatar-size: 32px;
+  --avatar-font-size: 12px;
+  --sidebar-list-pad: 0px;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sidebar.sidebar-collapsed .sidebar-header {
+  display: none;
+}
+
+.sidebar.sidebar-collapsed .sidebar-searchbar,
+.sidebar.sidebar-collapsed .sidebar-tabs,
+.sidebar.sidebar-collapsed .sidebar-desktop-bottom,
+.sidebar.sidebar-collapsed .pane-title,
+.sidebar.sidebar-collapsed .pane-section {
+  display: none;
+}
+
+.sidebar.sidebar-collapsed .row {
+  justify-content: flex-start;
+  padding-inline-start: 13px;
+  padding-inline-end: 0;
+  border-radius: 0;
+}
+
+.sidebar.sidebar-collapsed .row-main,
+.sidebar.sidebar-collapsed .row-tail,
+.sidebar.sidebar-collapsed .row-sub,
+.sidebar.sidebar-collapsed .row-time,
+.sidebar.sidebar-collapsed .row-unread,
+.sidebar.sidebar-collapsed .row-draft,
+.sidebar.sidebar-collapsed .row-prefix,
+.sidebar.sidebar-collapsed .row-label {
+  display: none;
+}
+
+@media (min-width: 601px) {
+  /* Tweb-like grid alignment for sidebar rows on desktop. */
+  .sidebar:not(.sidebar-collapsed) .row[data-ctx-kind] {
+    display: grid;
+    grid-template-columns: var(--avatar-size) minmax(0, 1fr) minmax(var(--row-tail-min, 96px), max-content);
+    grid-template-rows: auto auto;
+    grid-template-areas: "ava title tail" "ava sub tail";
+    column-gap: var(--row-gap);
+    row-gap: 3px;
+    align-items: center;
+  }
+
+  .sidebar:not(.sidebar-collapsed) .row[data-ctx-kind] > .avatar {
+    grid-area: ava;
+    align-self: center;
+  }
+
+  .sidebar:not(.sidebar-collapsed) .row[data-ctx-kind] > .row-main {
+    display: contents;
+  }
+
+  .sidebar:not(.sidebar-collapsed) .row[data-ctx-kind] .row-title {
+    grid-area: title;
+    align-self: flex-end;
+    min-width: 0;
+  }
+
+  .sidebar:not(.sidebar-collapsed) .row[data-ctx-kind] .row-sub {
+    grid-area: sub;
+    align-self: flex-start;
+    min-width: 0;
+  }
+
+  .sidebar:not(.sidebar-collapsed) .row[data-ctx-kind] > .row-tail {
+    grid-area: tail;
+    margin-left: 0;
+    align-self: stretch;
+    justify-self: end;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    min-height: calc(var(--row-min-h) - (var(--row-pad-y) * 2));
+  }
+
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 5;
+  touch-action: none;
+}
+
+.sidebar-resize-handle::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: color-mix(in srgb, var(--line), transparent 20%);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.sidebar-resize-handle:hover::before,
+.sidebar-resize-handle.is-active::before {
+  opacity: 1;
+}
+
+@media (max-width: 925px) {
+  .sidebar-resize-handle {
+    display: none;
+  }
+}
+
+.sidebar-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
+  overscroll-behavior-y: contain;
+  padding-inline: var(--sidebar-list-pad);
+  padding-bottom: max(var(--sp-2), var(--app-bottom-live-pad));
+  scroll-padding-bottom: max(var(--sp-2), var(--app-bottom-live-pad));
+  /* Prevent browser scroll anchoring from jumping the list during re-renders/context menus. */
+  overflow-anchor: none;
+  touch-action: pan-y;
+  contain: layout paint;
+  will-change: scroll-position;
+}
+
+.sidebar-body.sidebar-body-chatlist {
+  padding-inline: 0;
+}
+
+.sidebar-body.sidebar-body-chatlist > .chatlist {
+  margin-inline: var(--sidebar-list-pad);
+}
+
+.chat {
+  background:
+    linear-gradient(var(--layer-1), var(--layer-1)),
+    linear-gradient(var(--layer-2), var(--layer-2)),
+    var(--chat-bg);
+  padding: var(--chat-pad);
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.chat-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.input-wrap {
+  display: flex;
+  flex-direction: column;
+  padding: var(--composer-pad-y) var(--chat-input-padding);
+  --composer-action-gap: calc(var(--composer-gap) * var(--phi-inv));
+  --composer-action-size: var(--composer-icon-btn-size);
+  /* Mobile overrides may extend this bar into the physical iOS/PWA bottom inset. */
+  padding-bottom: max(var(--composer-pad-y), var(--app-bottom-live-pad));
+  border-top: var(--composer-border-width) solid var(--composer-border-color);
+  background: var(--composer-bg);
+}
+
+.input-wrap > .chat-selection-bar {
+  padding: 0;
+  border-top: 0;
+  background: transparent;
+}
+
+.input-wrap.is-selecting > .composer-edit,
+.input-wrap.is-selecting > .composer-helper,
+.input-wrap.is-selecting > .board-editor,
+.input-wrap.is-selecting > .composer-row,
+.input-wrap.is-selecting > .composer-meta {
+  display: none;
+}
+
+@media (min-width: 601px) {
+  .input-wrap {
+    --composer-gap: var(--chat-input-btn-send-margin);
+    --composer-action-gap: 4px;
+    --composer-field-min-h: var(--chat-input-size);
+    --composer-action-size: 34px;
+    --composer-input-pad-y: var(--chat-input-inner-padding);
+  }
+}
+
+.composer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--composer-gap);
+  min-height: var(--composer-field-min-h);
+}
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--composer-action-gap);
+  flex: 0 0 auto;
+}
+
+.composer-row > .composer-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.input-wrap > .composer-edit,
+.input-wrap > .composer-helper,
+.input-wrap > .board-editor,
+.input-wrap > .composer-row,
+.input-wrap > .composer-meta {
+  max-width: var(--chat-input-max-width);
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+:root[data-msg-wide="1"] .input-wrap > .composer-edit,
+:root[data-msg-wide="1"] .input-wrap > .composer-helper,
+:root[data-msg-wide="1"] .input-wrap > .board-editor,
+:root[data-msg-wide="1"] .input-wrap > .composer-row,
+:root[data-msg-wide="1"] .input-wrap > .composer-meta {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.sidebar-bottom-dock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--composer-field-min-h);
+  padding-top: var(--sp-3);
+  border-top: 0;
+  background: transparent;
+}
+
+.composer-field {
+  display: flex;
+  align-items: center;
+  gap: var(--composer-action-gap);
+  min-height: var(--composer-field-min-h);
+  position: relative;
+  background: var(--composer-field-bg);
+  border: var(--composer-field-border-width) solid var(--composer-field-border-color);
+  border-radius: var(--composer-field-radius);
+  box-shadow: var(--composer-field-shadow);
+  /* Telegram-like: controls sit inside the pill, so keep vertical padding minimal. */
+  padding: 0 var(--composer-field-pad);
+}
+
+.composer-field .composer-actions {
+  gap: var(--composer-action-gap);
+}
+
+.composer-field::after {
+  content: "";
+  display: none;
+  position: absolute;
+  inset: calc(-1 * var(--composer-field-border-width));
+  padding: var(--composer-field-border-width);
+  border-radius: calc(var(--composer-field-radius) + var(--composer-field-border-width));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+@supports (-webkit-mask-composite: xor) or (mask-composite: exclude) {
+  .composer-field::after {
+    display: block;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--focus), transparent 72%),
+      transparent,
+      color-mix(in srgb, var(--accent), transparent 78%),
+      transparent
+    );
+    background-size: 220% 100%;
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+}
+
+.input-wrap.composer-typing .composer-field::after {
+  opacity: 0.7;
+  animation: composer-shimmer 1.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input-wrap.composer-typing .composer-field::after {
+    animation: none;
+  }
+}
+
+@keyframes composer-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+/* Fallback shimmer for browsers without mask-composite (notably some iOS/WebKit builds). */
+@supports not ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
+  .input-wrap.composer-typing .composer-field {
+    animation: composer-border-pulse 1.9s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .input-wrap.composer-typing .composer-field {
+      animation: none;
+    }
+  }
+}
+
+@keyframes composer-border-pulse {
+  0%,
+  100% {
+    border-color: color-mix(in srgb, var(--composer-field-border-color), var(--focus) 35%);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--focus), transparent 88%);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--composer-field-border-color), var(--accent) 35%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 88%);
+  }
+}
+
+.composer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: 4px 2px 0;
+  color: var(--prompt-color);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.input-wrap.input-wrap-no-composer .composer-field,
+.input-wrap.input-wrap-no-composer .composer-row,
+.input-wrap.input-wrap-no-composer .composer-meta,
+.input-wrap.input-wrap-no-composer .composer-edit,
+.input-wrap.input-wrap-no-composer .composer-helper {
+  display: none;
+}
+
+/* Telegram-like: подсказки/счётчик показываем только когда это реально нужно. */
+.input-wrap:not(.composer-too-long):not(.composer-near-limit):not(.board-editor-open) .composer-meta {
+  display: none;
+}
+
+.composer-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.input-wrap.composer-too-long .composer-count {
+  color: var(--bad);
+  opacity: 1;
+}
+
+@media (max-width: 520px) {
+  .composer-hint {
+    display: none;
+  }
+
+  .composer-meta {
+    justify-content: flex-end;
+  }
+}
+
+@media (pointer: coarse) {
+  .composer-hint {
+    display: none;
+  }
+}
+
+/* ===== Boards: inline news editor ===== */
+.input-wrap.board-editor-open {
+  --composer-field-min-h: 96px;
+  /* Use app viewport var so iOS keyboard/URL bar doesn't clip the bottom controls. */
+  --composer-field-max-h: min(calc(var(--app-vh, 100vh) * 0.44), 420px);
+}
+
+.input-wrap.board-editor-open .composer-field {
+  /* iPhone: when the draft grows (many newlines) keep controls reachable. */
+  align-items: flex-start;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.input-wrap.board-editor-open .composer-field .input {
+  padding-top: 6px;
+  padding-bottom: 0;
+}
+
+.board-editor {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 22%);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel), transparent 12%);
+}
+
+.board-editor-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.board-editor-toolbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.btn.board-editor-tool {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+}
+
+.btn.board-editor-kind {
+  font-weight: 850;
+  letter-spacing: 0.04em;
+}
+
+.btn.board-editor-kind.kind-added {
+  color: var(--good);
+}
+
+.btn.board-editor-kind.kind-improved {
+  color: var(--focus);
+}
+
+.btn.board-editor-kind.kind-fixed {
+  color: var(--warn);
+}
+
+.btn.board-editor-kind.kind-notes {
+  color: var(--muted);
+}
+
+.board-editor-sep {
+  width: 1px;
+  height: 18px;
+  background: color-mix(in srgb, var(--line), transparent 25%);
+  flex: 0 0 auto;
+  margin: 0 4px;
+}
+
+.board-editor-preview {
+  display: grid;
+  gap: 8px;
+}
+
+.board-editor-preview-title {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.board-editor-preview-body {
+  border: 1px solid color-mix(in srgb, var(--line), transparent 25%);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel2), transparent 10%);
+  padding: 12px;
+  /* Use app viewport var so iOS keyboard/URL bar doesn't clip scrollable preview. */
+  max-height: min(calc(var(--app-vh, 100vh) * 0.28), 280px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+  touch-action: pan-y;
+}
+
+.board-editor-preview-empty {
+  color: var(--muted);
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.board-editor-schedule {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.board-editor-schedule-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.board-editor-datetime {
+  width: 100%;
+  min-width: 140px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--composer-field-bg);
+  border: var(--composer-field-border-width) solid var(--composer-field-border-color);
+  color: var(--composer-field-text);
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.board-editor-datetime.is-invalid {
+  border-color: color-mix(in srgb, var(--bad), transparent 10%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bad), transparent 75%);
+}
+
+.board-editor-schedule-btn,
+.board-editor-schedule-clear {
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.board-editor-schedule-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  opacity: 0.9;
+}
+
+.board-editor-schedule-list {
+  display: grid;
+  gap: 6px;
+}
+
+.board-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn.board-editor-publish {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  border-color: color-mix(in srgb, var(--focus), transparent 60%);
+  background: color-mix(in srgb, var(--focus), transparent 88%);
+}
+
+.btn.board-editor-publish:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--focus), transparent 40%);
+  background: color-mix(in srgb, var(--focus), transparent 82%);
+}
+
+.btn.board-editor-publish:active:not(:disabled) {
+  transform: translateY(1px);
+  background: color-mix(in srgb, var(--focus), transparent 75%);
+}
+
+.board-sched-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 25%);
+  background: color-mix(in srgb, var(--panel2), transparent 8%);
+}
+
+.board-sched-meta {
+  display: grid;
+  gap: 2px;
+}
+
+.board-sched-time {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.board-sched-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn.board-sched-cancel {
+  height: 30px;
+  width: 30px;
+  padding: 0;
+  border-radius: 12px;
+  font-size: 16px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.board-sched-more {
+  color: var(--muted);
+  font-size: 12px;
+  opacity: 0.9;
+  padding: 2px 10px 0;
+}
+
+@media (max-width: 520px) {
+  .board-editor-schedule {
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .board-editor-schedule-label {
+    display: none;
+  }
+}
+
+@media (min-width: 601px) {
+  .input-wrap {
+    box-shadow: var(--composer-divider-shadow);
+  }
+}
+
+@media (pointer: coarse) {
+  /* Mobile: keep the news composer compact so ✏️/скрепка stay reachable, and allow internal scroll. */
+  .input-wrap.board-editor-open {
+    --composer-field-max-h: min(calc(var(--app-vh, 100vh) * 0.34), 320px);
+  }
+
+  .kbd-open .input-wrap.board-editor-open {
+    --composer-field-max-h: min(calc(var(--app-vh, 100vh) * 0.26), 220px);
+  }
+
+  .kbd-open .input-wrap.board-editor-open .board-editor-schedule,
+  .kbd-open .input-wrap.board-editor-open .board-editor-schedule-hint,
+  .kbd-open .input-wrap.board-editor-open .board-editor-schedule-list {
+    display: none;
+  }
+
+  .kbd-open .input-wrap.board-editor-open .board-editor-preview-body {
+    max-height: min(calc(var(--app-vh, 100vh) * 0.22), 220px);
+  }
+}
+
+.footer {
+  display: none;
+  padding: var(--footer-pad-y) var(--footer-pad-x);
+  padding-bottom: calc(var(--footer-pad-y) + var(--safe-bottom-layout-pad));
+  border-top: var(--footer-border-width) solid var(--footer-border-color);
+  box-shadow: var(--footer-shadow);
+  background: var(--footer-bg);
+  color: var(--footer-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

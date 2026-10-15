@@ -1,0 +1,23 @@
+use strict;
+use warnings;
+use Test::More;
+use FindBin;
+use File::Temp qw(tempdir);
+use Time::HiRes qw(sleep);
+use lib "$FindBin::Bin/../lib";
+use MacDiag::Runner;
+my $r=MacDiag::Runner->new;
+my $a=$r->run(['/bin/echo','hello']);
+is($a->{state},'EXECUTED','command executed');is($a->{stdout},"hello\n",'stdout');is($a->{exit_code},0,'exit code');
+$a=$r->run([$^X,'-e','print STDERR "err";exit 7']);is($a->{exit_code},7,'nonzero retained');is($a->{stderr},'err','stderr retained');
+$a=$r->run([$^X,'-e','sleep 5'],timeout=>0.1);is($a->{state},'TIMEOUT','bounded timeout');cmp_ok($a->{duration_ms},'<',1500,'bounded duration');
+$a=$r->run([$^X,'-e','print "X" x 100000'],max_bytes=>4096);is($a->{state},'OUTPUT_LIMIT','bounded output');cmp_ok(length($a->{stdout}),'<=',4096,'capture bounded');
+local $ENV{MACDIAG_SECRET}='DO_NOT_LEAK';
+$a=$r->run([$^X,'-e','print $ENV{MACDIAG_SECRET}||"absent";print " cwd=";use Cwd;print getcwd']);is($a->{stdout},'absent cwd=/','environment cleared and cwd trusted');
+$a=$r->run(['/not/a/program']);is($a->{exit_code},127,'exec error tracked');
+my $d=tempdir(CLEANUP=>1);my $heartbeat="$d/beat";
+$a=$r->run([$^X,'-e','my $p=fork(); if (!$p) {$SIG{TERM}="IGNORE"; while(1){open my $f,">>",$ARGV[0] or die; print $f "x";close $f;select undef,undef,undef,0.02}} exit 0;',$heartbeat],timeout=>0.15);
+is($a->{state},'TIMEOUT','descendant-held pipe does not hang forever');
+my $size=-s $heartbeat;sleep 0.15;is(-s $heartbeat,$size,'TERM-ignoring descendant no longer executes after group kill');
+for (1..5) {is($r->run([$^X,'-e','exit 0'])->{state},'EXECUTED','group handshake repeat')}
+done_testing();
