@@ -79,8 +79,8 @@ SOCKS5 не предоставляет пересылку ICMP (RFC 1928). От�
 ## Воспроизводимые проверки
 
 ```sh
-swift test --package-path vpn-app/failover
-python3 vpn-app/failover/tools/mutation_check.py --output /tmp/vpn-failover-mutations
+swift test --package-path vpn/app/failover
+python3 vpn/app/failover/tools/mutation_check.py --output /tmp/vpn-failover-mutations
 ```
 
 39 Swift unit-тестов прошли на Linux x86_64 / Swift 6.2.1. Время моделируется входными

@@ -71,8 +71,8 @@ SHA-256, проверяет root-владельцев, типы файлов и 
 фактическое обновление VPN-подписки на устройстве и запуск на Big Sur.
 
 ```sh
-python3 -m unittest discover -s vpn-app/tests -v
-cd vpn-app && swift test -j 2
+python3 -m unittest discover -s vpn/app/tests -v
+cd vpn/app && swift test -j 2
 ```
 
 Development-сборка сохраняет отключённый канал обновлений. Для рабочего выпуска

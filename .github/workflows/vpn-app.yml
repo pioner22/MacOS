@@ -2,7 +2,7 @@ name: BigSurVPN app updater
 on:
   pull_request:
     paths:
-      - 'vpn-app/**'
+      - 'vpn/app/**'
       - '.github/workflows/vpn-app.yml'
   workflow_dispatch:
 permissions:
@@ -19,7 +19,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Release metadata and safety checks
-        run: python3 -m unittest discover -s vpn-app/tests -v
+        run: python3 -m unittest discover -s vpn/app/tests -v
   native-build:
     runs-on: macos-15-intel
     timeout-minutes: 25
@@ -32,11 +32,11 @@ jobs:
           xcodebuild -version
           xcrun swift --version
       - name: Test automatic failover decision policy
-        run: xcrun swift test --package-path vpn-app/failover
+        run: xcrun swift test --package-path vpn/app/failover
       - name: Build development application and run Swift tests
-        run: python3 vpn-app/tools/build_release.py build --development --output "$RUNNER_TEMP/BigSurVPN.app"
+        run: python3 vpn/app/tools/build_release.py build --development --output "$RUNNER_TEMP/BigSurVPN.app"
       - name: Launch native window and verify disabled development updater
-        run: python3 vpn-app/tools/smoke_test_app.py --app "$RUNNER_TEMP/BigSurVPN.app" --report "$RUNNER_TEMP/BigSurVPN-native-smoke.json"
+        run: python3 vpn/app/tools/smoke_test_app.py --app "$RUNNER_TEMP/BigSurVPN.app" --report "$RUNNER_TEMP/BigSurVPN-native-smoke.json"
       - name: Archive development application preserving signatures and symlinks
         run: ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/BigSurVPN.app" "$RUNNER_TEMP/BigSurVPN-development.zip"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -10,7 +10,7 @@ import re
 import xml.etree.ElementTree as ET
 
 BUNDLE_ID = 'ru.pioner22.BigSurVPN'
-FEED = 'https://raw.githubusercontent.com/pioner22/MacOS/main/vpn-app/updates/appcast.xml'
+FEED = 'https://raw.githubusercontent.com/pioner22/MacOS/main/vpn/app/updates/appcast.xml'
 RELEASES = 'https://github.com/pioner22/MacOS/releases/download/'
 SPARKLE = 'http://www.andymatuschak.org/xml-namespaces/sparkle'
 KEY_ACCOUNT = 'ru.pioner22.BigSurVPN.updates'

@@ -1,5 +1,7 @@
 # BigSurVPN: приложение и обновление по кнопке
 
+> Описание первого этапа ниже сохранено для истории. Актуальная последовательность одной кнопки и адаптер подписки описаны в [UNIFIED_UPDATE_RU.md](UNIFIED_UPDATE_RU.md). Рабочий каталог после перестройки — `vpn/app/`; нативный выпуск пока не готов.
+
 ## Что реализовано
 
 Это начальная нативная часть будущего приложения, а не готовая замена Happ.
@@ -51,8 +53,8 @@ SwiftUI/AppKit, цель macOS 11.0 Intel. Sparkle **2.9.6** закреплён 
 ## Локальные проверки
 
 ```sh
-swift test --package-path vpn-app
-python3 -m unittest discover -s vpn-app/tests -v
+swift test --package-path vpn/app
+python3 -m unittest discover -s vpn/app/tests -v
 ```
 
 На Linux собирается только модуль правил и выполняются его тесты; SwiftUI, AppKit и
@@ -69,7 +71,7 @@ Sparkle нельзя считать собранными по результат
 пользователя Xcode не потребуется после появления подписанного `.app`.
 
 ```sh
-python3 vpn-app/tools/build_release.py build \
+python3 vpn/app/tools/build_release.py build \
   --development --output /tmp/BigSurVPN.app
 ```
 
@@ -104,11 +106,11 @@ export SPARKLE_PUBLIC_KEY="$(/path/to/sparkle/bin/generate_keys --account ru.pio
 Из корня репозитория:
 
 ```sh
-python3 vpn-app/tools/build_release.py build \
+python3 vpn/app/tools/build_release.py build \
   --identity 'Developer ID Application: YOUR NAME (TEAMID)' \
   --output /tmp/BigSurVPN.app
 
-python3 vpn-app/tools/build_release.py prepare \
+python3 vpn/app/tools/build_release.py prepare \
   --app /tmp/BigSurVPN.app \
   --sparkle-tools /path/to/sparkle/bin \
   --notary-profile bigsurvpn-notary \
@@ -132,7 +134,7 @@ python3 vpn-app/tools/build_release.py prepare \
 **не публикует** выпуск и не заменяет работающую программу. Перед распространением
 нужно пройти приведённые ниже испытания. Затем сначала загрузить ZIP в GitHub Release
 с тегом из release.json, после этого опубликовать подписанный appcast.xml по пути
-`vpn-app/updates/appcast.xml` в main. Старые ZIP не удалять. Feed не форматировать после
+`vpn/app/updates/appcast.xml` в main. Старые ZIP не удалять. Feed не форматировать после
 подписи: любое изменение требует повторной подписи. Git attributes отключают CRLF.
 
 Для пользователя после первой установки: открыть BigSurVPN → «Проверить обновления»

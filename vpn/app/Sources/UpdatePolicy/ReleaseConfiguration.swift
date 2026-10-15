@@ -4,7 +4,7 @@ import Foundation
 /// This validates packaging configuration; Sparkle validates the actual signatures.
 public struct ReleaseConfiguration: Equatable {
     public static let bundleID = "ru.pioner22.BigSurVPN"
-    public static let feed = "https://raw.githubusercontent.com/pioner22/MacOS/main/vpn-app/updates/appcast.xml"
+    public static let feed = "https://raw.githubusercontent.com/pioner22/MacOS/main/vpn/app/updates/appcast.xml"
     public let version: String
     public let build: UInt32
     public let publicKey: String
