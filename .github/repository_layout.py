@@ -13,7 +13,7 @@ BASELINE = 'b37948a924f72cc06b577a0e5a3cf3f1f6e9170e'
 ARCHIVE = set('build desktop electron-builder.json index.html makefile package-lock.json package.json public scripts src test tsconfig.json vite.config.ts'.split())
 MIRRORS = ('diagnostic_profile.sh', 'diagnostics-release.tsv', 'network-fixtures.sha256', 'network-fixtures.tsv')
 PATH_ONLY_BLOBS = {'publish_network_fixtures.sh': '54cbb28b7cf04e259df4bbfb4f0dd5ebf130b9b1'}
-PRIMARY = {'st.sh': 'diagnostics/st.sh', 'macdiag-core.sh': 'diagnostics/macdiag-core.sh', 'vpn.sh': 'vpn/vpn.sh'}
+PRIMARY = {'st.sh': 'diagnostics/st.sh', 'macdiag-core.sh': 'diagnostics/macdiag-core.sh', 'vpn.sh': 'vpn/entry.sh'}
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = r'''#!/bin/bash
 # Stable entry point; canonical implementation: @TARGET@

@@ -31,7 +31,7 @@ class MappingTests(unittest.TestCase):
             self.assertEqual(r.destination(path), '.archive/yagodka-client/' + path)
     def test_root_controls_retained(self):
         self.assertEqual(r.destination('LICENSE'), 'LICENSE')
-        self.assertEqual(r.destination('.gitignore'), '.gitignore')
+        self.assertEqual(r.destination('.gitignore'), 'LICENSE'.replace('LICENSE','.gitignore'))
         self.assertIsNone(r.destination('.github/workflows/example.yml'))
     def test_original_readme_is_not_lost(self):
         self.assertEqual(r.destination('README.md'), '.archive/yagodka-client/README.original.md')
@@ -39,9 +39,9 @@ class MappingTests(unittest.TestCase):
         with self.assertRaises(ValueError): r.launcher('../evil', 'a'*40, 'b'*40)
     def test_rejects_noncommit_and_invalid_blob(self):
         for ref, sha in (('main','a'*40),('a'*40,'$(touch bad)'),('a'*39,'b'*40)):
-            with self.assertRaises(ValueError): r.launcher('vpn/vpn.sh',ref,sha)
+            with self.assertRaises(ValueError): r.launcher(r.PRIMARY['vpn.sh'],ref,sha)
     def test_fixed_args_and_no_privileged_commands(self):
-        text=r.launcher('vpn/vpn.sh','a'*40,'b'*40)
+        text=r.launcher(r.PRIMARY['vpn.sh'],'a'*40,'b'*40)
         self.assertNotIn('sudo ',text)
         self.assertNotIn('chmod ',text)
         self.assertNotIn('chown ',text)

@@ -47,7 +47,7 @@ class CheckerTests(unittest.TestCase):
         self.new['vpn/vpn-runtime.py']=('100644','blob','f'*40)
         self.assertEqual(self.check(),5)
     def test_changed_pinned_target_rejected(self):
-        self.pinned['vpn/vpn.sh']=('100644','blob','f'*40)
+        self.pinned[r.PRIMARY['vpn.sh']]=('100644','blob','f'*40)
         with self.assertRaises(ValueError): self.check()
     def test_missing_data_mirror_rejected(self):
         self.new['diagnostics/network-fixtures.tsv']=('100644','blob','f'*40)
