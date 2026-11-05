@@ -19,6 +19,8 @@ import time
 from service_common import (BASE, PRIVATE, SERVICE, ENV, CLOCK, ServiceError, Cancelled,
                             read_json, cancel_check, run, kill, load_runtime)
 
+class ProbeUnavailable(ServiceError): pass
+
 PROBE_PORT = 17891
 PROBE_URLS = ('https://www.gstatic.com/generate_204', 'https://cp.cloudflare.com/generate_204')
 
@@ -114,6 +116,7 @@ class MacAdapter(object):
         self.probe_path = PRIVATE + '/service-probe.json'
         self.probe_auth = binascii.hexlify(os.urandom(24)).decode('ascii')
         self.prepared = None
+        self.prepared_node = None
         self.deadline = None
         self.runtime.run = self.runtime_run
 
@@ -149,6 +152,7 @@ class MacAdapter(object):
             kill(self.probe_process); self.probe_process = None
         if os.path.exists(self.probe_path): os.unlink(self.probe_path)
         self.prepared = None
+        self.prepared_node = None
 
     def disconnect(self):
         self.close_probe()
@@ -168,7 +172,12 @@ class MacAdapter(object):
         self.runtime.assert_no_other_vpn()
         # No global routes for candidate probes. Interface autodetection now sees
         # the real underlying network, not a previously failed TUN.
-        config = self.runtime.make_config(node, self.probe_auth, False)
+        try:
+            resolved = self.runtime.resolve_node(node)
+        except self.runtime.VPNError:
+            raise ProbeUnavailable('Endpoint name resolution failed')
+        self.check()
+        config = self.runtime.make_config(resolved, self.probe_auth, False)
         config['inbounds'][0]['listen_port'] = PROBE_PORT
         self.runtime.atomic_json(self.probe_path, config)
         self.runtime.check_config(self.probe_path)
@@ -177,6 +186,7 @@ class MacAdapter(object):
             self.probe_process = subprocess.Popen(['/usr/bin/python', '-E', '-s', '-B', SERVICE + '/current/probe_guard.py'],
                 stdin=subprocess.PIPE, stdout=null, stderr=null, env=ENV, close_fds=True, preexec_fn=os.setsid)
         self.prepared = node['id']
+        self.prepared_node = resolved
 
     def probe(self, node, active):
         self.check()
@@ -188,12 +198,18 @@ class MacAdapter(object):
                 # Bind protects transport, this guards stale route observations.
                 return result and self.runtime.route_interface('1.1.1.1') == self.runtime.IFACE
             except self.runtime.VPNError: return False
-        self.prepare(node)
+        try:
+            self.prepare(node)
+        except ProbeUnavailable:
+            return False
         if self.probe_process.poll() is not None: return False
         return probe_round(auth=self.probe_auth, check=self.check)
 
     def activate(self, node):
         self.check()
+        if self.prepared != node['id'] or self.prepared_node is None:
+            raise ServiceError('Candidate has not been prepared and probed')
+        node = self.prepared_node
         self.close_probe()
         rt = self.runtime
         self.deadline = CLOCK() + 45.0
