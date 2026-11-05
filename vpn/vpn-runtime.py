@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""BigSurVPN 2.1.3. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
+"""BigSurVPN 2.1.4. Python 2.7/3 stdlib. macOS 11 Intel, not Recovery.
 Public provider preset is DATA. It must never be evaluated as shell/Python code.
 The CLI manages a sing-box TUN launchd job, not an IKEv2/mobileconfig profile.
 """
@@ -38,7 +38,7 @@ try:
 except NameError:
     text_type = str
 
-VERSION = '2.1.3'
+VERSION = '2.1.4'
 BASE = '/Library/BigSurVPN'
 PRIVATE = BASE + '/private'
 CURRENT = BASE + '/current'
@@ -519,9 +519,36 @@ def validate_socks(value):
     ident = hashlib.sha256(b(json.dumps(value, sort_keys=True, ensure_ascii=True))).hexdigest()[:20]
     return {'id': ident, 'name': 'SOCKS5 резерв', 'outbound': out, 'spiderx_ignored': False}
 
+def socks_nodes(state):
+    """Canonical endpoint order; accept installed single-address 2.1.3 catalogs."""
+    nodes = state.get('socks5_nodes')
+    if nodes is None:
+        nodes = [state['socks5']] if state.get('socks5') else []
+    if not isinstance(nodes, list) or not 1 <= len(nodes) <= 8:
+        raise VPNError('SOCKS5: нужен список из 1–8 адресов. Запустите установщик.')
+    result, seen = [], set()
+    for node in nodes:
+        if not isinstance(node, dict) or not isinstance(node.get('outbound'), dict):
+            raise VPNError('Некорректный сохранённый профиль SOCKS5.')
+        out = node['outbound']
+        if out.get('type') != 'socks' or out.get('version') != '5' or out.get('network') != 'tcp':
+            raise VPNError('Некорректный тип сохранённого профиля SOCKS5.')
+        checked = validate_socks({'server': out.get('server'), 'port': out.get('server_port'),
+                                  'username': out.get('username'), 'password': out.get('password')})
+        if checked['id'] not in seen:
+            result.append(checked)
+            seen.add(checked['id'])
+    return result
+
+def node_label(node):
+    out = node['outbound']
+    if out['type'] == 'socks':
+        return 'SOCKS5 %s:%s' % (out['server'], out['server_port'])
+    return node['name']
+
 def choose_backend(state, terminal=None):
     # The bootstrap may be piped into bash: never consume that stdin stream.
-    if not state.get('socks5'):
+    if not state.get('socks5') and not state.get('socks5_nodes'):
         return 'xray'  # old profiles remain usable without a new prompt
     say('Выберите подключение:\n  1 — Xray (VLESS / Trojan)\n  2 — SOCKS5 резервный\n  0 — Отмена')
     say('SOCKS5: TCP через TUN. Сам SOCKS5 не шифрует транспорт и пароль; используйте HTTPS.')
@@ -557,8 +584,24 @@ def validate_profile(value):
         raise VPNError('Не задан резервный список профилей.')
     state = {'subscription': value['subscription'], 'bootstrap': [parse_uri(u) for u in value['bootstrap']],
              'nodes': [], 'preferred': '', 'updated_at': None, 'backend': 'xray'}
+    if 'socks5_alternates' in value and 'socks5' not in value:
+        raise VPNError('Дополнительные адреса требуют основного SOCKS5-профиля.')
     if 'socks5' in value:
-        state['socks5'] = validate_socks(value['socks5'])
+        primary = validate_socks(value['socks5'])
+        extra = value.get('socks5_alternates', [])
+        if not isinstance(extra, list) or len(extra) > 7:
+            raise VPNError('Допускается не более семи дополнительных SOCKS5-адресов.')
+        nodes, seen = [primary], set([primary['id']])
+        for host in extra:
+            raw = dict(value['socks5'])
+            raw['server'] = host
+            node = validate_socks(raw)
+            if node['id'] not in seen:
+                nodes.append(node)
+                seen.add(node['id'])
+        state['socks5'] = primary
+        state['socks5_nodes'] = nodes
+        state['preferred_socks5'] = ''
     return state
 
 def resolve_node(node):
@@ -1051,10 +1094,10 @@ def refresh(auth, report):
 
 def candidates(state):
     if backend_of(state) == 'socks5':
-        node = state.get('socks5')
-        if not isinstance(node, dict) or node.get('outbound', {}).get('type') != 'socks':
-            raise VPNError('Выбран SOCKS5, но резервный профиль отсутствует. Повторите установку.')
-        return [node]  # explicit choice: never contact the failed primary provider
+        nodes = socks_nodes(state)
+        preferred = state.get('preferred_socks5', '')
+        # Priority is a hint, not a ban on trying the other working addresses.
+        return [n for n in nodes if n['id'] == preferred] + [n for n in nodes if n['id'] != preferred]
     seen, result = [], []
     all_nodes = state.get('nodes', []) + state.get('bootstrap', [])
     preferred = [x for x in all_nodes if x['id'] == state.get('preferred')]
@@ -1163,7 +1206,7 @@ def connect(base, report):
     auth = binascii.hexlify(os.urandom(24)).decode('ascii')
     selected = None
     for index, n in enumerate(candidates(state), 1):
-        report.mark('SERVER_PROBE', 'INFO', '%s. %s; системные маршруты ещё не меняются.' % (index, n['name']))
+        report.mark('SERVER_PROBE', 'INFO', '%s. %s; системные маршруты ещё не меняются.' % (index, node_label(n)))
         try:
             resolved = resolve_node(n)
             exit_ip = probe(resolved, auth)
@@ -1175,6 +1218,9 @@ def connect(base, report):
             report.mark('SERVER_ATTEMPT', 'INFO', 'Этот сервер не прошёл: ' + text_type(e))
     if selected is None:
         raise VPNError('Ни один профиль не прошёл HTTPS-проверку. Системный VPN не запущен; ключи/серверы могут быть недоступны.')
+    report.data['server_address'] = selected['outbound']['server']
+    report.data['server_port'] = selected['outbound']['server_port']
+    report.mark('SERVER_SELECTED', 'PASS', node_label(selected) + '; HTTPS через этот профиль подтверждён.')
     if selected.get('spiderx_ignored'):
         report.mark('REALITY', 'INFO', 'spiderX не переносится в sing-box; соединение проверено HTTPS-запросом.')
     atomic_json(CONFIG, make_config(selected, auth, True))
@@ -1203,7 +1249,9 @@ def connect(base, report):
                 time.sleep(0.5)
         ip = verify(base, report)
         atomic_json(ACTIVE, {'baseline': base, 'name': selected['name'], 'id': selected['id'],
-                            'auth': auth, 'ip': ip, 'verified_at': now(), 'version': VERSION, 'backend': backend})
+                            'auth': auth, 'ip': ip, 'verified_at': now(), 'version': VERSION, 'backend': backend,
+                            'server_address': selected['outbound']['server'],
+                            'server_port': selected['outbound']['server_port']})
         if backend == 'xray':
             try:
                 refresh(auth, report)
@@ -1228,7 +1276,7 @@ def rollback_new(report):
 
 COMMAND_ARITIES = {'setup': 1, 'select': 1, 'on': 0, 'off': 0, 'status': 0,
                    'test': 0, 'speed': 0, 'list': 0, 'update': 0, 'report': 0,
-                   'logs': 0, 'uninstall': 0, 'help': 0, 'version': 0}
+                   'logs': 0, 'uninstall': 0, 'help': 0, 'version': 0, 'wizard': 0}
 HELP = """BigSurVPN @VERSION@ — macOS Big Sur 11.x Intel
 Использование: vpn-bigsur КОМАНДА [АРГУМЕНТ]
 
@@ -1236,6 +1284,7 @@ HELP = """BigSurVPN @VERSION@ — macOS Big Sur 11.x Intel
   test         Проверить подключение, DNS, HTTPS и выходной IP
   on / off     Включить / выключить VPN
   speed        Проверить VPN и измерить скорость
+  wizard       Мастер выбора подключения без повторной установки (также menu)
   list         Список серверов
   select N     Выбрать приоритетный сервер по номеру
   update       Обновить подписку серверов, НЕ программу
@@ -1259,6 +1308,8 @@ def parse_command(argv):
     command = {'-h': 'help', '-V': 'version'}.get(command, command)
     if command.startswith('--'):
         command = command[2:]
+    if command == 'menu':
+        command = 'wizard'
     if command not in COMMAND_ARITIES or len(args) != COMMAND_ARITIES[command]:
         raise UsageError('Неизвестная команда или неверное число аргументов. Справка: vpn-bigsur --help')
     return command, args
@@ -1278,7 +1329,7 @@ case "$command" in
 esac
 case "$command" in
   setup|select) expected=1 ;;
-  on|off|status|test|speed|list|update|report|logs|uninstall|help|version) expected=0 ;;
+  on|off|status|test|speed|list|update|report|logs|uninstall|help|version|wizard|menu) expected=0 ;;
   *) printf '%s\\n' 'ОШИБКА команды. Справка: vpn-bigsur --help' >&2; exit 2 ;;
 esac
 if [ "$#" -ne "$expected" ]; then
@@ -1345,7 +1396,7 @@ def stage_install(profile_path, report):
             raise VPNError('Legacy-ядро не запускается на этом Mac или версия не совпадает.')
         report.mark('CORE', 'PASS', 'SHA-256 архива и запуск sing-box ' + CORE_VERSION + ' на этом Mac.')
         # Schema validation by the actual installed core, before network changes.
-        sample_nodes = [state['bootstrap'][0]] + ([state['socks5']] if state.get('socks5') else [])
+        sample_nodes = [state['bootstrap'][0]] + (socks_nodes(state) if state.get('socks5') else [])
         for sample_node in sample_nodes:
             sample = make_config(sample_node, 'schema-check', True)
             # No DNS/network is needed for either configuration schema check.
@@ -1385,6 +1436,10 @@ def activate_install(stage, state, profile, meta, report):
             state['nodes'] = old.get('nodes', [])
             state['preferred'] = old.get('preferred','')
             state['updated_at'] = old.get('updated_at')
+        if state.get('socks5'):
+            valid_ids = [n['id'] for n in socks_nodes(state)]
+            if old.get('preferred_socks5') in valid_ids:
+                state['preferred_socks5'] = old['preferred_socks5']
     atomic_json(CATALOG, state)
     atomic_json(PRIVATE + '/provider-profile.json', profile)
     atomic_bytes(BASE + '/vpn-bigsur.sh', b(CLI), 0o755)
@@ -1464,6 +1519,37 @@ def setup(profile_path, report):
         if staged and os.path.isdir(staged[0]):
             shutil.rmtree(staged[0])
 
+def wizard(report, terminal=None):
+    check_install()
+    original = read_json(CATALOG)
+    selected = choose_backend(original, terminal=terminal)  # cancel BEFORE stop/write
+    state = json.loads(json.dumps(original))
+    state['backend'] = selected
+    candidates(state)  # reject corrupt catalog before stopping a working session
+    report.mark('CHOICE', 'INFO', backend_name(selected))
+    had_service = bool(info())
+    report.mark('WIZARD', 'INFO', 'Мастер использует сохранённые профили. Программа и ядро не скачиваются.')
+    if had_service:
+        report.mark('RECONNECT', 'WARN', 'Переподключение: временно возможен прямой интернет; kill switch отсутствует.')
+        stop()  # if cleanup fails, do not overwrite settings or launch another TUN
+    changed = False
+    try:
+        base = baseline(report)
+        atomic_json(CATALOG, state)
+        changed = True
+        ip = connect(base, report)
+        report.data['baseline'] = base
+        report.end('CONNECTED_WITH_WARNINGS' if report.warnings() else 'CONNECTED')
+        say('VPN подключён: %s. IP: %s. Состояние: vpn-bigsur status' % (backend_name(selected), ip))
+        return 2 if report.warnings() else 0
+    except BaseException:
+        # connect cleans up a failed new launch; restore the saved choice, not a
+        # fabricated connected state. Ctrl+C never initiates a second connection.
+        if changed:
+            atomic_json(CATALOG, original)
+        report.mark('WIZARD_RESTORE', 'INFO', 'Прежний выбор сохранён. Подключение не подтверждено; проверить status, затем on.')
+        raise
+
 def record_verification(ip):
     state = read_json(ACTIVE)
     state.update(ip=ip, verified_at=now())
@@ -1494,9 +1580,17 @@ def turn_on(report):
 def list_nodes(select=None):
     state = read_json(CATALOG)
     if backend_of(state) == 'socks5':
-        if select is not None and select != '1':
-            raise VPNError('В режиме SOCKS5 доступен один сервер: номер 1.')
-        say('1. SOCKS5 резерв. Смена типа подключения: повторите установку.')
+        nodes = socks_nodes(state)
+        if select is not None:
+            if not re.match(r'^[1-9][0-9]*\Z', select) or not 1 <= int(select) <= len(nodes):
+                raise VPNError('Номер SOCKS5-адреса вне списка.')
+            state['preferred_socks5'] = nodes[int(select) - 1]['id']
+            atomic_json(CATALOG, state)
+            say('Приоритет: ' + node_label(nodes[int(select) - 1]) + '. Применить: vpn-bigsur wizard')
+        else:
+            for i, n in enumerate(nodes, 1):
+                say('%s %s. %s' % ('*' if state.get('preferred_socks5') == n['id'] else ' ', i, node_label(n)))
+            say('При подключении адреса проверяются по порядку; используется первый прошедший HTTPS-проверку.')
         return
     nodes = state.get('nodes', []) + state['bootstrap']
     if select is not None:
@@ -1571,6 +1665,8 @@ def main():
             say('IPv4-маршрут: ' + (route_interface('1.1.1.1') or 'нет данных'))
             if os.path.isfile(ACTIVE):
                 a = read_json(ACTIVE)
+                if a.get('server_address'):
+                    say('Последний подключённый сервер: %s:%s' % (a['server_address'], a.get('server_port', '?')))
                 say('Последняя проверка: %s; IP тогда: %s. Новый тест: vpn-bigsur test' % (a.get('verified_at'), a.get('ip')))
             return 0
         if cmd in ('list','select'):
@@ -1581,6 +1677,8 @@ def main():
             if cmd == 'setup' and len(args) == 1:
                 return setup(args[0], report)
             check_install()
+            if cmd == 'wizard':
+                return wizard(report)
             if cmd == 'on':
                 return turn_on(report)
             if cmd in ('test','speed'):

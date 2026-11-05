@@ -12,5 +12,6 @@
     "port": 45004,
     "username": "proxy_user",
     "password": "AiOZTgkvdMjlgeYG"
-  }
+  },
+  "socks5_alternates": ["87.251.86.229"]
 }
