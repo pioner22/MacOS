@@ -8,7 +8,7 @@ component_entry() (
   export PATH=/usr/bin:/bin:/usr/sbin:/sbin LC_ALL=C
   unset BASH_ENV ENV CDPATH PERL5OPT PERL5LIB PERLLIB PERL_UNICODE
   umask 077
-  local target='vpn/vpn.sh' source_ref='b9727f95971a9bf548cb84819bd09340497cf226' expected_blob='7c65cd1e9a60da386a94041cc20b6851f7812f81'
+  local target='vpn/vpn.sh' source_ref='97b302b25f3e599448889116d9b01e4f981f4e2a' expected_blob='5cedd87f457025c5324cb50a1763f55c58e4af5e'
   local here='' work='' actual='' result=0
   if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
     here=$(CDPATH= cd -- "$(/usr/bin/dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
