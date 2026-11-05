@@ -187,7 +187,9 @@ class ConfigAndChoiceTests(unittest.TestCase):
     def test_socks_list_preserves_xray_preference(self):
         s = v.validate_profile(profile()); s.update(backend='socks5', preferred='keep-xray')
         with mock.patch.object(v, 'read_json', return_value=s), mock.patch.object(v, 'atomic_json') as write, contextlib.redirect_stdout(io.StringIO()):
-            v.list_nodes('1'); write.assert_not_called()
+            v.list_nodes('1')
+            write.assert_called_once_with(v.CATALOG, s)
+            self.assertEqual(s['preferred_socks5'], s['socks5']['id'])
             with self.assertRaises(v.VPNError): v.list_nodes('2')
         self.assertEqual(s['preferred'], 'keep-xray')
 

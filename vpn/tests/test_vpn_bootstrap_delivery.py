@@ -56,7 +56,7 @@ class DeliveryTests(unittest.TestCase):
     def test_03_downloads_verified_before_privilege_elevation(self):
         for name, filename in (('runtime', 'vpn-runtime.py'), ('profile', 'vpn-profile.json')):
             instruction = ('  fetch_checked "https://raw.githubusercontent.com/pioner22/MacOS/'
-                           '$%s_ref/%s" "$work/%s" "$%s_sha"' %
+                           '$%s_ref/vpn/%s" "$work/%s" "$%s_sha"' %
                            (name, filename, filename, name))
             self.assertEqual(BOOT.count(instruction), 1)
             self.assertLess(BOOT.index(instruction), BOOT.index('  runner='))
@@ -98,6 +98,21 @@ class DeliveryTests(unittest.TestCase):
     def test_10_cancel_choice_preserved(self):
         with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(KeyboardInterrupt):
             VPN.choose_backend({'socks5': True}, io.StringIO('0\n'))
+
+    def test_20_preset_hash_and_both_endpoints(self):
+        self.assertEqual(field('profile_sha'), sha((ROOT / 'vpn-profile.json').read_bytes()))
+        state = VPN.validate_profile(VPN.read_json(str(ROOT / 'vpn-profile.json')))
+        state['backend'] = 'socks5'
+        self.assertEqual([(n['outbound']['server'], n['outbound']['server_port'])
+                          for n in VPN.candidates(state)],
+                         [('144.31.180.114', 45004), ('87.251.86.229', 45004)])
+
+    def test_21_root_dispatcher_matches_canonical_bootstrap(self):
+        root = (ROOT.parent / 'vpn.sh').read_text(encoding='utf-8')
+        blob = hashlib.sha1(b'blob ' + str(len(BOOT.encode())).encode() + b'\0' + BOOT.encode()).hexdigest()
+        self.assertIn("expected_blob='" + blob + "'", root)
+        self.assertIn("target='vpn/vpn.sh'", root)
+        self.assertRegex(root, r"source_ref='[0-9a-f]{40}'")
 
 
 @unittest.skipUnless(os.geteuid() == 0, 'isolated root subprocess checks')
