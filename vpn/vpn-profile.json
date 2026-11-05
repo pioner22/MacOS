@@ -8,7 +8,7 @@
   "name": "Xray and temporary SOCKS5 reserve",
   "notice": "PUBLIC TEMPORARY PERSONAL PRESET, published at the explicit request of the owner. These credentials grant VPN/proxy access. Revoke them at the provider after use; deleting this file does not remove Git history.",
   "socks5": {
-    "server": "144.31.180.114",
+    "server": "87.251.86.229",
     "port": 45004,
     "username": "proxy_user",
     "password": "AiOZTgkvdMjlgeYG"
