@@ -1,5 +1,5 @@
 #!/bin/bash
-# BigSurVPN 2.1.3. One command: download -> configure -> launch -> verify -> speed.
+# BigSurVPN 2.1.4. One command: download -> configure -> launch -> verify -> speed.
 # Usage: curl -fL https://raw.githubusercontent.com/pioner22/MacOS/main/vpn.sh | bash
 # PERSONAL PUBLIC PRESET: the owner explicitly requested embedded VPN access.
 # Anyone able to download vpn-profile.json can use its subscription/credentials.
@@ -11,12 +11,13 @@ bigsur_vpn_bootstrap() (
   export LC_ALL=C
   unset BASH_ENV ENV CDPATH PYTHONHOME PYTHONPATH VPN_INSTALL_KEY
   umask 077
-  local runtime_ref=56256fcd2b279fb4bbcef1b2be4a2366ce6fd7de
-  local runtime_sha=966a6d63a7968113af5c713b5595c9c9c53628fb80e83badd31bedb84d24b877
-  local profile_ref=93ccab1365bab351dd10bdf861a5facc53e6a642
-  local profile_sha=0d45033f165b47595e78e5127233d8e1e802e7be3391afa7d325702af89524ad
+  local runtime_ref=0657826e2333c9e397caba128818e8425a2272f5
+  local runtime_sha=64d53f3cd4387535f6c4641b3a68971119aa04af73a595cca417434645059260
+  local profile_ref=0657826e2333c9e397caba128818e8425a2272f5
+  local profile_sha=b1def76c2e600cecee0accb2d0c06a225300d6ca1e3cf5f35920c070bad08c3d
   local work runner runtime_status
-  printf '%s\n' 'BigSurVPN 2.1.3 — выбор Xray или SOCKS5, установка/обновление и проверка.'
+  printf '%s\n' 'BigSurVPN 2.1.4 — выбор Xray или SOCKS5, установка/обновление и проверка.'
+  printf '%s\n' 'После установки: vpn-bigsur wizard — мастер без повторной загрузки установщика.'
   printf '%s\n' 'Автодиагностика каталогов команды при ошибке установки включена.'
   printf '%s\n' 'При повторном запуске VPN переподключается; временно возможен прямой интернет.'
   printf '%s\n' 'VPN-данные встроены в отдельный публичный профиль. Ключ установки не нужен.'
@@ -54,8 +55,8 @@ bigsur_vpn_bootstrap() (
       exit 1
     }
   }
-  fetch_checked "https://raw.githubusercontent.com/pioner22/MacOS/$runtime_ref/vpn-runtime.py" "$work/vpn-runtime.py" "$runtime_sha"
-  fetch_checked "https://raw.githubusercontent.com/pioner22/MacOS/$profile_ref/vpn-profile.json" "$work/vpn-profile.json" "$profile_sha"
+  fetch_checked "https://raw.githubusercontent.com/pioner22/MacOS/$runtime_ref/vpn/vpn-runtime.py" "$work/vpn-runtime.py" "$runtime_sha"
+  fetch_checked "https://raw.githubusercontent.com/pioner22/MacOS/$profile_ref/vpn/vpn-profile.json" "$work/vpn-profile.json" "$profile_sha"
 
   # Only read metadata of these two fixed paths; never list directory contents.
   # Keep the actual runtime error and its exit status, even if diagnostics fail.
