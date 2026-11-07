@@ -1,6 +1,6 @@
 #!/bin/bash
-# One command for an existing installation: diagnose both SOCKS5 endpoints,
-# select the working endpoint and verify the actual tunnel. No automatic updater.
+# One command: explicit Xray/SOCKS5 selection before changing a connection.
+# SOCKS5 retains the verified two-address recovery. No automatic updater.
 # Fresh installation retains the previously published installer/menu.
 bigsur_vpn_entry() (
   set +x
@@ -8,8 +8,11 @@ bigsur_vpn_entry() (
   export PATH=/usr/bin:/bin:/usr/sbin:/sbin LC_ALL=C
   unset BASH_ENV ENV CDPATH PYTHONHOME PYTHONPATH PERL5OPT PERL5LIB PERLLIB PERL_UNICODE
   umask 077
+  cd /  # Do not import Python modules from the caller's working directory.
   local repair_ref='a3c46d6e4f044aa91ef919c0c97d78d908b71f79'
   local repair_sha='7f64a270fa2e488a1f8aba686feb342abc16f63bd00f4fa6861d8b07289019ba'
+  local menu_ref='8cf78f376bea21a5899e8105769dc38f0b4c2aa6'
+  local menu_sha='127b3bb16ed4a124519316fd3ff171e55d19eb2dd083223191d4d18282fcad17'
   local work result=0 runner actual
   [ "$#" -eq 0 ] || { printf '%s\n' 'Запускайте эту ссылку без аргументов.' >&2; exit 2; }
   [ "$(/usr/bin/uname -s)" = Darwin ] || { printf '%s\n' 'Требуется macOS Big Sur.' >&2; exit 1; }
@@ -45,39 +48,49 @@ bigsur_vpn_entry() (
     /bin/bash "$work/install.sh" || result=$?
     exit "$result"
   fi
-  printf '%s\n' 'BigSurVPN — единый запуск: проверка двух адресов и восстановление подключения (1.0).'
-  printf '%s\n' 'Сначала 87.251.86.229:45004, затем 144.31.180.114:45004. Пароль SOCKS5 берётся из локальных настроек.'
+  printf '%s\n' 'BigSurVPN — мастер переключения Xray / SOCKS5 (1.1).'
+  printf '%s\n' 'Сначала выберите режим. Для SOCKS5 проверяются 87.251.86.229 и 144.31.180.114; Xray использует сохранённые VLESS/Trojan-профили.'
   printf '%s\n' 'При проверке подключение может прерываться; прямой интернет не блокируется.'
   printf '%s\n' 'Ядро и версия CLI сохраняются. Экспериментальная служба/автообновление не устанавливаются.'
   fetch "https://raw.githubusercontent.com/pioner22/MacOS/$repair_ref/vpn/connection-repair.py" "$work/repair.py"
   printf '%s  %s\n' "$repair_sha" "$work/repair.py" | /usr/bin/shasum -a 256 -c - || {
     printf '%s\n' 'Контрольная сумма не совпала; запуск отменён.' >&2; exit 1;
   }
+  fetch "https://raw.githubusercontent.com/pioner22/MacOS/$menu_ref/vpn/connection-menu.py" "$work/menu.py"
+  printf '%s  %s\n' "$menu_sha" "$work/menu.py" | /usr/bin/shasum -a 256 -c - || {
+    printf '%s\n' 'Контрольная сумма мастера не совпала; запуск отменён.' >&2; exit 1;
+  }
   # Verify exactly the same bytes again after privilege elevation, before execution.
   runner='import hashlib, os, shutil, sys, tempfile
 os.umask(0o077)
 if os.geteuid() != 0:
     sys.exit("Administrator privileges required.")
-with open(sys.argv[1], "rb") as source:
-    payload = source.read(262145)
-if len(payload) > 262144 or hashlib.sha256(payload).hexdigest() != sys.argv[2]:
-    sys.exit("Integrity verification failed; nothing executed.")
+verified = []
+for path, expected, name in [(sys.argv[1], sys.argv[2], "connection_repair.py"),
+                             (sys.argv[3], sys.argv[4], "connection-menu.py")]:
+    with open(path, "rb") as source:
+        payload = source.read(262145)
+    if len(payload) > 262144 or hashlib.sha256(payload).hexdigest() != expected:
+        sys.exit("Integrity verification failed; nothing executed.")
+    verified.append((name, payload))
 root = tempfile.mkdtemp(prefix="bigsur-vpn-repair-", dir="/private/var/tmp")
 try:
-    script = os.path.join(root, "connection-repair.py")
-    with open(script, "wb") as output:
-        output.write(payload)
+    for name, payload in verified:
+        with open(os.path.join(root, name), "wb") as output:
+            output.write(payload)
+    sys.path.insert(0, root)
+    script = os.path.join(root, "connection-menu.py")
     sys.argv = [script]
     scope = {"__name__": "__main__", "__file__": script, "__package__": None}
-    exec(compile(payload, script, "exec"), scope)
+    exec(compile(verified[1][1], script, "exec"), scope)
 finally:
     shutil.rmtree(root)
 '
   if [ "$EUID" -eq 0 ]; then
-    /usr/bin/python -E -s -B -c "$runner" "$work/repair.py" "$repair_sha" </dev/null || result=$?
+    /usr/bin/python -E -s -B -c "$runner" "$work/repair.py" "$repair_sha" "$work/menu.py" "$menu_sha" </dev/null || result=$?
   else
     ( : </dev/tty ) 2>/dev/null || { printf '%s\n' 'Нужен Терминал для системного подтверждения администратора.' >&2; exit 1; }
-    /usr/bin/sudo /usr/bin/python -E -s -B -c "$runner" "$work/repair.py" "$repair_sha" </dev/tty || result=$?
+    /usr/bin/sudo /usr/bin/python -E -s -B -c "$runner" "$work/repair.py" "$repair_sha" "$work/menu.py" "$menu_sha" </dev/tty || result=$?
   fi
   # Exit 2 means CONNECTED_WITH_WARNINGS (known SOCKS5 limitations), not failure.
   exit "$result"
