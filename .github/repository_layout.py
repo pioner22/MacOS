@@ -117,7 +117,7 @@ def check(root=ROOT, audit_relocation=False):
     for path, identity in old.items():
         if '/' not in path and path.endswith('.sh') and path not in PRIMARY and new.get(path) != new.get(destination(path)):
             failures.append('Historical entry point changed: ' + path)
-    allowed = {'.github', '.archive', '.gitignore', 'LICENSE', 'README.md', 'diagnostics', 'vpn'} | set(MIRRORS)
+    allowed = {'.github', '.archive', '.gitignore', 'LICENSE', 'README.md', 'diagnostics', 'vpn', 'dimanger'} | set(MIRRORS)
     allowed.update(p for p in old if '/' not in p and p.endswith('.sh'))
     for path in new:
         if path.split('/')[0] not in allowed:
