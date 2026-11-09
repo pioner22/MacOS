@@ -1,0 +1,2 @@
+# Sparkle signs exact feed bytes; do not normalize line endings after signing.
+updates/*.xml -text
