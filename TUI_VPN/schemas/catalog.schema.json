@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TUI VPN private catalog document v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "subscriptions"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "subscriptions": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "nodes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "nodes": {
+            "type": "array",
+            "maxItems": 200
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "health_url": "https://cp.cloudflare.com/generate_204",
+  "public_ip_url": "https://api.ipify.org",
+  "bootstrap_dns": "1.1.1.1",
+  "dns_tls_name": "cloudflare-dns.com",
+  "check_interval": 15,
+  "tolerance_ms": 500,
+  "probe_port": 18090,
+  "api_port": 18091,
+  "tun_macos": "utun97",
+  "tun_linux": "tuivpn0",
+  "maximum_servers": 200,
+  "maximum_subscriptions": 20,
+  "fetch_timeout": 20,
+  "theme": "ocean",
+  "repository": "pioner22/MacOS",
+  "release_path": "TUI_VPN/release.json"
+}

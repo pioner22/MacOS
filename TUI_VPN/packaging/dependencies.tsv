@@ -1,0 +1,4 @@
+darwin-amd64	python	https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-x86_64-apple-darwin-install_only.tar.gz	a962e47df522889eaa7ff0d6a56203f1079f68aabb65ffdbe8455f362bc769f3
+darwin-amd64	core	https://github.com/SagerNet/sing-box/releases/download/v1.14.0/sing-box-1.14.0-darwin-amd64-legacy-macos-10.13.tar.gz	99285bb2d30739dc8884144cf90f50538336eab9914ac4524290f5b82fdb5565
+linux-amd64	core	https://github.com/SagerNet/sing-box/releases/download/v1.14.0/sing-box-1.14.0-linux-amd64.tar.gz	2375de6999f4f56ab46b4fc5ddf26a6aba1d3e61a0f4e7ddec2f4690457d5f63
+linux-arm64	core	https://github.com/SagerNet/sing-box/releases/download/v1.14.0/sing-box-1.14.0-linux-arm64.tar.gz	04d9b40bc98dc55b6f509ce3292145c65478f65866bea64826ebb2f382385088
