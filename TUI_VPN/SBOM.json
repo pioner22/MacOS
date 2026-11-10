@@ -6,7 +6,7 @@
     "component": {
       "type": "application",
       "name": "TUI_VPN",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   },
   "components": [
@@ -61,6 +61,40 @@
           "license": {
             "id": "GPL-3.0-or-later"
           }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "CPython _curses (macOS Intel compatibility)",
+      "version": "3.12.16",
+      "licenses": [
+        {
+          "license": {
+            "id": "PSF-2.0"
+          }
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "130cae352eab5b5d40986c8e04d9824c760f3833d3114830229bf17221d0b8d2"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/python/cpython/tree/v3.12.16"
+        }
+      ],
+      "properties": [
+        {
+          "name": "build:target",
+          "value": "x86_64-apple-macos11"
+        },
+        {
+          "name": "build:ncurses-headers",
+          "value": "5.7.20081102"
         }
       ]
     }

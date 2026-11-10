@@ -13,6 +13,8 @@ from pathlib import Path
 from .common import AppError, Paths, atomic, digest, read_bytes, read_json, read_private_json, write_json, verify_source, load_settings, private_directory, owner_lock
 from .catalog import Catalog
 from .engine import Engine
+from .darwin_services import start_darwin, stop_darwin
+from .service_readiness import installation_ready
 
 
 def python_path(paths: Any, release: Any=None) -> Path:
@@ -65,18 +67,20 @@ class HostServices:
         result = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, timeout=35, check=False)
         if result.returncode not in allowed:
-            raise AppError('Системный менеджер служб не подтвердил операцию.')
+            detail = (result.stderr or b'').decode('utf-8', 'replace').strip()[:240]
+            raise AppError('Менеджер служб: %s, код %s: %s' %
+                           (Path(args[0]).name, result.returncode, detail))
         return result
 
     def stop(self) -> None:
         if self.paths.system == 'darwin':
-            self.command(['/bin/launchctl', 'bootout', 'system/' + self.paths.label], (0, 3, 113))
+            stop_darwin(self)
         elif Path('/run/systemd/system').exists():
             self.command(['/usr/bin/systemctl', 'stop', 'tui-vpn.service'], (0, 5))
 
     def start(self) -> bool:
         if self.paths.system == 'darwin':
-            self.command(['/bin/launchctl', 'bootstrap', 'system', str(self.paths.unit)])
+            return start_darwin(self)
         elif Path('/run/systemd/system').exists():
             self.command(['/usr/bin/systemctl', 'daemon-reload'])
             self.command(['/usr/bin/systemctl', 'enable', '--now', 'tui-vpn.service'])
@@ -91,7 +95,7 @@ class HostServices:
             try:
                 result = request('status', paths=self.paths, timeout=2)
                 expected = read_json(self.paths.current / 'receipt.json')['source_sha256']
-                if 'state' in result and 'enabled' in result and result.get('source_sha256') == expected:
+                if installation_ready(self.paths, result, expected):
                     return
             except (OSError, AppError):
                 pass
@@ -261,8 +265,8 @@ def publish_install(context: dict, receipt_path: Any) -> None:
     if managed_link(paths.current, paths) != old:
         raise AppError('Текущая версия изменилась перед установкой.')
     if old:
-        host.stop()
         context['stopped'] = True
+        host.stop()
     switch(paths.current, target)
     for path, data, mode in system_files(paths).values():
         public_directory(path.parent)
@@ -290,7 +294,8 @@ def revert_install(context: dict) -> None:
         elif (paths.base / 'previous').is_symlink() and (paths.base / 'previous').resolve() == old:
             (paths.base / 'previous').unlink()
         if context['stopped']:
-            host.start()
+            if host.start():
+                host.verify()
     elif paths.current.is_symlink() and paths.current.resolve() == context['target']:
         paths.current.unlink()
 
@@ -366,6 +371,6 @@ def authorize_maintenance(action: str) -> None:
         script = 'do shell script ' + json.dumps(command) + ' with administrator privileges'
         result = subprocess.run(['/usr/bin/osascript', '-e', script], check=False)
     else:
-        result = subprocess.run(['/usr/bin/sudo'] + arguments, check=False)
+        result = subprocess.run(['/usr/bin/sudo', '/usr/bin/python3'] + arguments[1:], check=False)
     if result.returncode:
         raise AppError('Обслуживание не завершено. Проверьте состояние службы.')

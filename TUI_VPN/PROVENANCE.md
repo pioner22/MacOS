@@ -28,3 +28,9 @@ Linux использует системный Python 3 через штатные
 при установке. PyPI, Homebrew, произвольные install scripts и отключение
 проверки TLS не используются. Контрольные суммы подтверждают целостность,
 но не являются отдельной цифровой подписью издателя приложения.
+
+## CPython terminal compatibility for macOS Intel (0.1.1)
+
+The bundled `_curses` extension is built from the unmodified CPython v3.12.16 module and generated clinic header against the macOS SDK ncurses 5.7 headers, targeting macOS 11. It replaces only the pinned CPython 3.12.16 terminal binding. The system libraries are unchanged. Source and binary SHA-256 values, compiler flags and target are in `src/vendor/darwin_x86_64/provenance.json`; the PSF license is beside the binary. Build with Apple clang 13 and the Python Build Standalone 3.12.16 include and internal include directories.
+
+The resize failure was reproduced with the original SDK 6.0 binding and eliminated with this SDK 5.7 binding on Big Sur Intel using the same interpreter and application. Linux, ARM and other interpreter versions skip this component.

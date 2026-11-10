@@ -12,6 +12,10 @@ from tui_vpn.common import AppError, verify_source
 def entry() -> int:
     try:
         verify_source(ROOT)
+        from tui_vpn.runtime_permissions import prepare_installer_runtime
+        from tui_vpn.terminal_backend import prepare_terminal_backend
+        prepare_installer_runtime(sys.argv[1:])
+        prepare_terminal_backend()
         from tui_vpn.cli import main
         return main(ROOT)
     except KeyboardInterrupt:
