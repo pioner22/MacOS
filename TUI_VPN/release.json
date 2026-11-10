@@ -1,21 +1,21 @@
 {
   "schema": "tui-vpn.release.v1",
   "version": "0.1.0",
-  "published_at": 1794322633,
-  "expires_at": 1809874633,
-  "source_sha256": "94706d868931e8c27b9902329251cfb03bb8c50cdb078b98c8174766843e0f58",
+  "published_at": 1794324372,
+  "expires_at": 1809876372,
+  "source_sha256": "d6915f1f773e4bbec5ecd74c7912617faf0584eedbb16c450b881861b3db26d1",
   "artifacts": [
     {
       "platform": "linux",
       "name": "tui-vpn_0.1.0_all.deb",
-      "bytes": 78782,
-      "sha256": "13ab050e8945e78bae2c2dbe549265f16bb05bad6c0b3631591e7abecfab8cf6"
+      "bytes": 79090,
+      "sha256": "497a49fd9c3d7cb223c4e5b1df238495a80468c2993d9aa797260eed00d10f7a"
     },
     {
       "platform": "darwin",
       "name": "TUI_VPN-0.1.0-macos-intel.pkg",
-      "bytes": 81111,
-      "sha256": "99a4dd4c2a7ea810851a6ae21ca52c383de40467994eb843f17b34036108d34d"
+      "bytes": 81451,
+      "sha256": "08fc04cc755ad4dd3df451c2fc70aa233d58d0a831615e906919e8dd598ba929"
     }
   ],
   "supported": {

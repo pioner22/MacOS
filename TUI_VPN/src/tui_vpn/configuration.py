@@ -2,6 +2,8 @@
 from __future__ import annotations
 import copy
 
+LINUX_INPUT_MARK = 0x2023  # Native sing-box auto_redirect input policy, pinned to 1.14.
+
 
 def build(nodes: list, settings: dict, api_secret: str, probe_secret: str, system: str, selection: str='auto', tun: bool=True) -> dict:
     tags = [n['id'] for n in nodes]
@@ -35,5 +37,6 @@ def build(nodes: list, settings: dict, api_secret: str, probe_secret: str, syste
             'auto_route': True, 'strict_route': True, 'dns_mode': 'hijack', 'stack': 'system'}
         if system == 'linux':
             inbound['auto_redirect'] = True
+            inbound['auto_redirect_input_mark'] = LINUX_INPUT_MARK
         config['inbounds'].insert(0, inbound)
     return config

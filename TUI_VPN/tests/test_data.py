@@ -1,8 +1,10 @@
 import base64
+import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,7 +13,7 @@ from tui_vpn.common import AppError, Paths, write_json, read_json, owner_lock, v
 from tui_vpn.profiles import parse_uri, parse_feed, wireguard, assign_ids, json_feed
 from tui_vpn.configuration import build
 from tui_vpn.catalog import Catalog
-from tui_vpn.engine import Counters, native_health
+from tui_vpn.engine import Counters, native_health, Engine
 from tui_vpn.network import validate_url
 
 URI = 'trojan://synthetic-password@example.org:443?security=tls&sni=example.org#Primary'
@@ -71,6 +73,24 @@ class DataTests(unittest.TestCase):
                       'x' * 48, 'y' * 48, 'linux')
         self.assertTrue(value['inbounds'][0]['auto_redirect'])
         self.assertEqual(value['inbounds'][0]['dns_mode'], 'hijack')
+
+    def test_linux_route_check_uses_native_input_mark(self):
+        engine = object.__new__(Engine)
+        engine.paths = SimpleNamespace(system='linux')
+        engine.settings = {'tun_linux': 'tuivpn0'}
+        def kernel_route(args):
+            interface = 'tuivpn0' if args[-2:] == ['mark', '0x2023'] else 'eth0'
+            return SimpleNamespace(returncode=0, stdout=json.dumps([{'dev': interface}]).encode())
+        with mock.patch('tui_vpn.engine.run', side_effect=kernel_route):
+            engine.assert_routes()
+
+    def test_linux_route_check_rejects_missing_policy_route(self):
+        engine = object.__new__(Engine)
+        engine.paths = SimpleNamespace(system='linux')
+        engine.settings = {'tun_linux': 'tuivpn0'}
+        result = SimpleNamespace(returncode=0, stdout=b'[{"dev":"eth0"}]')
+        with mock.patch('tui_vpn.engine.run', return_value=result), self.assertRaises(AppError):
+            engine.assert_routes()
 
     def test_counter_resets_do_not_generate_negative_rates(self):
         counters = Counters()

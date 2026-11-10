@@ -233,7 +233,16 @@ def lab(core, folder, tun=False):
         assert second['rx_bytes'] > 0 and second['tx_bytes'] > 0
         result.update(failover=second, manual_selector=True, real_native_counters=True)
         if tun:
-            result['system_test'] = engine.test()
+            try:
+                result['system_test'] = engine.test()
+            except Exception as error:
+                diagnostics = {}
+                for label, arguments in [('rules', ['-j', 'rule']),
+                        ('routes', ['-j', 'route', 'show', 'table', 'all']),
+                        ('tcp_route', ['-j', 'route', 'get', '1.1.1.1', 'ipproto', 'tcp', 'dport', '443'])]:
+                    probe = subprocess.run(['/usr/sbin/ip'] + arguments, capture_output=True, text=True, timeout=3)
+                    diagnostics[label] = probe.stdout
+                raise AssertionError(str(error) + '; native routing: ' + json.dumps(diagnostics)) from error
             assert result['system_test']['ipv4'] == '198.51.100.77'
         result.update(status='PASS', tun_test=tun, real_provider_credentials=False,
                       allowed_targets='loopback SOCKS/TLS and synthetic 10.99.0.1 only')

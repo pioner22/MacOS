@@ -1,4 +1,5 @@
 import io
+import os
 import plistlib
 import shutil
 import sys
@@ -25,6 +26,10 @@ from tui_vpn.profiles import parse_uri
 class Host:
     def __init__(self):
         self.starts, self.stops, self.fail = 0, 0, False
+        self.commands = []
+
+    def command(self, args, allowed=(0,)):
+        self.commands.append((args, allowed))
 
     def start(self):
         self.starts += 1
@@ -72,6 +77,21 @@ class DeliveryTests(unittest.TestCase):
         self.assertTrue(self.paths.shortcut.is_file())
         self.assertFalse(Catalog(self.paths).state['enabled'])
         verify_source(self.paths.current / 'app')
+
+    def test_private_installer_umask_keeps_program_accessible_and_data_private(self):
+        previous = os.umask(0o077)
+        try:
+            self.do_install()
+        finally:
+            os.umask(previous)
+        release = self.paths.current.resolve()
+        public = [self.paths.base, self.paths.releases, release,
+                  self.paths.launcher.parent, self.paths.shortcut.parent]
+        public += [p for p in release.rglob('*') if p.is_dir()]
+        for directory in public:
+            self.assertEqual(directory.stat().st_mode & 0o777, 0o755, str(directory))
+        self.assertEqual(self.paths.private.stat().st_mode & 0o777, 0o700)
+        self.assertEqual((self.paths.private / 'catalog.sqlite3').stat().st_mode & 0o777, 0o600)
 
     def test_release_switch_resolves_both_sides_of_a_parent_alias(self):
         real = self.root / 'real' / 'nested'

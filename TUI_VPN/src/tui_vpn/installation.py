@@ -125,11 +125,25 @@ def check_preimages(paths: Any, previous: dict) -> None:
                 raise AppError('Существующий системный файл изменён; он не будет заменён.')
 
 
+def public_directory(path: Any) -> None:
+    """Give only newly created program directories explicit public traversal."""
+    path = Path(path)
+    missing, current = [], path
+    while not current.exists():
+        if current.is_symlink():
+            raise AppError('Путь каталога программы занят ссылкой.')
+        missing.append(current)
+        current = current.parent
+    path.mkdir(mode=0o755, parents=True, exist_ok=True)
+    for directory in reversed(missing):
+        directory.chmod(0o755)
+
+
 def copy_source(source: Any, target: Any, manifest: dict) -> None:
-    target.mkdir(mode=0o755)
+    public_directory(target)
     for name in list(manifest['files']) + ['manifest.json']:
         destination = target / name
-        destination.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+        public_directory(destination.parent)
         atomic(destination, read_bytes(source / name), 0o644)
     verify_source(target)
 
@@ -155,7 +169,7 @@ def prepare_release(source: Any, python_tree: Any, core_file: Any, paths: Any) -
             if not python_tree:
                 raise AppError('Не подготовлена закреплённая среда Python.')
             shutil.copytree(python_tree, stage / 'python', symlinks=True)
-        (stage / 'core').mkdir()
+        public_directory(stage / 'core')
         shutil.copyfile(core_file, stage / 'core/sing-box')
         (stage / 'core/sing-box').chmod(0o755)
         result = subprocess.run([str(stage / 'core/sing-box'), 'version'], capture_output=True, timeout=15)
@@ -177,12 +191,13 @@ def prepare_release(source: Any, python_tree: Any, core_file: Any, paths: Any) -
 
 
 def initialize(paths: Any) -> None:
-    paths.base.mkdir(mode=0o755, parents=True, exist_ok=True)
-    paths.releases.mkdir(mode=0o755, exist_ok=True)
+    public_directory(paths.base)
+    public_directory(paths.releases)
     for directory in (paths.base, paths.releases):
         info = directory.lstat()
         if directory.is_symlink() or info.st_uid != os.geteuid() or info.st_mode & 0o022:
             raise AppError('Небезопасный каталог программы.')
+        directory.chmod(0o755)
     private_directory(paths.private)
     Catalog(paths)
     if not (paths.private / 'owner.json').exists():
@@ -250,7 +265,7 @@ def publish_install(context: dict, receipt_path: Any) -> None:
         context['stopped'] = True
     switch(paths.current, target)
     for path, data, mode in system_files(paths).values():
-        path.parent.mkdir(parents=True, exist_ok=True)
+        public_directory(path.parent)
         atomic(path, data, mode)
     context['attempted_start'] = True
     activated = host.start()

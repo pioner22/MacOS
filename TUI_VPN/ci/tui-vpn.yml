@@ -28,6 +28,10 @@ jobs:
           sudo tui-vpn status
           sudo tui-vpn off
           sudo systemctl restart tui-vpn.service
+          for attempt in $(seq 1 40); do
+            if sudo tui-vpn status; then break; fi
+            sleep 0.25
+          done
           sudo tui-vpn status
           sudo apt-get remove -y tui-vpn
   native-containers:

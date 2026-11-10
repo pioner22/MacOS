@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from urllib.request import Request, ProxyHandler, build_opener
 from .common import AppError, read_json, write_json, digest
-from .configuration import build
+from .configuration import build, LINUX_INPUT_MARK
 from vendor import legacy_runtime as mac
 
 
@@ -193,7 +193,9 @@ class Engine:
             mac.assert_routes()
             mac.assert_dns()
         else:
-            result = run(['/usr/sbin/ip', '-j', 'route', 'get', '1.1.1.1'])
+            # nftables applies this native mark before the kernel reroutes a flow.
+            # A plain route query intentionally sees the physical default route.
+            result = run(['/usr/sbin/ip', '-j', 'route', 'get', '1.1.1.1', 'mark', hex(LINUX_INPUT_MARK)])
             if result.returncode or json.loads(result.stdout)[0].get('dev') != self.settings['tun_linux']:
                 raise AppError('Системный маршрут не подтверждён через VPN.')
 
