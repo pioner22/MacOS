@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TUI VPN local request v1",
+  "type": "object",
+  "required": [
+    "command",
+    "args"
+  ],
+  "properties": {
+    "command": {
+      "enum": [
+        "status",
+        "on",
+        "off",
+        "select",
+        "test",
+        "subscription_add",
+        "subscription_refresh",
+        "subscription_edit",
+        "subscription_delete",
+        "uri_add",
+        "wireguard_add",
+        "import_existing"
+      ]
+    },
+    "args": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

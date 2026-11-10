@@ -1,0 +1,53 @@
+name: TUI VPN packages and isolated native networking
+on:
+  push:
+    paths: ['TUI_VPN/**', '.github/workflows/tui-vpn.yml']
+  pull_request:
+    paths: ['TUI_VPN/**', '.github/workflows/tui-vpn.yml']
+permissions:
+  contents: read
+jobs:
+  source-and-systemd:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Unit, IPC, install, upgrade and rollback contracts
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B -m unittest discover -s TUI_VPN/tests -p 'test_*.py'
+      - name: Native Debian package and persistent systemd controller
+        run: |
+          sudo apt-get update
+          version=$(cat TUI_VPN/VERSION)
+          sudo apt-get install -y "./TUI_VPN/dist/tui-vpn_${version}_all.deb"
+          sudo systemctl is-enabled tui-vpn.service
+          sudo systemctl is-active tui-vpn.service
+          sudo tui-vpn status
+          sudo tui-vpn off
+          sudo systemctl restart tui-vpn.service
+          for attempt in $(seq 1 40); do
+            if sudo tui-vpn status; then break; fi
+            sleep 0.25
+          done
+          sudo tui-vpn status
+          sudo apt-get remove -y tui-vpn
+  native-containers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['ubuntu:22.04', 'debian:12-slim']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build clean distribution and configure the actual .deb
+        run: docker build --build-arg BASE_IMAGE='${{ matrix.image }}' -f TUI_VPN/ci/Dockerfile -t tui-vpn-ci .
+      - name: Native TUN, SOCKS failover, counters and uninstall in a network-isolated container
+        run: |
+          sudo modprobe tun
+          docker run --rm --privileged --network none tui-vpn-ci

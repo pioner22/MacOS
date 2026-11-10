@@ -1,0 +1,99 @@
+#!/bin/bash
+# Native Installer.app/dpkg calls this as root. No credentials in the package.
+set -euo pipefail
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+unset PYTHONPATH PYTHONHOME BASH_ENV ENV CDPATH
+umask 077
+SOURCE='@SOURCE@'
+EXPECTED_MANIFEST='@MANIFEST_SHA@'
+EXPECTED_DEPS='@DEPS_SHA@'
+STAGE=''
+
+fail() { printf '%s\n' "TUI VPN: $1" >&2; exit 1; }
+hash_file() { /usr/bin/shasum -a 256 "$1" | /usr/bin/awk '{print $1}'; }
+cleanup() {
+  case "$STAGE" in
+    /private/var/tmp/tui-vpn-install.*|/var/tmp/tui-vpn-install.*)
+      [ -d "$STAGE" ] && [ ! -L "$STAGE" ] && /bin/rm -rf -- "$STAGE" ;;
+  esac
+  return 0
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+[ "$EUID" -eq 0 ] || fail 'нужны права системного установщика'
+for tool in /usr/bin/curl /usr/bin/tar /usr/bin/shasum; do
+  [ -x "$tool" ] || fail "отсутствует системная зависимость: $tool"
+done
+[ "$(hash_file "$SOURCE/manifest.json")" = "$EXPECTED_MANIFEST" ] || fail 'манифест пакета изменился'
+[ "$(hash_file "$SOURCE/packaging/dependencies.tsv")" = "$EXPECTED_DEPS" ] || fail 'список зависимостей изменился'
+case "$(/usr/bin/uname -s)" in
+  Darwin)
+    [ "$(/usr/bin/uname -m)" = x86_64 ] || fail 'первый выпуск macOS предназначен для Intel'
+    [ "$(/usr/sbin/sysctl -n hw.optional.arm64 2>/dev/null || true)" != 1 ] || fail 'Apple Silicon в этом выпуске не поддерживается'
+    major=$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)
+    [ "$major" -ge 11 ] || fail 'нужна macOS 11 Big Sur или новее'
+    key=darwin-amd64
+    BASE='/Library/Application Support/TUI_VPN'
+    STAGE=$(/usr/bin/mktemp -d /private/var/tmp/tui-vpn-install.XXXXXX)
+    ;;
+  Linux)
+    distribution=$(/usr/bin/awk -F= '$1=="ID" {gsub(/"/,"",$2); print $2}' /etc/os-release)
+    case "$distribution" in ubuntu|debian) ;; *) fail 'поддерживаются Ubuntu и Debian' ;; esac
+    case "$(/usr/bin/uname -m)" in x86_64) key=linux-amd64 ;; aarch64|arm64) key=linux-arm64 ;; *) fail 'нужен amd64 или arm64' ;; esac
+    case "${1:-configure}" in configure) ;; *) exit 0 ;; esac
+    /usr/bin/python3 -I -c 'import sys,ssl,curses,ctypes,sqlite3; assert sys.version_info >= (3,8)' || fail 'нужны Python 3.8+, SSL, curses и SQLite'
+    BASE=/opt/tui-vpn
+    STAGE=$(/usr/bin/mktemp -d /var/tmp/tui-vpn-install.XXXXXX)
+    ;;
+  *) fail 'эта операционная система не поддерживается' ;;
+esac
+if [ ! -e "$BASE" ]; then /bin/mkdir -m 755 "$BASE"; fi
+[ -d "$BASE" ] && [ ! -L "$BASE" ] || fail 'путь приложения занят'
+case "$key" in
+  darwin-*) identity=$(/usr/bin/stat -f '%u:%Lp' "$BASE") ;;
+  *) identity=$(/usr/bin/stat -c '%u:%a' "$BASE") ;;
+esac
+[ "$identity" = 0:755 ] || fail 'неподходящие владелец или права каталога приложения'
+available=$(/bin/df -Pk "$BASE" | /usr/bin/awk 'NR==2 {print $4}')
+[ "$available" -ge 768000 ] || fail 'для безопасной установки нужно не менее 750 МиБ свободного места'
+CACHE="$BASE/cache"
+if [ ! -e "$CACHE" ]; then /bin/mkdir -m 700 "$CACHE"; fi
+[ -d "$CACHE" ] && [ ! -L "$CACHE" ] || fail 'путь cache занят'
+case "$key" in
+  darwin-*) identity=$(/usr/bin/stat -f '%u:%Lp' "$CACHE") ;;
+  *) identity=$(/usr/bin/stat -c '%u:%a' "$CACHE") ;;
+esac
+[ "$identity" = 0:700 ] || fail 'неподходящие права cache'
+while IFS=$'\t' read -r architecture kind url expected; do
+  [ "$architecture" = "$key" ] || continue
+  case "$kind" in python|core) ;; *) fail 'неизвестная зависимость' ;; esac
+  [[ "$expected" =~ ^[a-f0-9]{64}$ ]] || fail 'неверный SHA-256 зависимости'
+  archive="$CACHE/$expected.tar.gz"
+  if [ ! -e "$archive" ]; then
+    temporary=$(/usr/bin/mktemp "$CACHE/.download.XXXXXX")
+    /usr/bin/curl -q -fLsS --proto '=https' --proto-redir '=https' --max-redirs 3 \
+      --connect-timeout 15 --max-time 240 --max-filesize 134217728 "$url" -o "$temporary" || {
+        /bin/rm -f -- "$temporary"; fail 'зависимость не скачана; действующая версия не остановлена'; }
+    [ "$(hash_file "$temporary")" = "$expected" ] || {
+      /bin/rm -f -- "$temporary"; fail 'SHA-256 зависимости не совпал'; }
+    /bin/mv -- "$temporary" "$archive"
+  fi
+  [ -f "$archive" ] && [ ! -L "$archive" ] || fail 'небезопасный файл cache'
+  [ "$(hash_file "$archive")" = "$expected" ] || fail 'cache повреждён'
+  /usr/bin/tar -tzf "$archive" | /usr/bin/awk '
+    /^\// {exit 1}
+    {n=split($0,p,"/"); for(i=1;i<=n;i++) if(p[i]=="..") exit 1}
+  ' || fail 'небезопасный путь внутри зависимости'
+  /bin/mkdir -m 700 "$STAGE/$kind"
+  /usr/bin/tar -xzf "$archive" -C "$STAGE/$kind"
+done < "$SOURCE/packaging/dependencies.tsv"
+core=$(/usr/bin/find "$STAGE/core" -type f -name sing-box)
+[ -f "$core" ] && [ ! -L "$core" ] || fail 'не найдено единственное ядро'
+if [ "$key" = darwin-amd64 ]; then
+  python="$STAGE/python/python/bin/python3"
+  "$python" -I -c 'import sys,ssl,curses,ctypes,sqlite3; assert sys.version_info >= (3,8)' || fail 'проверка Python не пройдена'
+  "$python" -I -B "$SOURCE/src/entry.py" _install --python-tree "$STAGE/python/python" --core-file "$core"
+else
+  /usr/bin/python3 -I -B "$SOURCE/src/entry.py" _install --core-file "$core"
+fi

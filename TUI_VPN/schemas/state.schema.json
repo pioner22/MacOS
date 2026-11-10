@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TUI VPN requested state v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "enabled",
+    "selection"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "selection": {
+      "type": "string",
+      "pattern": "^(auto|n-[a-f0-9]{16})$"
+    }
+  },
+  "additionalProperties": false
+}

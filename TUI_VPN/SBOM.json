@@ -1,0 +1,78 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "TUI_VPN",
+      "version": "0.1.0"
+    }
+  },
+  "components": [
+    {
+      "type": "application",
+      "name": "sing-box",
+      "version": "1.14.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-3.0-or-later"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/SagerNet/sing-box/tree/v1.14.0"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "CPython macOS standalone",
+      "version": "3.12.16+20261026",
+      "licenses": [
+        {
+          "license": {
+            "id": "Python-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "scope",
+          "value": "macOS Intel only; bundled native library licenses retained"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "legacy_runtime",
+      "version": "2.1.3",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "966a6d63a7968113af5c713b5595c9c9c53628fb80e83badd31bedb84d24b877"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-3.0-or-later"
+          }
+        }
+      ]
+    }
+  ],
+  "properties": [
+    {
+      "name": "linux-system-dependencies",
+      "value": "python3>=3.8, ca-certificates, curl, iproute2, nftables, perl; versions maintained by Ubuntu/Debian"
+    },
+    {
+      "name": "artifact-pins",
+      "value": "packaging/dependencies.tsv pins complete runtime/core archives including bundled transitive libraries"
+    }
+  ]
+}
