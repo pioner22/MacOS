@@ -1,0 +1,40 @@
+{
+  "component": "CPython _curses",
+  "version": "3.12.16",
+  "origin": "https://github.com/python/cpython/tree/v3.12.16",
+  "source_sha256": {
+    "_cursesmodule.c": "dac7d584ea6ceaf261bfc82f4713d52baf5b1beb05032f1fead776bd7fa6d19e",
+    "clinic/_cursesmodule.c.h": "35435457d82994fe18c2cdce62fb462c3e73a139fd1cfb44be901bfb62c3bcfb"
+  },
+  "binary_sha256": "130cae352eab5b5d40986c8e04d9824c760f3833d3114830229bf17221d0b8d2",
+  "architecture": "x86_64",
+  "minimum_macos": "11.0",
+  "sdk_ncurses_headers": "5.7.20081102",
+  "license": "PSF-2.0",
+  "compiler": "Apple clang 13.0.0",
+  "build_flags": [
+    "-dynamiclib",
+    "-undefined",
+    "dynamic_lookup",
+    "-fPIC",
+    "-O2",
+    "-D_XOPEN_SOURCE_EXTENDED=1",
+    "-D_DARWIN_C_SOURCE=1",
+    "-mmacosx-version-min=11.0",
+    "-isysroot",
+    "MacOSX.sdk",
+    "-I",
+    "python3.12",
+    "-I",
+    "python3.12/internal",
+    "-I",
+    "source",
+    "-lncurses"
+  ],
+  "links": [
+    "/usr/lib/libncurses.5.4.dylib",
+    "/usr/lib/libSystem.B.dylib"
+  ],
+  "global_library_changes": false,
+  "reason": "Match oldest supported system curses WINDOW ABI; PBS SDK6.0 header layout caused Big Sur resize SIGSEGV."
+}

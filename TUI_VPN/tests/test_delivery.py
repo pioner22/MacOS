@@ -26,6 +26,8 @@ from tui_vpn.profiles import parse_uri
 class Host:
     def __init__(self):
         self.starts, self.stops, self.fail = 0, 0, False
+        self.fail_after_stop = False
+        self.verifications = 0
         self.commands = []
 
     def command(self, args, allowed=(0,)):
@@ -37,8 +39,12 @@ class Host:
 
     def stop(self):
         self.stops += 1
+        if self.fail_after_stop:
+            self.fail_after_stop = False
+            raise AppError('synthetic failure after the stop request')
 
     def verify(self):
+        self.verifications += 1
         if self.fail:
             raise AppError('synthetic service start failed')
 
@@ -67,7 +73,9 @@ class DeliveryTests(unittest.TestCase):
         install(self.source, None, self.core, self.paths, self.host)
 
     def upgrade_source(self):
-        (self.source / 'VERSION').write_text('0.1.1\n')
+        parts = [int(p) for p in (self.source / 'VERSION').read_text().strip().split('.')]
+        parts[-1] += 1
+        (self.source / 'VERSION').write_text('.'.join(str(p) for p in parts) + '\n')
         build_packages.manifest(self.source)
 
     def test_first_install_is_independent_and_off(self):
@@ -136,6 +144,18 @@ class DeliveryTests(unittest.TestCase):
             self.do_install()
         self.assertEqual(self.paths.current.resolve(), old)
         self.assertEqual(self.paths.launcher.read_bytes(), old_launcher)
+
+    def test_a_partial_stop_failure_restores_and_checks_the_old_controller(self):
+        self.do_install()
+        old = self.paths.current.resolve()
+        starts, checks = self.host.starts, self.host.verifications
+        self.upgrade_source()
+        self.host.fail_after_stop = True
+        with self.assertRaises(AppError):
+            self.do_install()
+        self.assertEqual(self.paths.current.resolve(), old)
+        self.assertEqual(self.host.starts, starts + 1)
+        self.assertEqual(self.host.verifications, checks + 1)
 
     def test_foreign_launcher_blocks_before_stopping_the_working_service(self):
         self.do_install()

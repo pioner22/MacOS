@@ -82,6 +82,8 @@ def client(root: Any, args: Any) -> None:
         from .installation import authorize_maintenance
         authorize_maintenance(args.command)
     elif args.command == 'tui':
+        if sys.platform == 'darwin' and os.geteuid() == 0 and not args.demo:
+            raise AppError('Запускайте tui-vpn без sudo: интерфейс работает от вашего пользователя.')
         from .ui import main as tui
         tui(args.demo)
     else:

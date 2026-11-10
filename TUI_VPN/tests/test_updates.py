@@ -13,7 +13,11 @@ from tui_vpn import updates
 
 
 class UpdateTests(unittest.TestCase):
-    def metadata(self, version='0.1.1'):
+    def metadata(self, version=None):
+        if version is None:
+            parts = [int(p) for p in (ROOT / 'VERSION').read_text().strip().split('.')]
+            parts[-1] += 1
+            version = '.'.join(str(p) for p in parts)
         now = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
         return {'schema': 'tui-vpn.release.v1', 'version': version, 'published_at': now - 60,
             'expires_at': now + 3600, 'artifacts': [{'platform': sys.platform, 'name': ('TUI_VPN-' + version + '-macos-intel.pkg') if sys.platform == 'darwin' else ('tui-vpn_' + version + '_all.deb'),
