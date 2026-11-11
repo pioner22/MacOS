@@ -25,6 +25,17 @@ class DataTests(unittest.TestCase):
         self.assertEqual(one['outbound']['server'], 'example.org')
         self.assertEqual(parse_feed(base64.b64encode((URI + '\n').encode())), [one])
 
+    def test_standard_line_wrapped_base64_subscription(self):
+        encoded = base64.b64encode((URI + '\n').encode()).decode()
+        wrapped = '\r\n'.join(encoded[index:index + 32] for index in range(0, len(encoded), 32))
+        self.assertEqual(parse_feed(wrapped.encode()), [parse_uri(URI)])
+
+    def test_invalid_provider_body_has_a_public_error_without_raw_content(self):
+        for raw in (b'<html>private-provider-token</html>', b'not valid base64 !!', b'\xff\xfe'):
+            with self.subTest(raw=raw), self.assertRaises(AppError) as caught:
+                parse_feed(raw)
+            self.assertNotIn('private-provider-token', str(caught.exception))
+
     def test_tls_verification_cannot_be_disabled(self):
         with self.assertRaises(AppError):
             parse_uri(URI.replace('#Primary', '&allowInsecure=1#Primary'))

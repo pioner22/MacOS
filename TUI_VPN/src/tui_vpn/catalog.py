@@ -14,6 +14,8 @@ from urllib.parse import urlsplit
 from .common import AppError, private_directory, clean
 from .profiles import assign_ids, validate_outbound, no_files
 
+MAX_DOCUMENT_BYTES = 4194304
+
 
 class Catalog:
     def __init__(self, paths: Any) -> None:
@@ -76,7 +78,7 @@ class Catalog:
     @staticmethod
     def _document(database, name: str) -> dict:
         row = database.execute('SELECT value FROM documents WHERE name=?', (name,)).fetchone()
-        if row is None or len(row[0]) > 4194304:
+        if row is None or len(row[0]) > MAX_DOCUMENT_BYTES:
             raise AppError('Повреждён документ базы данных.')
         return json.loads(row[0])
 
@@ -102,6 +104,7 @@ class Catalog:
         self.state = state
 
     def candidate(self, nodes: list, label: str, url: str='', existing_id: str='') -> dict:
+        existing_id = existing_id or self.source_for_url(url)
         value = copy.deepcopy(self.data)
         old = next((s for s in value['subscriptions'] if s['id'] == existing_id), None)
         if existing_id and old is None:
@@ -111,10 +114,17 @@ class Catalog:
                 raise AppError('Допускается не более 20 подписок.')
             old = {'id': uuid.uuid4().hex, 'name': clean(label or urlsplit(url).hostname or 'Локальный профиль')}
             value['subscriptions'].append(old)
-        old.update(url=url, nodes=assign_ids(nodes, old['id']))
+        old.update(name=clean(label or old['name']), url=url,
+                   nodes=stable_nodes(nodes, old['id'], old.get('nodes', [])))
         if not 1 <= sum(len(s['nodes']) for s in value['subscriptions']) <= 200:
             raise AppError('Допускается от 1 до 200 серверов.')
         return value
+
+    def source_for_url(self, url: str) -> str:
+        if not url:
+            return ''
+        return next((item['id'] for item in self.data['subscriptions']
+                     if item.get('url') == url), '')
 
     def commit(self, value: Any) -> None:
         validate_catalog(value)
@@ -138,7 +148,30 @@ class Catalog:
                  'remote': bool(s.get('url'))} for s in self.data['subscriptions']]
 
 
+def matching_node(node: dict, previous: list) -> dict | None:
+    candidates = [old for old in previous if old.get('outbound') == node.get('outbound')
+                  and old.get('endpoint') == node.get('endpoint')]
+    return next((old for old in candidates if old['name'] == node['name']),
+                candidates[0] if candidates else None)
+
+
+def stable_nodes(nodes: list, source_id: str, previous: list) -> list:
+    values, remaining = assign_ids(nodes, source_id), list(previous)
+    reserved, used = {old['id'] for old in previous}, set()
+    for node in values:
+        old = matching_node(node, remaining)
+        if old is not None:
+            node['id'] = old['id']
+            remaining.remove(old)
+        elif node['id'] in reserved or node['id'] in used:
+            node['id'] = 'n-' + uuid.uuid4().hex[:16]
+        used.add(node['id'])
+    return values
+
+
 def validate_catalog(data: dict) -> None:
+    if len(json.dumps(data, ensure_ascii=True)) > MAX_DOCUMENT_BYTES:
+        raise AppError('Суммарный размер подписок слишком большой. Прежние данные сохранены.')
     subscriptions = data['subscriptions']
     if len(subscriptions) > 20:
         raise AppError('Слишком много сохранённых подписок.')

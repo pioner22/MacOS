@@ -39,7 +39,7 @@ def main(root: Any, argv: Any=None) -> int:
     parser = argparse.ArgumentParser(description='TUI VPN: терминальный интерфейс и постоянная служба')
     parser.add_argument('command', nargs='?', default='tui', choices=[
         'tui', 'status', 'on', 'off', 'test', 'logs', 'auto', 'doctor', 'update',
-        'rollback', 'uninstall', '_daemon', '_fetch', '_install', '_maintain'])
+        'rollback', 'uninstall', '_daemon', '_fetch', '_probe', '_install', '_maintain'])
     parser.add_argument('--demo', action='store_true')
     parser.add_argument('--python-tree')
     parser.add_argument('--core-file')
@@ -60,6 +60,12 @@ def internal(root: Any, args: Any) -> None:
     elif args.command == '_daemon':
         from .service import daemon
         daemon(root)
+    elif args.command == '_probe':
+        from .probe_runtime import worker
+        raw = sys.stdin.buffer.read(4194305)
+        if len(raw) > 4194304:
+            raise AppError('Список проверки слишком большой.')
+        worker(root, json.loads(raw))
     elif args.command == '_install':
         from .installation import install
         if os.geteuid() != 0:

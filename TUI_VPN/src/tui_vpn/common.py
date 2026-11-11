@@ -161,4 +161,22 @@ def load_settings(root: Any) -> dict:
             raise AppError('Неверный локальный порт.')
     if value['api_port'] == value['probe_port']:
         raise AppError('Локальные порты совпадают.')
+    validate_probe_settings(value)
     return value
+
+
+def validate_probe_settings(value: dict) -> None:
+    from urllib.parse import urlsplit
+    limits = {'probe_timeout_ms': (6000, 500, 15000), 'probe_parallel': (4, 1, 8),
+              'probe_batch_timeout': (180, 15, 600), 'probe_cache_ttl': (60, 10, 600),
+              'probe_min_interval': (5, 1, 60)}
+    for name, (default, minimum, maximum) in limits.items():
+        value.setdefault(name, default)
+        if type(value[name]) is not int or not minimum <= value[name] <= maximum:
+            raise AppError('Неверные пределы проверки подключений.')
+    url = value.get('health_url')
+    if not isinstance(url, str) or len(url) > 2048:
+        raise AppError('Неверный адрес проверки.')
+    parsed = urlsplit(url)
+    if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+        raise AppError('Для проверки нужен HTTPS-адрес без реквизитов.')

@@ -79,6 +79,7 @@ class UI:
         self.data, self.polling, self.acting = {}, False, 0
         self.results, self.rx, self.tx = queue.Queue(), deque(maxlen=80), deque(maxlen=80)
         self.buttons, self.last_poll = [], 0
+        self.last_auto_probe, self.probe_after_action, self.exiting = 0, False, False
         base = Path.home() / ('Library/Application Support/TUI_VPN' if os.uname().sysname == 'Darwin' else '.config/tui-vpn')
         self.preferences = None if demo else base / 'ui.json'
         self.theme = 'ocean' if demo else read_json(self.preferences, {'theme': 'ocean'}).get('theme', 'ocean')
@@ -122,6 +123,7 @@ class UI:
         def worker() -> None:
             try:
                 value = self.rpc(command, args)
+                value = dict(value, _ui_command=command)
                 self.results.put((poll, value, ''))
             except Exception as error:
                 message = str(error) if isinstance(error, AppError) else 'Служба недоступна. Проверьте установку и права пользователя.'
@@ -138,16 +140,33 @@ class UI:
             if error:
                 self.message = error
                 continue
-            if value.get('snapshot_at', 0) < self.data.get('snapshot_at', 0):
-                continue
-            self.data = value
-            if poll:
-                self.rx.append(value.get('rx_rate') or 0)
-                self.tx.append(value.get('tx_rate') or 0)
-            elif value.get('test'):
-                self.message = 'Проверка HTTPS и маршрутов: ' + value['test']['ipv4']
-            else:
-                self.message = 'Команда принята'
+            self.accept_response(value, poll)
+
+    def accept_response(self, value: dict, poll: bool) -> None:
+        command = value.pop('_ui_command', '')
+        if 'socks_form' in value:
+            self.socks_dialog(value['socks_form'])
+            return
+        if value.get('snapshot_at', 0) < self.data.get('snapshot_at', 0):
+            return
+        self.data = value
+        if poll:
+            self.rx.append(value.get('rx_rate') or 0)
+            self.tx.append(value.get('tx_rate') or 0)
+        else:
+            self.action_result(command, value)
+
+    def action_result(self, command: str, value: dict) -> None:
+        if value.get('test'):
+            self.message = 'Проверка HTTPS и маршрутов: ' + value['test']['ipv4']
+        elif command == 'probe':
+            self.message = 'Проверка подключений запущена' if value.get('probe_started') else 'Проверка уже идёт или ещё действует короткая пауза'
+        else:
+            self.message = 'Команда принята'
+        if command in ('subscription_add', 'uri_add', 'socks_save', 'subscription_edit', 'subscription_refresh', 'import_existing'):
+            self.probe_after_action = True
+            if command in ('subscription_add', 'uri_add', 'socks_save', 'import_existing'):
+                self.page, self.row = 1, 0
 
     def draw(self) -> None:
         self.screen.erase()
@@ -168,12 +187,16 @@ class UI:
         render(height, width)
         self.put(height - 3, 2, 'Выполняется операция…' if self.acting else self.message, curses.color_pair(3))
         self.button(height - 1, 1, '[Space Вкл/Выкл]', ' ')
-        self.button(height - 1, 19, '[A Авто]', 'a')
-        self.button(height - 1, 30, '[R Обновить]' if self.page == 2 else '[R Проверка]', 'r')
-        self.put(height - 1, 46, 'T Тема · U Обновления · Q Выход')
+        self.button(height - 1, 18, '[A Авто]', 'a')
+        self.button(height - 1, 28, '[R Обновить]' if self.page == 2 else '[P Проверить]', 'r' if self.page == 2 else 'p')
+        self.button(height - 1, 43, '[U Версия]', 'u')
+        self.button(height - 1, 56, '[T Тема]', 't')
+        self.button(height - 1, 66, '[Q Выход]', 'q')
         self.screen.refresh()
 
     def overview(self, height: int, width: int) -> None:
+        self.button(6, 2, '[N Добавить ссылку]', 'n')
+        self.button(6, 23, '[S Добавить SOCKS5]', 's')
         self.put(7, 2, '↓ ВХОДЯЩИЙ    ' + human(self.data.get('rx_rate'), True), curses.color_pair(2))
         self.put(8, 2, spark(self.rx, width - 5))
         self.put(10, 2, '↑ ИСХОДЯЩИЙ   ' + human(self.data.get('tx_rate'), True), curses.color_pair(1))
@@ -183,27 +206,44 @@ class UI:
         self.put(15, 2, 'RAM ядра: ' + human(self.data.get('memory_bytes')))
         selected = next((s['name'] for s in self.data.get('servers', []) if s['id'] == self.data.get('selected')), '—')
         self.put(16, 2, 'Текущий сервер: ' + selected)
+        self.put(17, 2, 'P — доступность серверов · R — проверка активного VPN')
         self.put(18, 2, 'Q закрывает интерфейс. VPN продолжает работать до ручного выключения.')
 
-    def listing(self, entries: Any, height: int, formatter: Any) -> None:
+    def listing(self, entries: Any, height: int, formatter: Any, footer_rows: int=0) -> None:
         self.row = min(self.row, max(0, len(entries) - 1))
-        start = max(0, self.row - (height - 13) // 2)
-        for offset, entry in enumerate(entries[start:start + height - 12]):
+        count = max(1, height - 12 - footer_rows)
+        start = max(0, self.row - count // 2)
+        for offset, entry in enumerate(entries[start:start + count]):
             index = start + offset
             self.put(8 + offset, 2, formatter(entry), curses.A_REVERSE if index == self.row else 0)
         if not entries:
             self.put(9, 2, 'Список пуст. Добавьте собственную подписку или профиль.')
 
     def servers(self, height: int, width: int) -> Any:
-        self.put(7, 2, 'Enter — выбрать вручную; A — автоматический выбор')
+        self.button(6, 2, '[N Ссылка]', 'n')
+        self.button(6, 15, '[S SOCKS5]', 's')
+        self.button(6, 28, '[P Проверить все]', 'p')
+        checks = self.data.get('probes', {})
+        progress = ' · проверено %s/%s' % (checks.get('done', 0), checks.get('total', 0)) if checks.get('running') else ''
+        self.put(7, 2, 'Enter — выбрать · Space — подключить · E/D — локальный профиль' + progress)
         def line(server: Any) -> Any:
-            mark = '●' if server['id'] == self.data.get('selected') else '·'
-            delay = str(server.get('delay_ms')) + ' мс' if server.get('healthy') else 'нет свежей проверки'
-            return '%s %s  %s  %s' % (mark, server['name'], server['kind'], delay)
-        self.listing(self.data.get('servers', []), height, line)
+            mark = '●' if server['id'] == self.data.get('selected') else '>' if server['id'] == self.data.get('selection') else '·'
+            return '%s %-24s %-10s %s' % (mark, clipped(server['name'], 24),
+                'SOCKS5' if server['kind'] == 'socks' else server['kind'].upper(), reachability_text(server))
+        values = self.data.get('servers', [])
+        self.listing(values, height, line, footer_rows=2)
+        if values and self.row < len(values):
+            selected = values[self.row]
+            self.put(height - 6, 2, 'Источник: %s · %s:%s' %
+                     (selected.get('source_name', '—'), selected['host'], selected['port']))
+            probe = selected.get('reachability', {})
+            checked = time.strftime('%H:%M:%S', time.localtime(probe['checked_at'])) if probe.get('checked_at') else 'ещё не проверялся'
+            self.put(height - 5, 2, 'Проверка: ' + checked + ' · ' + probe_path(probe.get('path', '')))
 
     def subscriptions(self, height: int, width: int) -> None:
-        self.put(6, 2, 'N URL · I URI · W WireGuard · L Импорт BigSurVPN')
+        self.button(6, 2, '[N Ссылка]', 'n')
+        self.button(6, 15, '[S SOCKS5]', 's')
+        self.put(6, 28, 'I URI · W WireGuard · L Импорт')
         self.put(7, 2, 'E Изменить ссылку · R Обновить · D Удалить')
         self.listing(self.data.get('subscriptions', []), height,
                      lambda s: '%s · %s · серверов %s' % (s['name'], s['host'], s['servers']))
@@ -254,6 +294,9 @@ class UI:
             self.async_call('subscription_delete', {'id': selected['id']})
 
     def profile_input(self, key: Any) -> None:
+        if key == 'n':
+            self.subscription_dialog()
+            return
         prompts = {'n': 'HTTPS-ссылка подписки', 'i': 'VLESS / Trojan / SOCKS5 URI',
                    'w': 'Путь к собственному WireGuard .conf'}
         value = self.prompt(prompts[key], secret=key != 'w')
@@ -265,6 +308,71 @@ class UI:
                           'w': ('wireguard_add', 'text')}[key]
         self.async_call(command, {field: value})
 
+    def subscription_dialog(self) -> None:
+        from .ui_forms import Form, field
+        from .network import validate_authority
+        from urllib.parse import urlsplit
+        def validate(values: dict) -> None:
+            try:
+                validate_authority(urlsplit(values['url'].strip()))
+            except ValueError:
+                raise AppError('Проверьте HTTPS-ссылку и номер порта.') from None
+        fields = [field('name', 'Название', limit=120), field('url', 'HTTPS-ссылка', True, 8192)]
+        values = Form(self, 'Добавить подписку', fields,
+                      hint='Все поддерживаемые серверы загрузятся по одной ссылке.', validate=validate).run()
+        if values is not None:
+            values['url'] = values['url'].strip()
+            self.async_call('subscription_add', values)
+
+    def socks_dialog(self, details: dict | None=None) -> None:
+        from .ui_forms import Form, field
+        from .manual_profiles import socks_profile
+        details = details or {}
+        fields = [field('name', 'Название', limit=120), field('host', 'Сервер'),
+                  field('port', 'Порт', limit=5), field('username', 'Логин'),
+                  field('password', 'Пароль', True)]
+        def values_for_service(values: dict) -> dict:
+            args = dict(values)
+            if details.get('id'):
+                args['id'] = details['id']
+                if not args['password']:
+                    args['password'] = None
+            return args
+        def validate(values: dict) -> None:
+            previous = {'password': 'kept'} if details.get('has_password') else None
+            socks_profile(values_for_service(values), previous)
+        hint = 'Пустой пароль сохраняет прежний. Пустой логин убирает авторизацию.' if details else 'Логин и пароль можно оставить пустыми, если сервер их не требует.'
+        values = Form(self, 'Изменить SOCKS5' if details else 'Добавить SOCKS5', fields,
+                      initial=dict(details, port=details.get('port', '')), hint=hint, validate=validate).run()
+        if values is not None:
+            self.async_call('socks_save', values_for_service(values))
+
+    def server_action(self, key: str) -> None:
+        values = self.data.get('servers', [])
+        if not values or self.row >= len(values):
+            return
+        node = values[self.row]
+        if key == 'e':
+            if node.get('remote') or node['kind'] != 'socks':
+                self.message = 'E редактирует локальный SOCKS5. Подписки обновляются на вкладке 3.'
+            else:
+                self.async_call('socks_details', {'id': node['id']})
+        elif key == 'd' and self.prompt('Удалить локальное подключение? Введите ДА', False).upper() == 'ДА':
+            self.async_call('server_delete', {'id': node['id']})
+
+    def auto_probe(self) -> None:
+        if self.demo or self.acting or not self.data.get('servers'):
+            return
+        checks = self.data.get('probes', {})
+        if checks.get('running') or checks.get('retry_after', 0):
+            return
+        stale = any(node.get('reachability', {}).get('state', 'unknown') in ('unknown', 'stale')
+                    for node in self.data['servers'])
+        interval = checks.get('minimum_interval', 5)
+        if self.probe_after_action or self.page == 1 and stale and time.monotonic() - self.last_auto_probe >= interval:
+            self.probe_after_action, self.last_auto_probe = False, time.monotonic()
+            self.async_call('probe')
+
     def change_theme(self) -> None:
         self.theme = THEMES[(THEMES.index(self.theme) + 1) % len(THEMES)] if self.theme in THEMES else 'ocean'
         if self.preferences is not None:
@@ -273,6 +381,9 @@ class UI:
         self.colors()
 
     def update(self) -> None:
+        if self.demo:
+            self.message = 'Демо: обновление установленной программы не запускается.'
+            return
         from .updates import interactive_update
         curses.endwin()
         try:
@@ -291,14 +402,16 @@ class UI:
         if self.page == 2:
             self.subscription_action('r')
         else:
-            self.async_call('test')
+            self.async_call('test' if self.data.get('enabled') else 'probe')
 
     def key(self, key: Any) -> None:
         height, width = self.screen.getmaxyx()
         if height < 22 or width < 76:
             return
         if key == curses.KEY_MOUSE:
-            _id, x, y, _z, _state = curses.getmouse()
+            _id, x, y, _z, state = curses.getmouse()
+            if not state & (curses.BUTTON1_CLICKED | curses.BUTTON1_RELEASED | curses.BUTTON1_DOUBLE_CLICKED):
+                return
             key = next((action for row, left, right, action in self.buttons if row == y and left <= x < right), None)
         if key in ('1', '2', '3', '4'):
             self.page, self.row = int(key) - 1, 0
@@ -313,10 +426,14 @@ class UI:
         actions = {' ': lambda: self.async_call('off' if self.data.get('enabled') else 'on'),
                    'a': lambda: self.async_call('select', {'id': 'auto'}),
                    't': self.change_theme, 'u': self.update, 'r': self.refresh,
+                   'p': lambda: self.async_call('probe'), 'n': self.subscription_dialog,
+                   's': self.socks_dialog, 'q': lambda: setattr(self, 'exiting', True),
                    '\n': self.enter_server, '\r': self.enter_server}
         if key in actions:
             actions[key]()
-        elif self.page == 2 and key in ('n', 'i', 'w', 'l', 'd', 'e'):
+        elif self.page == 1 and key in ('d', 'e'):
+            self.server_action(key)
+        elif self.page == 2 and key in ('i', 'w', 'l', 'd', 'e'):
             self.subscription_action(key)
 
     def run(self) -> None:
@@ -325,6 +442,7 @@ class UI:
                 self.async_call('status', poll=True)
                 self.last_poll = time.monotonic()
             self.collect()
+            self.auto_probe()
             self.draw()
             try:
                 key = self.screen.get_wch()
@@ -334,8 +452,31 @@ class UI:
                 return
             try:
                 self.key(key)
+                if self.exiting:
+                    return
             except Exception as error:
                 self.message = str(error) if isinstance(error, AppError) else 'Операция не выполнена.'
+
+
+def reachability_text(server: dict) -> str:
+    value = server.get('reachability', {})
+    state = value.get('state')
+    if state == 'ok':
+        return 'Доступен · %s мс' % value.get('delay_ms')
+    labels = {'checking': 'Проверка…', 'failed': 'Нет HTTPS-ответа', 'stale': 'Проверка устарела',
+              'blocked': 'Адрес не допускает проверку', 'error': 'Не удалось проверить',
+              'unsupported': 'Проверка доступна после подключения', 'unknown': 'Нет проверки'}
+    if state in labels:
+        return labels[state]
+    return '%s мс · VPN' % server['delay_ms'] if server.get('healthy') else 'Нет проверки'
+
+
+def probe_path(value: str) -> str:
+    if value.startswith('direct:'):
+        return 'Напрямую · ' + value.split(':', 1)[1]
+    if value == 'local':
+        return 'Через локальный прокси'
+    return 'Через текущее соединение' if value == 'current' else 'Путь ещё не определён'
 
 
 def main(demo: bool=False) -> None:

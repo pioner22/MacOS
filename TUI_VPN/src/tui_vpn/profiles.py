@@ -12,7 +12,7 @@ from .common import AppError, clean
 from vendor import legacy_runtime
 
 KINDS = {'vless', 'trojan', 'socks', 'shadowsocks', 'vmess', 'hysteria2'}
-FORBIDDEN = {'detour', 'bind_interface', 'routing_mark', 'network_namespace', 'protect_path',
+FORBIDDEN = {'detour', 'bind_interface', 'routing_mark', 'network_namespace', 'netns', 'protect_path',
              'plugin', 'plugin_opts', 'script', 'command', 'executable'}
 
 
@@ -68,18 +68,27 @@ def parse_uri(uri: str) -> dict:
 
 
 def decode64(value: Any) -> bytes:
-    value = value.strip()
+    value = ''.join(value.split())
     return base64.b64decode(value + '=' * (-len(value) % 4), altchars=b'-_', validate=True)
 
 
 def parse_feed(raw: Any) -> list:
-    if not raw or len(raw) > 2097152:
+    if not isinstance(raw, (bytes, bytearray)) or not raw or len(raw) > 2097152:
         raise AppError('Пустая или слишком большая подписка.')
-    text = raw.decode('utf-8-sig').strip()
+    try:
+        text = raw.decode('utf-8-sig').strip()
+        if '://' not in text and not text.startswith(('{', '[', '<')):
+            text = decode64(text).decode('utf-8-sig').strip()
+        return feed_text(text)
+    except (ValueError, TypeError):
+        raise AppError('Не удалось прочитать подписку. Нужен список поддерживаемых URI, Base64 или JSON.') from None
+
+
+def feed_text(text: str) -> list:
+    if text.startswith('<'):
+        raise AppError('По ссылке получена веб-страница. Укажите ссылку подписки для VPN-клиента.')
     if text.startswith(('{', '[')):
         return json_feed(json.loads(text))
-    if '://' not in text:
-        text = decode64(text).decode('utf-8-sig')
     lines = [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith('#')]
     if not 1 <= len(lines) <= 200:
         raise AppError('Подписка должна содержать от 1 до 200 серверов.')

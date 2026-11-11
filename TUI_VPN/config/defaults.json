@@ -13,6 +13,11 @@
   "maximum_servers": 200,
   "maximum_subscriptions": 20,
   "fetch_timeout": 20,
+  "probe_timeout_ms": 6000,
+  "probe_parallel": 4,
+  "probe_batch_timeout": 180,
+  "probe_cache_ttl": 60,
+  "probe_min_interval": 5,
   "theme": "ocean",
   "repository": "pioner22/MacOS",
   "release_path": "TUI_VPN/release.json"

@@ -9,6 +9,8 @@ from pathlib import Path
 from .catalog import Catalog
 from .common import AppError, Paths, clean, digest, read_json, read_private_json, load_settings, owner_lock
 from .engine import Engine
+from .health_checks import HealthChecks
+from .manual_profiles import socks_profile, socks_details, edit_socks, remove_local_node
 from .network import fetch_worker
 from .profiles import parse_feed, parse_uri, wireguard, json_feed
 
@@ -21,6 +23,8 @@ class Manager:
         self.source_sha = digest(self.root / 'manifest.json')
         self.catalog = Catalog(paths)
         self.engine = engine or Engine(paths, root, self.settings)
+        self.health = HealthChecks(paths, root, self.settings)
+        self.control_generation = 0
         self.lock, self.operation = threading.RLock(), threading.Lock()
         self.stop_event = threading.Event()
         self.changed = threading.Event()
@@ -42,25 +46,47 @@ class Manager:
     def status(self) -> dict:
         with self.lock:
             value = copy.deepcopy(self.view)
-            nodes = self.catalog.nodes()
+            nodes = self.probe_nodes()
+            reachability, checks = self.health.snapshot(nodes)
             value.update(enabled=self.catalog.state['enabled'], selection=self.catalog.state['selection'],
                 subscriptions=self.catalog.public_subscriptions(), busy=self.busy, events=self.events[-40:],
                 updated_at=self.updated_at, stale=time.time() - self.updated_at > 8)
             value['snapshot_at'] = time.monotonic()
             value.update(version=self.version, source_sha256=self.source_sha)
-            value['servers'] = [public_node(n, value.get('health', {}).get(n['id'], {})) for n in nodes]
+            sources = {n['id']: source for source in self.catalog.data['subscriptions'] for n in source['nodes']}
+            value['servers'] = [dict(public_node(n, value.get('health', {}).get(n['id'], {})),
+                reachability=reachability[n['id']], source_id=sources[n['id']]['id'],
+                source_name=sources[n['id']]['name'], remote=bool(sources[n['id']].get('url')))
+                for n in nodes]
+            value['probes'] = checks
             return value
+
+    def probe_nodes(self) -> list:
+        return [dict(copy.deepcopy(node), _manual_socks=not source.get('url')
+                     and node.get('outbound', {}).get('type') == 'socks')
+                for source in self.catalog.data['subscriptions'] for node in source['nodes']]
 
     def dispatch(self, command: str, args: Any) -> dict:
         if not isinstance(args, dict):
             raise AppError('Неверные параметры команды.')
         if command == 'status':
             return self.status()
+        if command == 'socks_details':
+            with self.lock:
+                return {'socks_form': socks_details(self.catalog.data, args.get('id', ''))}
+        if command == 'probe':
+            with self.lock:
+                nodes = self.probe_nodes()
+                if not nodes:
+                    raise AppError('Сначала добавьте подписку или подключение SOCKS5.')
+                started = self.health.start(nodes)
+                return dict(self.status(), probe_started=started)
         actions = {'on': self.on, 'off': self.off, 'select': self.select, 'test': self.test,
             'subscription_add': self.add, 'subscription_refresh': self.refresh,
             'subscription_edit': self.edit,
             'subscription_delete': self.delete, 'uri_add': self.uri,
-            'wireguard_add': self.wg, 'import_existing': self.import_existing}
+            'wireguard_add': self.wg, 'import_existing': self.import_existing,
+            'socks_save': self.socks_save, 'server_delete': self.server_delete}
         if command not in actions:
             raise AppError('Неизвестная команда управления.')
         if command in ('on', 'off'):
@@ -78,6 +104,19 @@ class Manager:
         with self.lock:
             if not self.catalog.nodes():
                 raise AppError('Сначала добавьте подписку или профиль сервера.')
+            if self.catalog.state['enabled']:
+                return self.status()
+            self.control_generation += 1
+            generation = self.control_generation
+        try:
+            self.engine.guard()
+        except Exception:
+            raise AppError('Проверьте интернет и отключите другой VPN перед включением.') from None
+        with self.lock:
+            if generation != self.control_generation:
+                return self.status()
+            if not self.catalog.nodes():
+                raise AppError('Сначала добавьте подписку или профиль сервера.')
             self.catalog.enable(True)
             if self.view['state'] == 'OFF':
                 self.view['state'] = 'STARTING'
@@ -87,10 +126,13 @@ class Manager:
 
     def off(self, _args: Any) -> dict:
         with self.lock:
+            self.control_generation += 1
+            self.pending = None
             self.catalog.enable(False)
             self.view['state'] = 'STOPPING' if self.engine.process else 'OFF'
             self.event('VPN: ручное выключение сохранено')
             self.changed.set()
+        self.health.cancel()
         return self.status()
 
     def select(self, args: Any) -> dict:
@@ -115,12 +157,17 @@ class Manager:
         return dict(self.status(), test=result)
 
     def apply(self, candidate: Any, allow_fallback: bool=True) -> dict:
+        with self.lock:
+            if candidate == self.catalog.data:
+                self.event('Список подключений уже актуален')
+                return self.status()
         nodes = [n for s in candidate['subscriptions'] for n in s['nodes']]
         self.engine.check(nodes, self.catalog.state['selection'])
         with self.lock:
             old = copy.deepcopy(self.catalog.data)
             was_healthy = self.view['state'] == 'RUNNING'
             self.catalog.commit(candidate)
+            self.health.invalidate(self.probe_nodes())
             if not nodes:
                 self.catalog.enable(False)
             self.pending = (self.catalog.revision, old, time.monotonic() + 60) if was_healthy and nodes and allow_fallback else None
@@ -129,7 +176,7 @@ class Manager:
         return self.status()
 
     def add(self, args: Any) -> dict:
-        url = args.get('url', '')
+        url = args.get('url', '').strip()
         nodes = parse_feed(fetch_worker(self.root, url, self.settings['fetch_timeout']))
         return self.apply(self.catalog.candidate(nodes, args.get('name', ''), url))
 
@@ -144,9 +191,20 @@ class Manager:
         item = next((s for s in self.catalog.data['subscriptions'] if s['id'] == args.get('id')), None)
         if item is None:
             raise AppError('Подписка не найдена.')
-        url = args.get('url', '')
+        url = args.get('url', '').strip()
         nodes = parse_feed(fetch_worker(self.root, url, self.settings['fetch_timeout']))
         return self.apply(self.catalog.candidate(nodes, item['name'], url, item['id']))
+
+    def socks_save(self, args: dict) -> dict:
+        if args.get('id'):
+            candidate = edit_socks(self.catalog.data, args)
+        else:
+            node = socks_profile(args)
+            candidate = self.catalog.candidate([node], node['name'])
+        return self.apply(candidate)
+
+    def server_delete(self, args: dict) -> dict:
+        return self.apply(remove_local_node(self.catalog.data, args.get('id', '')), allow_fallback=False)
 
     def delete(self, args: Any) -> dict:
         value = copy.deepcopy(self.catalog.data)
@@ -225,6 +283,7 @@ class Manager:
                 self.pending = None
             elif time.monotonic() > deadline:
                 self.catalog.commit(previous)
+                self.health.invalidate(self.probe_nodes())
                 self.pending = None
                 self.event('Новая подписка не подтвердила связь: возвращён предыдущий список')
 
@@ -297,6 +356,7 @@ def daemon(root: Any) -> None:
             manager.supervise()
         finally:
             manager.stop_event.set()
+            manager.health.close()
             server.shutdown()
             server.server_close()
             paths.socket.unlink(missing_ok=True)
