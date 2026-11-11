@@ -1,0 +1,34 @@
+name: VPN supervisor portable checks
+on:
+  pull_request:
+    paths:
+      - 'vpn/service/**'
+      - '.github/workflows/vpn-supervisor.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vpn-supervisor-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  portable-not-macos:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Real file, process and crypto tests with explicit macOS test doubles
+        working-directory: vpn/service
+        run: sudo python3 -B -m unittest discover -s tests -v
+      - name: Targeted mutants, not native VPN validation
+        working-directory: vpn/service
+        run: sudo python3 -B tools/mutation_check.py
+      - name: Preserve mutation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vpn-supervisor-portable-evidence-NOT-MACOS
+          path: vpn/service/evidence/
+          if-no-files-found: ignore
+          retention-days: 7
