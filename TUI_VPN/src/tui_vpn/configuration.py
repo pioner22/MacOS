@@ -30,7 +30,12 @@ def build(nodes: list, settings: dict, api_secret: str, probe_secret: str, syste
              'tls': {'enabled': True, 'server_name': settings['dns_tls_name']}, 'detour': 'proxy'}],
             'final': 'remote-dns', 'strategy': 'prefer_ipv4'},
         'route': {'auto_detect_interface': True, 'default_domain_resolver': 'bootstrap-dns',
-                  'final': 'proxy', 'rules': [{'port': 53, 'action': 'hijack-dns'}]}}
+                  'final': 'proxy', 'rules': [
+                      # Keep native URLTest's timer active even when the user
+                      # selects a server directly. Only our authenticated
+                      # loopback probe uses auto; user traffic stays on proxy.
+                      {'inbound': ['probe'], 'outbound': 'auto'},
+                      {'port': 53, 'action': 'hijack-dns'}]}}
     if tun:
         inbound = {'type': 'tun', 'tag': 'tun', 'interface_name': settings['tun_macos' if system == 'darwin' else 'tun_linux'],
             'address': ['172.29.255.1/30', 'fd56:76aa:6273::1/126'], 'mtu': 1400,
