@@ -1,11 +1,11 @@
 {
   "files": {
-    "CHANGELOG.md": "f2d605e7c4ee8fb694bb2d9eff327c5abd5b1a844dbba4ccac773d5384b6d07a",
+    "CHANGELOG.md": "6816d7a4b70763afbb5b40074037c511ef216253c5333dd1fd5022e543fc0111",
     "LICENSE": "e57f1c320b8cf8798a7d2ff83a6f9e06a33a03585f6e065fea97f1d86db84052",
     "PROVENANCE.md": "f81bd65eb1f07b8981ca712d1d11d34640b7426c05f6c71c97cca8e9e1211882",
-    "README.md": "b66d7b5955031012c582c666e01f572434dd27761d4078a905237153eaace495",
-    "SBOM.json": "4fe0524aa668e2576af5ce503ea6d247d4f653c83d9afdc26ea11f2c77c24fc4",
-    "VERSION": "297b50f08386d3521f8fdaf2f78eb8d9d0acdf452d2e61596905fba37208c792",
+    "README.md": "28e61f0481526bbef2406d1394240f494cfa72e96be46799dbc904ece75e7763",
+    "SBOM.json": "7954cbf789e918de45e7682fec4ef54728ba428f2c57031f93db3bd327dff8f8",
+    "VERSION": "2d2454ef0edeb462a6ce8b25d387aaa74df08093d5cea0428a10ce55510c6326",
     "config/defaults.json": "40de56690e8fe019e85dceb13b2465ecc172ac767acc8edb858219f0d109e690",
     "docs/ARCHITECTURE.md": "c772b7596ff2fcb731d438c936a73eb5fea896c25aea52093d2ee2e01a66b6e1",
     "migrations/README.md": "3d995e45b85181f5c76edecbba9b7e2938a7bc223decab66ad6725f1413190f2",
@@ -18,7 +18,7 @@
     "src/tui_vpn/catalog.py": "94c90860361bb7dfc6e77d8a6467244c92d97ea678ebc8cc7f98b567072b201d",
     "src/tui_vpn/cli.py": "e50d94774a30b12aabc32baae89dbde9eafd1d05942d2101d78e68b59960d9ff",
     "src/tui_vpn/common.py": "26527a0ec703762c1e0aad50e4d3afacf8278da3f9d139aa7307d067080bdd59",
-    "src/tui_vpn/configuration.py": "01fd66c958c52856ee396bd3d56723b6bab2caffde29a9538fb927d3331a4488",
+    "src/tui_vpn/configuration.py": "b39322fdeea3a8e01fec7c563c1097c0edc826d57c044d2267052edd05d1f873",
     "src/tui_vpn/darwin_services.py": "3d3a673d97a7c759895fbe688e757763a62a2fd7bc3ee5ff580bae4d9d724223",
     "src/tui_vpn/engine.py": "128551a3afbc7b86ddf40b209f2273fc2769935767b2d7d9170eac72f9eb26c4",
     "src/tui_vpn/health_checks.py": "b66f3bb42577f129c6eebb043ead60ea2ba83b912af0449745e2c24ee359d4bd",
@@ -32,7 +32,7 @@
     "src/tui_vpn/service.py": "b74749ea0a7f3ef5e39fd3ea84ee74a536ed73c2a3fc67ac9447fe3679d624b1",
     "src/tui_vpn/service_readiness.py": "a0ea638358cf553cafcc432a55245508613eb0a7e8a91472c467a326eb11de8a",
     "src/tui_vpn/terminal_backend.py": "12a86f4107571178b54d7d77c03e61c4641d61d6e0cab3a73fead69a4fb3cb70",
-    "src/tui_vpn/ui.py": "09d32edf40002473b672a87816de934deb9f2ccf12f17c2bb8ca70fe61e0a2d8",
+    "src/tui_vpn/ui.py": "2155f33aea8e2eb4bcb9d6a578920c755106a3a3f340817e4edbc213f48d59fa",
     "src/tui_vpn/ui_forms.py": "0ac6a6b8c746d46c9653232ee7eca1092c90ac32b189c92cad885829c39ab469",
     "src/tui_vpn/updates.py": "83ee8acb2b78028e9f5ee081f697fa12170b2617fdceab7ca4a140ae866fe949",
     "src/vendor/__init__.py": "1642ccb8133a4ec23c4d7a312c08fd451a75959459bd88885a50dbe566fa1b9a",
@@ -43,5 +43,5 @@
     "src/vendor/legacy_runtime.py": "966a6d63a7968113af5c713b5595c9c9c53628fb80e83badd31bedb84d24b877"
   },
   "schema": "tui-vpn.source.v1",
-  "version": "0.1.2"
+  "version": "0.1.3"
 }

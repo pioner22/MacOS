@@ -15,7 +15,7 @@ from .ipc import request
 
 STATES = {'OFF': 'ВЫКЛЮЧЕН', 'STARTING': 'ЗАПУСК', 'STOPPING': 'ВЫКЛЮЧЕНИЕ',
     'RUNNING': 'ОНЛАЙН', 'CHECKING': 'ПРОВЕРКА', 'RETRYING': 'ПОВТОР ЗАПУСКА',
-    'NO_HEALTHY_PATH': 'НЕТ ДОСТУПНОГО ПУТИ'}
+    'NO_HEALTHY_PATH': 'СВЯЗЬ НЕ ПОДТВЕРЖДЕНА'}
 THEMES = ('ocean', 'light', 'mono')
 
 
