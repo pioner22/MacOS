@@ -20,7 +20,11 @@
         "subscription_delete",
         "uri_add",
         "wireguard_add",
-        "import_existing"
+        "import_existing",
+        "socks_save",
+        "socks_details",
+        "server_delete",
+        "probe"
       ]
     },
     "args": {

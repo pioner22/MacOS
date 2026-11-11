@@ -25,6 +25,9 @@ class FakeEngine:
     def check(self, nodes, selection):
         pass
 
+    def guard(self):
+        pass
+
     def start(self, nodes, selection, wanted):
         self.starts += 1
         self.process = mock.Mock()
